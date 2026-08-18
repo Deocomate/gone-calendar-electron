@@ -4,6 +4,12 @@ import { IPC_CHANNELS, type AppLocale } from '@shared/ipc-contract'
 let currentLocale: AppLocale = 'vi'
 
 export function registerIpcHandlers(): void {
+  // Clear any existing handlers to allow safe re-registration during dev reload
+  ipcMain.removeHandler(IPC_CHANNELS.APP.GET_VERSION)
+  ipcMain.removeHandler(IPC_CHANNELS.APP.GET_LOCALE)
+  ipcMain.removeHandler(IPC_CHANNELS.APP.SET_LOCALE)
+  ipcMain.removeHandler(IPC_CHANNELS.APP.GET_PLATFORM)
+
   // Return current application version
   ipcMain.handle(IPC_CHANNELS.APP.GET_VERSION, () => {
     return app.getVersion()

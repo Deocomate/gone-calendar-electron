@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, nativeTheme } from 'electron'
 import { join } from 'node:path'
 import { registerIpcHandlers } from './ipc'
+import { initDatabase, closeDatabase } from './db/database'
 
 // Enforce single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -61,6 +62,12 @@ if (!gotTheLock) {
   })
 
   app.whenReady().then(() => {
+    try {
+      initDatabase(app.getPath('userData'))
+    } catch (dbErr) {
+      console.error('Failed to initialize database:', dbErr)
+    }
+
     registerIpcHandlers()
     createWindow()
 
@@ -72,9 +79,11 @@ if (!gotTheLock) {
   })
 
   app.on('window-all-closed', () => {
+    closeDatabase()
     if (process.platform !== 'darwin') {
       app.quit()
     }
   })
 }
+
 

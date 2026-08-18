@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   CalendarDays,
@@ -15,9 +15,12 @@ import {
   Sparkles,
   CalendarCheck,
   RotateCw,
-  X
+  X,
+  FileUp,
+  Clock
 } from 'lucide-react'
 import type { AppLocale } from '@shared/ipc-contract'
+import type { Calendar, ExpandedOccurrence } from '@shared/event-model'
 
 export type CalendarViewType = 'day' | 'week' | 'month' | 'year' | 'list'
 
@@ -31,8 +34,39 @@ export const App: React.FC = () => {
   const [showLunar, setShowLunar] = useState<boolean>(true)
   const [showWeekNumbers, setShowWeekNumbers] = useState<boolean>(true)
 
+  // Domain state
+  const [calendars, setCalendars] = useState<Calendar[]>([])
+  const [occurrences, setOccurrences] = useState<ExpandedOccurrence[]>([])
+  const [quickEventTitle, setQuickEventTitle] = useState<string>('')
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false)
+  const [importStatus, setImportStatus] = useState<string | null>(null)
+
+  const loadCalendarsAndEvents = useCallback(async () => {
+    if (!window.gone?.calendars || !window.gone?.events) {
+      return
+    }
+
+    try {
+      const cals = await window.gone.calendars.list()
+      setCalendars(cals)
+
+      const activeCalIds = cals.filter((c) => c.isVisible).map((c) => c.id)
+      if (activeCalIds.length > 0) {
+        // Query events for August 2026 window as default
+        const startUtc = '2026-08-01T00:00:00.000Z'
+        const endUtc = '2026-08-31T23:59:59.999Z'
+        const occs = await window.gone.events.queryRange(activeCalIds, startUtc, endUtc)
+        setOccurrences(occs)
+      } else {
+        setOccurrences([])
+      }
+    } catch (err) {
+      console.error('Failed to load calendars or events:', err)
+    }
+  }, [])
+
   useEffect(() => {
-    // Initialize locale and platform from IPC if available
+    // Initialize locale and platform from IPC
     const initApp = async (): Promise<void> => {
       if (window.gone?.app) {
         try {
@@ -48,9 +82,10 @@ export const App: React.FC = () => {
           console.warn('IPC init failed, using fallbacks:', err)
         }
       }
+      await loadCalendarsAndEvents()
     }
     initApp()
-  }, [i18n])
+  }, [i18n, loadCalendarsAndEvents])
 
   const toggleLanguage = async (): Promise<void> => {
     const nextLocale: AppLocale = i18n.language === 'vi' ? 'en' : 'vi'
@@ -70,6 +105,71 @@ export const App: React.FC = () => {
       }
       return next
     })
+  }
+
+  const toggleCalendarVisibility = async (cal: Calendar) => {
+    if (window.gone?.calendars) {
+      const updated = await window.gone.calendars.update(cal.id, { isVisible: !cal.isVisible })
+      setCalendars((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+      await loadCalendarsAndEvents()
+    }
+  }
+
+  const handleCreateQuickEvent = async () => {
+    if (!quickEventTitle.trim() || calendars.length === 0 || !window.gone?.events) {
+      return
+    }
+
+    const defaultCal = calendars.find((c) => !c.isReadOnly) || calendars[0]
+    if (!defaultCal || defaultCal.isReadOnly) {
+      alert('Default calendar is read-only!')
+      return
+    }
+
+    try {
+      await window.gone.events.create({
+        calendarId: defaultCal.id,
+        title: quickEventTitle.trim(),
+        dtStartUtc: '2026-08-18T10:00:00.000Z',
+        dtEndUtc: '2026-08-18T11:00:00.000Z',
+        tzid: 'Asia/Ho_Chi_Minh',
+        allDay: false
+      })
+      setQuickEventTitle('')
+      setIsQuickAddOpen(false)
+      await loadCalendarsAndEvents()
+    } catch (err: any) {
+      alert(`Create event error: ${err.message}`)
+    }
+  }
+
+  const handleImportSampleIcs = async () => {
+    if (calendars.length === 0 || !window.gone?.ics) return
+
+    const targetCal = calendars.find((c) => !c.isReadOnly) || calendars[0]
+    const sampleIcs = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Sample//EN',
+      'BEGIN:VEVENT',
+      'UID:sample-weekly-meeting@gone.calendar',
+      'DTSTART:20260818T090000Z',
+      'DTEND:20260818T100000Z',
+      'SUMMARY:Weekly Team Sync',
+      'DESCRIPTION:Phase 2 domain sprint status review',
+      'RRULE:FREQ=WEEKLY;BYDAY=TU',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n')
+
+    try {
+      const result = await window.gone.ics.importIcs(targetCal.id, sampleIcs)
+      setImportStatus(result.message || 'ICS Imported')
+      await loadCalendarsAndEvents()
+      setTimeout(() => setImportStatus(null), 4000)
+    } catch (err: any) {
+      setImportStatus(`Import failed: ${err.message}`)
+    }
   }
 
   const views: CalendarViewType[] = ['day', 'week', 'month', 'year', 'list']
@@ -141,11 +241,20 @@ export const App: React.FC = () => {
         {/* Quick Action & Controls */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => {}}
+            onClick={() => setIsQuickAddOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-all shadow-md shadow-indigo-600/25"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>{t('actions.newEvent')}</span>
+          </button>
+
+          <button
+            onClick={handleImportSampleIcs}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700/60 transition-colors"
+            title="Import sample ICS file"
+          >
+            <FileUp className="h-3.5 w-3.5" />
+            <span>Import ICS</span>
           </button>
 
           <div className="h-5 w-px bg-slate-800 mx-1" />
@@ -219,11 +328,37 @@ export const App: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors">
-                <input type="checkbox" defaultChecked className="rounded accent-indigo-500 h-3.5 w-3.5" />
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-xs" />
-                <span className="flex-1 truncate">{t('sidebar.localCalendar')}</span>
-              </label>
+              {calendars.length > 0 ? (
+                calendars.map((cal) => (
+                  <label
+                    key={cal.id}
+                    className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={cal.isVisible}
+                      onChange={() => toggleCalendarVisibility(cal)}
+                      className="rounded accent-indigo-500 h-3.5 w-3.5"
+                    />
+                    <span
+                      className="h-2.5 w-2.5 rounded-full shadow-xs shrink-0"
+                      style={{ backgroundColor: cal.color }}
+                    />
+                    <span className="flex-1 truncate">{cal.name}</span>
+                    {cal.isReadOnly && (
+                      <span className="text-[10px] text-amber-400 font-mono px-1 py-0.5 bg-amber-500/10 rounded">
+                        RO
+                      </span>
+                    )}
+                  </label>
+                ))
+              ) : (
+                <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer">
+                  <input type="checkbox" defaultChecked className="rounded accent-indigo-500 h-3.5 w-3.5" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-indigo-500 shadow-xs" />
+                  <span className="flex-1 truncate">{t('sidebar.localCalendar')}</span>
+                </label>
+              )}
 
               <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors">
                 <input
@@ -255,7 +390,11 @@ export const App: React.FC = () => {
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>{t('status.ready')}</span>
             </div>
-            <button className="text-slate-400 hover:text-slate-200 p-1" title={t('actions.refresh')}>
+            <button
+              onClick={() => loadCalendarsAndEvents()}
+              className="text-slate-400 hover:text-slate-200 p-1"
+              title={t('actions.refresh')}
+            >
               <RotateCw className="h-3 w-3" />
             </button>
           </div>
@@ -263,25 +402,65 @@ export const App: React.FC = () => {
 
         {/* Center Main Calendar Surface */}
         <main className="flex-1 flex flex-col bg-slate-950/80 p-6 overflow-auto">
+          {importStatus && (
+            <div className="mb-4 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-xs text-indigo-300 flex items-center justify-between animate-in fade-in">
+              <span>{importStatus}</span>
+              <button onClick={() => setImportStatus(null)}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
           <div className="flex-1 rounded-2xl border border-slate-800/80 bg-slate-900/40 backdrop-blur-md p-8 flex flex-col items-center justify-center text-center shadow-xl">
             <div className="h-16 w-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-4 shadow-inner">
               <CalendarCheck className="h-8 w-8 text-indigo-400" />
             </div>
 
             <h2 className="text-xl font-bold text-slate-100 mb-2">
-              {t(`views.${currentView}`)} View — {i18n.language === 'vi' ? 'Sẵn sàng' : 'Ready'}
+              {t(`views.${currentView}`)} View — SQLite Domain Active
             </h2>
 
-            <p className="text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
-              {i18n.language === 'vi'
-                ? 'Khung ứng dụng Electron + React + Tailwind đã sẵn sàng. Giao diện lịch đầy đủ, SQLite cục bộ và đồng bộ sẽ được kích hoạt ở các giai đoạn tiếp theo.'
-                : 'Electron + React + Tailwind application shell is active. Full grid views, local SQLite domain, and multi-provider sync will be attached in subsequent phases.'}
+            <p className="text-sm text-slate-400 max-w-md mb-4 leading-relaxed">
+              Canonical SQLite database and recurrence expansion active. Found{' '}
+              <strong className="text-indigo-400">{occurrences.length} occurrences</strong> in the
+              active calendar window.
             </p>
+
+            {occurrences.length > 0 && (
+              <div className="w-full max-w-lg mb-6 bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 text-left space-y-2 max-h-48 overflow-y-auto">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+                  Active Month Occurrences:
+                </div>
+                {occurrences.slice(0, 5).map((occ) => (
+                  <div
+                    key={occ.id}
+                    className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: occ.color || '#6366f1' }}
+                      />
+                      <span className="font-semibold text-slate-200">{occ.title}</span>
+                      {occ.isRecurring && (
+                        <span className="text-[10px] text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded font-mono">
+                          Recurring
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-slate-400 flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {new Date(occ.startUtc).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                IPC Sandbox Active
+                SQLite + RRULE Ready
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                 v{appVersion} ({platform})
@@ -290,6 +469,52 @@ export const App: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {/* Quick Add Event Dialog */}
+      {isQuickAddOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 relative">
+            <button
+              onClick={() => setIsQuickAddOpen(false)}
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <h3 className="text-base font-bold text-slate-100 mb-4 flex items-center gap-2">
+              <Plus className="h-4 w-4 text-indigo-400" />
+              {t('actions.newEvent')}
+            </h3>
+
+            <input
+              type="text"
+              placeholder="Event title (e.g. Design review)"
+              value={quickEventTitle}
+              onChange={(e) => setQuickEventTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateQuickEvent()
+              }}
+              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-hidden focus:border-indigo-500 mb-4"
+              autoFocus
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setIsQuickAddOpen(false)}
+                className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateQuickEvent}
+                className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+              >
+                Create Event
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {isSettingsOpen && (

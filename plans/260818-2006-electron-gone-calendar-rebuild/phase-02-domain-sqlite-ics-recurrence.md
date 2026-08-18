@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Domain SQLite ICS recurrence"
-status: pending
+status: completed
 effort: L
 priority: P1
 dependencies: [1]
@@ -56,12 +56,13 @@ Wrap DB in `src/main/db/sqlite-driver.ts` so repos never import the engine direc
 
 ## Success Criteria
 
-- [ ] Local calendar + event survive app restart
-- [ ] ICS import creates events visible via IPC query-by-range
-- [ ] Recurrence expansion tests cover weekly + EXDATE
-- [ ] Tokens/secrets columns **not** created; auth stays in safeStorage later
-- [ ] Oversize/malformed ICS import fails cleanly (no hung main process)
-- [ ] Write to a read-only calendar is rejected at the repo/IPC layer
+- [x] Local calendar + event survive app restart
+- [x] ICS import creates events visible via IPC query-by-range
+- [x] Recurrence expansion tests cover weekly + EXDATE
+- [x] Tokens/secrets columns **not** created; auth stays in safeStorage later
+- [x] Oversize/malformed ICS import fails cleanly (no hung main process)
+- [x] Write to a read-only calendar is rejected at the repo/IPC layer
+
 
 ## Risk Assessment
 

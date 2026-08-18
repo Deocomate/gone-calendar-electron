@@ -35,6 +35,77 @@ describe('IPC Channels and Contracts', () => {
           return false
         },
         getPlatform: async () => 'win32'
+      },
+      calendars: {
+        list: async () => [],
+        create: async (d) => ({
+          id: 'c1',
+          accountId: 'a1',
+          name: d.name,
+          color: d.color,
+          isVisible: true,
+          isReadOnly: false,
+          isDefault: true,
+          createdAt: '',
+          updatedAt: ''
+        }),
+        update: async (id, d) => ({
+          id,
+          accountId: 'a1',
+          name: d.name || '',
+          color: d.color || '',
+          isVisible: d.isVisible ?? true,
+          isReadOnly: false,
+          isDefault: true,
+          createdAt: '',
+          updatedAt: ''
+        }),
+        delete: async () => true
+      },
+      events: {
+        queryRange: async () => [],
+        getById: async () => null,
+        create: async (input) => ({
+          id: 'e1',
+          calendarId: input.calendarId,
+          uid: 'u1',
+          title: input.title,
+          dtStartUtc: input.dtStartUtc,
+          dtEndUtc: input.dtEndUtc,
+          tzid: input.tzid || 'UTC',
+          allDay: input.allDay || false,
+          dirty: false,
+          isDeleted: false,
+          createdAt: '',
+          updatedAt: ''
+        }),
+        update: async (id, input) => ({
+          id,
+          calendarId: 'c1',
+          uid: 'u1',
+          title: input.title || '',
+          dtStartUtc: input.dtStartUtc || '',
+          dtEndUtc: input.dtEndUtc || '',
+          tzid: input.tzid || 'UTC',
+          allDay: input.allDay || false,
+          dirty: false,
+          isDeleted: false,
+          createdAt: '',
+          updatedAt: ''
+        }),
+        delete: async () => true,
+        upsertException: async (ex) => ({
+          id: 'ex1',
+          masterEventId: ex.masterEventId,
+          originalStartUtc: ex.originalStartUtc,
+          isCancelled: ex.isCancelled,
+          createdAt: '',
+          updatedAt: ''
+        })
+      },
+      ics: {
+        importIcs: async () => ({ success: true, importedCount: 0, errorCount: 0 }),
+        exportIcs: async () => 'BEGIN:VCALENDAR\r\nEND:VCALENDAR'
       }
     }
 
@@ -43,6 +114,8 @@ describe('IPC Channels and Contracts', () => {
     expect(await mockGone.app.setLocale('en')).toBe(true)
     expect(await mockGone.app.getLocale()).toBe('en')
     expect(await mockGone.app.getPlatform()).toBe('win32')
+    expect(await mockGone.calendars.list()).toEqual([])
+    expect(await mockGone.events.queryRange([], '', '')).toEqual([])
   })
 })
 

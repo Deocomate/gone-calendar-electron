@@ -13,6 +13,8 @@ export class SyncWorker {
   private lastSyncTime?: string
   private lastError?: string
 
+  private currentIntervalMs = 5 * 60 * 1000
+
   constructor(
     private db: ISqliteDatabase,
     private googleClientId?: string,
@@ -26,9 +28,10 @@ export class SyncWorker {
   }
 
   /**
-   * Start periodic background sync (every 5 minutes)
+   * Start periodic background sync with adaptive polling
    */
   start(intervalMs = 5 * 60 * 1000): void {
+    this.currentIntervalMs = intervalMs
     if (this.timer) clearInterval(this.timer)
 
     // Initial sync
@@ -38,7 +41,23 @@ export class SyncWorker {
 
     this.timer = setInterval(() => {
       this.triggerSync().catch(() => {})
-    }, intervalMs)
+    }, this.currentIntervalMs)
+  }
+
+  /**
+   * Adaptive polling policy: 60s when focused, 5m when background/tray
+   */
+  setFocusState(isFocused: boolean): void {
+    const nextInterval = isFocused ? 60 * 1000 : 5 * 60 * 1000
+    if (this.currentIntervalMs !== nextInterval) {
+      this.currentIntervalMs = nextInterval
+      if (this.timer) {
+        clearInterval(this.timer)
+        this.timer = setInterval(() => {
+          this.triggerSync().catch(() => {})
+        }, this.currentIntervalMs)
+      }
+    }
   }
 
   stop(): void {

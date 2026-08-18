@@ -73,6 +73,12 @@ const goneApi: GoneAPI = {
     toggle: () => ipcRenderer.invoke(IPC_CHANNELS.MINI.TOGGLE),
     getUpcoming: (limit?: number) => ipcRenderer.invoke(IPC_CHANNELS.MINI.GET_UPCOMING, limit),
     setAlwaysOnTop: (flag: boolean) => ipcRenderer.invoke(IPC_CHANNELS.MINI.SET_ALWAYS_ON_TOP, flag)
+  },
+  holidays: {
+    subscribe: (type: 'vietnam' | 'international') =>
+      ipcRenderer.invoke(IPC_CHANNELS.HOLIDAYS.SUBSCRIBE, type),
+    unsubscribe: (type: 'vietnam' | 'international') =>
+      ipcRenderer.invoke(IPC_CHANNELS.HOLIDAYS.UNSUBSCRIBE, type)
   }
 }
 

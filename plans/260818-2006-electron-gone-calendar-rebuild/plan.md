@@ -72,7 +72,7 @@ Renderer never talks to Google/Graph/CalDAV directly.
 | 7 | [CalDAV adapter onboarding](./phase-07-caldav-adapter-onboarding.md) | Completed | Nextcloud/generic Must; iCloud best-effort |
 | 8 | [Invite share search filters](./phase-08-invite-share-search-filters.md) | Completed | **R2** |
 | 9 | [Mini window tasks deep theme](./phase-09-mini-window-tasks-deep-theme.md) | Completed | **R3** |
-| 10 | [Stretch a11y push holidays](./phase-10-stretch-a11y-push-holidays.md) | Pending | Stretch; skippable |
+| 10 | [Stretch a11y push holidays](./phase-10-stretch-a11y-push-holidays.md) | Completed | Stretch Complete |
 
 ## Dependencies
 

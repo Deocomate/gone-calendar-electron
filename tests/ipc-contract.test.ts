@@ -197,6 +197,10 @@ describe('IPC Channels and Contracts', () => {
         toggle: async () => {},
         getUpcoming: async () => ({ occurrences: [], tasks: [] }),
         setAlwaysOnTop: async () => true
+      },
+      holidays: {
+        subscribe: async (_type) => ({ calendarId: 'cal_h1', count: 10 }),
+        unsubscribe: async (_type) => true
       }
     }
 

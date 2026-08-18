@@ -274,3 +274,31 @@ export function formatLunarLabel(lunarDate: LunarDate): {
     isTet
   }
 }
+
+/**
+ * Convert a Lunar date (day, month, year, leap) to its Solar date counterpart (day, month, year)
+ */
+export function convertLunarToSolar(
+  lunarDay: number,
+  lunarMonth: number,
+  lunarYear: number,
+  lunarLeap: boolean = false,
+  timeZone: number = 7
+): { day: number; month: number; year: number } | null {
+  // Approximate starting point for the lunar year in solar calendar
+  const jdStart = jdFromDate(1, 1, lunarYear)
+  for (let i = 0; i < 400; i++) {
+    const jd = jdStart + i
+    const solar = jdToDate(jd)
+    const lunar = convertSolarToLunar(solar.day, solar.month, solar.year, timeZone)
+    if (
+      lunar.day === lunarDay &&
+      lunar.month === lunarMonth &&
+      lunar.year === lunarYear &&
+      lunar.leap === lunarLeap
+    ) {
+      return solar
+    }
+  }
+  return null
+}

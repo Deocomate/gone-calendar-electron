@@ -4,6 +4,7 @@ import { registerIpcHandlers } from './ipc'
 import { initDatabase, closeDatabase } from './db/database'
 import { setupTray } from './tray'
 import { registerMiniIpcHandlers } from './mini-window'
+import { getSyncWorker } from './ipc/auth-sync-ipc'
 
 // Enforce single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -37,6 +38,15 @@ if (!gotTheLock) {
 
     mainWindow.on('ready-to-show', () => {
       mainWindow?.show()
+    })
+
+    // Adaptive sync polling on focus/blur
+    mainWindow.on('focus', () => {
+      getSyncWorker()?.setFocusState(true)
+    })
+
+    mainWindow.on('blur', () => {
+      getSyncWorker()?.setFocusState(false)
     })
 
     // Open target links in default external browser, not in Electron shell

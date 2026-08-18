@@ -20,7 +20,8 @@ import {
   Search,
   Filter,
   Palette,
-  CheckSquare
+  CheckSquare,
+  Keyboard
 } from 'lucide-react'
 import type { AppLocale } from '@shared/ipc-contract'
 import type {
@@ -44,6 +45,8 @@ import AccountManagerModal from './components/AccountManagerModal'
 import SearchPaletteModal from './components/SearchPaletteModal'
 import TaskPane from './components/TaskPane'
 import ThemeSettingsModal from './components/ThemeSettingsModal'
+import HolidayCalendarToggle from './components/HolidayCalendarToggle'
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
 import { useEventDnD } from './dnd/use-event-dnd'
 
 export type CalendarViewType = 'day' | 'week' | 'month' | 'year' | 'list'
@@ -59,6 +62,7 @@ export const App: React.FC = () => {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false)
   const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState<boolean>(false)
   const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false)
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false)
   const [selectedColorFilter, setSelectedColorFilter] = useState<string | null>(null)
   const [showLunar, setShowLunar] = useState<boolean>(true)
   const [showWeekNumbers, setShowWeekNumbers] = useState<boolean>(true)
@@ -102,17 +106,56 @@ export const App: React.FC = () => {
 
   const visibleRange = useVisibleRange(anchorDate, currentView, i18n.language)
 
-  // Global Ctrl+K / Cmd+K search hotkey listener
+  // Global Keyboard Shortcuts Listener (A11y & Navigation)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setIsSearchPaletteOpen((prev) => !prev)
+        return
+      }
+
+      if (isInput) return
+
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault()
+        setAnchorDate(DateTime.local())
+      } else if (e.key === '1') {
+        e.preventDefault()
+        setCurrentView('day')
+      } else if (e.key === '2') {
+        e.preventDefault()
+        setCurrentView('week')
+      } else if (e.key === '3') {
+        e.preventDefault()
+        setCurrentView('month')
+      } else if (e.key === '4') {
+        e.preventDefault()
+        setCurrentView('year')
+      } else if (e.key === '5') {
+        e.preventDefault()
+        setCurrentView('list')
+      } else if (e.key === 'n' || e.key === 'N' || e.key === 'c' || e.key === 'C') {
+        e.preventDefault()
+        setEditorData({
+          initialStart: anchorDate.set({ hour: 9, minute: 0, second: 0 }),
+          initialEnd: anchorDate.set({ hour: 10, minute: 0, second: 0 })
+        })
+        setIsEditorOpen(true)
+      } else if (e.key === '?' || e.key === 'F1') {
+        e.preventDefault()
+        setIsShortcutsModalOpen((prev) => !prev)
+      } else if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        setIsSearchPaletteOpen(true)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [anchorDate])
 
   const loadCalendarsAndEvents = useCallback(async () => {
     if (!window.gone?.calendars || !window.gone?.events) {
@@ -389,14 +432,15 @@ export const App: React.FC = () => {
     }
   }
 
-  const handleDropCopy = async (drop: PendingDropAction) => {
+  const handleDropCopy = async (drop: PendingDropAction, copyInstanceOnly?: boolean) => {
     if (!window.gone?.events) return
     try {
       await window.gone.events.copy({
         sourceEventId: drop.occurrence.eventId,
         dtStartUtc: drop.targetStart.toUTC().toISO()!,
         dtEndUtc: drop.targetEnd.toUTC().toISO()!,
-        targetCalendarId: drop.targetCalendarId
+        targetCalendarId: drop.targetCalendarId,
+        copyInstanceOnly
       })
       setPendingDrop(null)
       await loadCalendarsAndEvents()
@@ -588,6 +632,14 @@ export const App: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setIsShortcutsModalOpen(true)}
+            className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-800/60 rounded-lg transition-colors"
+            title="Phím tắt (? / F1)"
+          >
+            <Keyboard className="h-4 w-4" />
+          </button>
+
+          <button
             onClick={() => setIsSettingsOpen(true)}
             className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-lg transition-colors"
             title={t('actions.settings')}
@@ -738,6 +790,12 @@ export const App: React.FC = () => {
                   </label>
                 </div>
               </div>
+
+              {/* Holiday Calendars Quick Subscription */}
+              <HolidayCalendarToggle
+                calendars={calendars}
+                onCalendarsChanged={loadCalendarsAndEvents}
+              />
             </>
           )}
 
@@ -754,11 +812,11 @@ export const App: React.FC = () => {
             <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>{occurrences.length} {i18n.language === 'vi' ? 'sự kiện' : 'events'}</span>
+                <span>Local DB ready</span>
               </div>
               <button
                 onClick={() => loadCalendarsAndEvents()}
-                className="text-slate-400 hover:text-slate-200 p-1"
+                className="p-1 hover:bg-slate-800 rounded transition-colors"
                 title={t('actions.refresh')}
               >
                 <RotateCw className="h-3 w-3" />
@@ -925,6 +983,12 @@ export const App: React.FC = () => {
           setEditorData({ event })
           setIsEditorOpen(true)
         }}
+      />
+
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal
+        isOpen={isShortcutsModalOpen}
+        onClose={() => setIsShortcutsModalOpen(false)}
       />
 
       {/* Theme Settings Modal */}

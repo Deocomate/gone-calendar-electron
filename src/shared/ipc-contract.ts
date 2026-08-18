@@ -81,6 +81,10 @@ export const IPC_CHANNELS = {
     TOGGLE: 'gone:mini:toggle',
     GET_UPCOMING: 'gone:mini:get-upcoming',
     SET_ALWAYS_ON_TOP: 'gone:mini:set-always-on-top'
+  },
+  HOLIDAYS: {
+    SUBSCRIBE: 'gone:holidays:subscribe',
+    UNSUBSCRIBE: 'gone:holidays:unsubscribe'
   }
 } as const
 
@@ -168,5 +172,9 @@ export interface GoneAPI {
     toggle: () => Promise<void>
     getUpcoming: (limit?: number) => Promise<{ occurrences: ExpandedOccurrence[]; tasks: TaskItem[] }>
     setAlwaysOnTop: (flag: boolean) => Promise<boolean>
+  },
+  holidays: {
+    subscribe: (type: 'vietnam' | 'international') => Promise<{ calendarId: string; count: number }>
+    unsubscribe: (type: 'vietnam' | 'international') => Promise<boolean>
   }
 }

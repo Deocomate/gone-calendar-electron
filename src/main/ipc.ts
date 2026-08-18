@@ -4,6 +4,7 @@ import { registerCalendarIpcHandlers } from './ipc/calendar-ipc'
 import { registerSettingsIpcHandlers } from './ipc/settings-ipc'
 import { registerAuthSyncIpcHandlers } from './ipc/auth-sync-ipc'
 import { registerTasksIpcHandlers } from './ipc/tasks-ipc'
+import { registerHolidayIpcHandlers } from './ipc/holiday-ipc'
 
 let currentLocale: AppLocale = 'vi'
 
@@ -38,10 +39,11 @@ export function registerIpcHandlers(): void {
     return process.platform
   })
 
-  // Register domain calendar, event, settings, auth, sync, and tasks IPC handlers
+  // Register domain calendar, event, settings, auth, sync, tasks, and holiday IPC handlers
   registerSettingsIpcHandlers()
   registerCalendarIpcHandlers()
   registerAuthSyncIpcHandlers()
   registerTasksIpcHandlers()
+  registerHolidayIpcHandlers()
 }
 

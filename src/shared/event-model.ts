@@ -141,6 +141,7 @@ export interface CopyEventInput {
   dtStartUtc: string
   dtEndUtc: string
   targetCalendarId?: string
+  copyInstanceOnly?: boolean
 }
 
 export interface UpdateRecurringScopeInput {

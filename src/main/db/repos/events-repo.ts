@@ -449,6 +449,10 @@ export class EventsRepo {
     const newId = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const newUid = `${newId}@gone.calendar`
 
+    // When copyInstanceOnly is true, create a single standalone event without rrule
+    const rrule = input.copyInstanceOnly ? null : (existing.event.rrule || null)
+    const exdate = input.copyInstanceOnly ? null : (existing.event.exdate || null)
+
     this.db
       .prepare(
         `INSERT INTO events (
@@ -468,8 +472,8 @@ export class EventsRepo {
         input.dtEndUtc,
         existing.event.tzid,
         existing.event.allDay ? 1 : 0,
-        existing.event.rrule || null,
-        existing.event.exdate || null,
+        rrule,
+        exdate,
         existing.event.color || null,
         existing.event.meetingUrl || null,
         now,
@@ -626,5 +630,19 @@ export class EventsRepo {
       event.attendees = this.getAttendeesForEvent(r.id)
       return event
     })
+  }
+
+  queryEventsByCalendar(calendarId: string): CalendarEvent[] {
+    const rows = this.db
+      .prepare('SELECT * FROM events WHERE calendar_id = ? AND is_deleted = 0')
+      .all<EventRow>(calendarId)
+    return rows.map(mapRowToEvent)
+  }
+
+  deleteEventsByCalendar(calendarId: string): number {
+    const result = this.db
+      .prepare('DELETE FROM events WHERE calendar_id = ?')
+      .run(calendarId)
+    return result.changes
   }
 }

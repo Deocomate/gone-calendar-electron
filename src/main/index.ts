@@ -2,6 +2,8 @@ import { app, BrowserWindow, shell, nativeTheme } from 'electron'
 import { join } from 'node:path'
 import { registerIpcHandlers } from './ipc'
 import { initDatabase, closeDatabase } from './db/database'
+import { setupTray } from './tray'
+import { registerMiniIpcHandlers } from './mini-window'
 
 // Enforce single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -70,6 +72,15 @@ if (!gotTheLock) {
 
     registerIpcHandlers()
     createWindow()
+
+    if (mainWindow) {
+      registerMiniIpcHandlers(mainWindow)
+      try {
+        setupTray(mainWindow)
+      } catch (err) {
+        console.warn('System tray initialization skipped or unsupported:', err)
+      }
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

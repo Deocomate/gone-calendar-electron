@@ -1,12 +1,14 @@
 import React from 'react'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
+import type { TaskItem } from '@shared/task-model'
 import LunarLabel from '../components/LunarLabel'
 import WeekNumber from '../components/WeekNumber'
 
 interface MonthViewProps {
   anchorDate: DateTime
   occurrences: ExpandedOccurrence[]
+  tasks?: TaskItem[]
   showLunar: boolean
   showWeekNumbers: boolean
   onSelectDate?: (date: DateTime) => void
@@ -18,6 +20,7 @@ interface MonthViewProps {
 export const MonthView: React.FC<MonthViewProps> = ({
   anchorDate,
   occurrences,
+  tasks = [],
   showLunar,
   showWeekNumbers,
   onSelectDate,
@@ -48,6 +51,19 @@ export const MonthView: React.FC<MonthViewProps> = ({
     }
     return map
   }, [occurrences])
+
+  // Group tasks by YYYY-MM-DD
+  const tasksByDay = React.useMemo(() => {
+    const map = new Map<string, TaskItem[]>()
+    for (const t of tasks) {
+      if (t.dueDate && t.showOnCalendar !== false) {
+        const list = map.get(t.dueDate) || []
+        list.push(t)
+        map.set(t.dueDate, list)
+      }
+    }
+    return map
+  }, [tasks])
 
   const weekdayHeaders = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 
@@ -90,6 +106,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                 const isCurrentMonth = day.month === anchorDate.month
                 const isToday = day.hasSame(today, 'day')
                 const dayOccurrences = occurrencesByDay.get(dayKey) || []
+                const dayTasks = tasksByDay.get(dayKey) || []
 
                 return (
                   <div
@@ -129,9 +146,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       )}
                     </div>
 
-                    {/* Event Chips */}
+                    {/* Event Chips & Task Badges */}
                     <div className="flex-1 space-y-1 overflow-hidden">
-                      {dayOccurrences.slice(0, 3).map((occ) => {
+                      {dayOccurrences.slice(0, 2).map((occ) => {
                         const occTime = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
                         return (
                           <div
@@ -159,9 +176,23 @@ export const MonthView: React.FC<MonthViewProps> = ({
                         )
                       })}
 
-                      {dayOccurrences.length > 3 && (
+                      {/* Due Tasks */}
+                      {dayTasks.slice(0, 2).map((task) => (
+                        <div
+                          key={task.id}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium truncate flex items-center gap-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/30"
+                          title={`Nhiệm vụ: ${task.title}`}
+                        >
+                          <span className="text-[9px]">✓</span>
+                          <span className={`truncate ${task.completed ? 'line-through opacity-60' : ''}`}>
+                            {task.title}
+                          </span>
+                        </div>
+                      ))}
+
+                      {dayOccurrences.length + dayTasks.length > 3 && (
                         <div className="text-[10px] font-semibold text-indigo-400 px-1 hover:underline">
-                          +{dayOccurrences.length - 3} {showLunar ? 'khác' : 'more'}
+                          +{dayOccurrences.length + dayTasks.length - 3} {showLunar ? 'khác' : 'more'}
                         </div>
                       )}
                     </div>

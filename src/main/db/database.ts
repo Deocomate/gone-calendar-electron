@@ -133,6 +133,21 @@ INSERT OR IGNORE INTO events_fts(event_id, title, notes, location)
 SELECT id, title, COALESCE(notes, ''), COALESCE(location, '') FROM events;
 `
 
+const MIGRATION_003_SQL = `
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  due_date TEXT,
+  completed INTEGER NOT NULL DEFAULT 0,
+  show_on_calendar INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed);
+`
+
 /**
  * Execute all schema migrations in order
  */
@@ -160,6 +175,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_002_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       2,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 3) {
+    db.exec(MIGRATION_003_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      3,
       new Date().toISOString()
     )
   }

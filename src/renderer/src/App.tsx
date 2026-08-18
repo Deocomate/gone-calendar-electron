@@ -18,7 +18,9 @@ import {
   FileUp,
   Users,
   Search,
-  Filter
+  Filter,
+  Palette,
+  CheckSquare
 } from 'lucide-react'
 import type { AppLocale } from '@shared/ipc-contract'
 import type {
@@ -28,6 +30,7 @@ import type {
   UpdateEventInput,
   RecurringEditScope
 } from '@shared/event-model'
+import type { TaskItem, ThemeConfig } from '@shared/task-model'
 import { useVisibleRange } from './hooks/use-visible-range'
 import MonthView from './views/MonthView'
 import WeekView from './views/WeekView'
@@ -39,6 +42,8 @@ import RecurringScopeDialog from './editor/RecurringScopeDialog'
 import DropActionPopover, { type PendingDropAction } from './dnd/DropActionPopover'
 import AccountManagerModal from './components/AccountManagerModal'
 import SearchPaletteModal from './components/SearchPaletteModal'
+import TaskPane from './components/TaskPane'
+import ThemeSettingsModal from './components/ThemeSettingsModal'
 import { useEventDnD } from './dnd/use-event-dnd'
 
 export type CalendarViewType = 'day' | 'week' | 'month' | 'year' | 'list'
@@ -53,13 +58,25 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false)
   const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState<boolean>(false)
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false)
   const [selectedColorFilter, setSelectedColorFilter] = useState<string | null>(null)
   const [showLunar, setShowLunar] = useState<boolean>(true)
   const [showWeekNumbers, setShowWeekNumbers] = useState<boolean>(true)
+  const [sidebarTab, setSidebarTab] = useState<'calendar' | 'tasks'>('calendar')
+
+  // Theme Config
+  const [themeConfig, setThemeConfig] = useState<ThemeConfig>({
+    mode: 'dark',
+    accentColor: '#6366f1',
+    customBgUrl: '',
+    bgOverlayOpacity: 0.8,
+    bgBlur: 8
+  })
 
   // Domain state
   const [calendars, setCalendars] = useState<Calendar[]>([])
   const [occurrences, setOccurrences] = useState<ExpandedOccurrence[]>([])
+  const [tasks, setTasks] = useState<TaskItem[]>([])
   const [importStatus, setImportStatus] = useState<string | null>(null)
 
   // Full Event Editor Dialog State
@@ -122,6 +139,16 @@ export const App: React.FC = () => {
     }
   }, [visibleRange.startUtc, visibleRange.endUtc])
 
+  const loadTasks = useCallback(async () => {
+    if (!window.gone?.tasks?.list) return
+    try {
+      const list = await window.gone.tasks.list(true)
+      setTasks(list)
+    } catch (err) {
+      console.warn('Failed to load tasks:', err)
+    }
+  }, [])
+
   useEffect(() => {
     const initApp = async (): Promise<void> => {
       if (window.gone?.app) {
@@ -139,21 +166,31 @@ export const App: React.FC = () => {
         }
       }
 
-      // Load persistent settings
+      // Load persistent settings & theme
       if (window.gone?.settings) {
         try {
           const settings = await window.gone.settings.getAll()
           setShowLunar(settings.showLunar ?? true)
           setShowWeekNumbers(settings.showWeekNumbers ?? true)
+
+          const theme: ThemeConfig = {
+            mode: 'dark',
+            accentColor: settings.themeAccent || '#6366f1',
+            customBgUrl: settings.themeCustomBg || '',
+            bgOverlayOpacity: settings.themeOverlayOpacity !== undefined ? settings.themeOverlayOpacity : 0.8,
+            bgBlur: settings.themeBlur !== undefined ? settings.themeBlur : 8
+          }
+          setThemeConfig(theme)
         } catch (err) {
           console.warn('Failed to load settings:', err)
         }
       }
 
       await loadCalendarsAndEvents()
+      await loadTasks()
     }
     initApp()
-  }, [i18n, loadCalendarsAndEvents])
+  }, [i18n, loadCalendarsAndEvents, loadTasks])
 
   // Navigation handlers
   const handleToday = () => {
@@ -404,7 +441,27 @@ export const App: React.FC = () => {
   const views: CalendarViewType[] = ['day', 'week', 'month', 'year', 'list']
 
   return (
-    <div className={`h-screen w-screen flex flex-col ${isDarkMode ? 'dark' : ''} bg-slate-950 text-slate-100 font-sans select-none`}>
+    <div
+      className={`h-screen w-screen flex flex-col ${isDarkMode ? 'dark' : ''} bg-slate-950 text-slate-100 font-sans select-none relative overflow-hidden`}
+      style={{ '--accent-color': themeConfig.accentColor } as any}
+    >
+      {/* Dynamic Background Wallpaper */}
+      {themeConfig.customBgUrl && (
+        <div
+          className="fixed inset-0 pointer-events-none z-0 bg-cover bg-center transition-all duration-500 scale-105"
+          style={{
+            backgroundImage: `url(${themeConfig.customBgUrl})`,
+            filter: `blur(${themeConfig.bgBlur}px)`
+          }}
+        />
+      )}
+      {themeConfig.customBgUrl && (
+        <div
+          className="fixed inset-0 pointer-events-none z-0 bg-slate-950 transition-opacity duration-300"
+          style={{ opacity: themeConfig.bgOverlayOpacity }}
+        />
+      )}
+
       {/* Top Navigation Bar */}
       <header className="h-14 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md px-4 flex items-center justify-between shrink-0 z-10">
         {/* Brand & Date Navigation */}
@@ -523,6 +580,14 @@ export const App: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setIsThemeModalOpen(true)}
+            className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-800/60 rounded-lg transition-colors"
+            title="Tùy biến Giao diện (Theme)"
+          >
+            <Palette className="h-4 w-4" />
+          </button>
+
+          <button
             onClick={() => setIsSettingsOpen(true)}
             className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-lg transition-colors"
             title={t('actions.settings')}
@@ -533,114 +598,148 @@ export const App: React.FC = () => {
       </header>
 
       {/* Main Workspace Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden z-10">
         {/* Left Sidebar */}
-        <aside className="w-64 border-r border-slate-800/80 bg-slate-900/30 flex flex-col p-4 gap-6 shrink-0">
-          {/* Mini Calendar Card */}
-          <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-xs">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-3">
-              <span>{anchorDate.toFormat('MMMM yyyy')}</span>
-              <div className="flex gap-1 text-slate-400">
-                <ChevronLeft
-                  className="h-3.5 w-3.5 cursor-pointer hover:text-slate-200"
-                  onClick={() => setAnchorDate((d) => d.minus({ months: 1 }))}
-                />
-                <ChevronRight
-                  className="h-3.5 w-3.5 cursor-pointer hover:text-slate-200"
-                  onClick={() => setAnchorDate((d) => d.plus({ months: 1 }))}
-                />
-              </div>
-            </div>
-            {/* Weekday headers */}
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-slate-500 mb-2">
-              <span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span className="text-indigo-400">T7</span><span className="text-rose-400">CN</span>
-            </div>
-            {/* Mini Grid Days */}
-            <div className="grid grid-cols-7 gap-1 text-center text-xs">
-              {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
-                const isSelected = anchorDate.day === day
-                return (
-                  <div
-                    key={day}
-                    onClick={() => setAnchorDate((d) => d.set({ day }))}
-                    className={`h-6 w-6 mx-auto rounded-md flex items-center justify-center transition-colors cursor-pointer text-[11px] ${
-                      isSelected
-                        ? 'bg-indigo-600 text-white font-bold shadow-xs'
-                        : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
-                    }`}
-                  >
-                    {day}
-                  </div>
-                )
-              })}
-            </div>
+        <aside className="w-64 border-r border-slate-800/80 bg-slate-900/40 backdrop-blur-md flex flex-col p-4 gap-4 shrink-0">
+          {/* Sidebar Tab Switcher */}
+          <div className="flex bg-slate-950/60 p-1 rounded-xl border border-slate-800/80 shrink-0">
+            <button
+              onClick={() => setSidebarTab('calendar')}
+              className={`flex-1 py-1 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                sidebarTab === 'calendar'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <CalendarDays className="h-3.5 w-3.5" />
+              <span>Lịch</span>
+            </button>
+            <button
+              onClick={() => setSidebarTab('tasks')}
+              className={`flex-1 py-1 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                sidebarTab === 'tasks'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <CheckSquare className="h-3.5 w-3.5" />
+              <span>Nhiệm vụ ({tasks.filter((t) => !t.completed).length})</span>
+            </button>
           </div>
 
-          {/* Calendars Group */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
-              <span>{t('sidebar.myCalendars')}</span>
-              <Folder className="h-3.5 w-3.5 text-slate-500" />
+          {sidebarTab === 'tasks' ? (
+            <div className="flex-1 overflow-hidden">
+              <TaskPane onTasksChanged={loadTasks} />
             </div>
+          ) : (
+            <>
+              {/* Mini Calendar Card */}
+              <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-3">
+                  <span>{anchorDate.toFormat('MMMM yyyy')}</span>
+                  <div className="flex gap-1 text-slate-400">
+                    <ChevronLeft
+                      className="h-3.5 w-3.5 cursor-pointer hover:text-slate-200"
+                      onClick={() => setAnchorDate((d) => d.minus({ months: 1 }))}
+                    />
+                    <ChevronRight
+                      className="h-3.5 w-3.5 cursor-pointer hover:text-slate-200"
+                      onClick={() => setAnchorDate((d) => d.plus({ months: 1 }))}
+                    />
+                  </div>
+                </div>
+                {/* Weekday headers */}
+                <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-slate-500 mb-2">
+                  <span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span className="text-indigo-400">T7</span><span className="text-rose-400">CN</span>
+                </div>
+                {/* Mini Grid Days */}
+                <div className="grid grid-cols-7 gap-1 text-center text-xs">
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+                    const isSelected = anchorDate.day === day
+                    return (
+                      <div
+                        key={day}
+                        onClick={() => setAnchorDate((d) => d.set({ day }))}
+                        className={`h-6 w-6 mx-auto rounded-md flex items-center justify-center transition-colors cursor-pointer text-[11px] ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                            : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                        }`}
+                      >
+                        {day}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
 
-            <div className="space-y-1.5">
-              {calendars.length > 0 ? (
-                calendars.map((cal) => (
-                  <label
-                    key={cal.id}
-                    className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors"
-                  >
+              {/* Calendars Group */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <span>{t('sidebar.myCalendars')}</span>
+                  <Folder className="h-3.5 w-3.5 text-slate-500" />
+                </div>
+
+                <div className="space-y-1.5">
+                  {calendars.length > 0 ? (
+                    calendars.map((cal) => (
+                      <label
+                        key={cal.id}
+                        className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={cal.isVisible}
+                          onChange={() => toggleCalendarVisibility(cal)}
+                          className="rounded accent-indigo-500 h-3.5 w-3.5"
+                        />
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shadow-xs shrink-0"
+                          style={{ backgroundColor: cal.color }}
+                        />
+                        <span className="flex-1 truncate">{cal.name}</span>
+                        {cal.isReadOnly && (
+                          <span className="text-[10px] text-amber-400 font-mono px-1 py-0.5 bg-amber-500/10 rounded">
+                            RO
+                          </span>
+                        )}
+                      </label>
+                    ))
+                  ) : (
+                    <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer">
+                      <input type="checkbox" defaultChecked className="rounded accent-indigo-500 h-3.5 w-3.5" />
+                      <span className="h-2.5 w-2.5 rounded-full bg-indigo-500 shadow-xs" />
+                      <span className="flex-1 truncate">{t('sidebar.localCalendar')}</span>
+                    </label>
+                  )}
+
+                  {/* Lunar Toggle */}
+                  <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors">
                     <input
                       type="checkbox"
-                      checked={cal.isVisible}
-                      onChange={() => toggleCalendarVisibility(cal)}
+                      checked={showLunar}
+                      onChange={(e) => toggleLunar(e.target.checked)}
                       className="rounded accent-indigo-500 h-3.5 w-3.5"
                     />
-                    <span
-                      className="h-2.5 w-2.5 rounded-full shadow-xs shrink-0"
-                      style={{ backgroundColor: cal.color }}
-                    />
-                    <span className="flex-1 truncate">{cal.name}</span>
-                    {cal.isReadOnly && (
-                      <span className="text-[10px] text-amber-400 font-mono px-1 py-0.5 bg-amber-500/10 rounded">
-                        RO
-                      </span>
-                    )}
+                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                    <span className="flex-1 truncate">{t('sidebar.lunarEnabled')}</span>
                   </label>
-                ))
-              ) : (
-                <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer">
-                  <input type="checkbox" defaultChecked className="rounded accent-indigo-500 h-3.5 w-3.5" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-indigo-500 shadow-xs" />
-                  <span className="flex-1 truncate">{t('sidebar.localCalendar')}</span>
-                </label>
-              )}
 
-              {/* Lunar Toggle */}
-              <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors">
-                <input
-                  type="checkbox"
-                  checked={showLunar}
-                  onChange={(e) => toggleLunar(e.target.checked)}
-                  className="rounded accent-indigo-500 h-3.5 w-3.5"
-                />
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-                <span className="flex-1 truncate">{t('sidebar.lunarEnabled')}</span>
-              </label>
-
-              {/* Week Numbers Toggle */}
-              <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors">
-                <input
-                  type="checkbox"
-                  checked={showWeekNumbers}
-                  onChange={(e) => toggleWeekNumbers(e.target.checked)}
-                  className="rounded accent-indigo-500 h-3.5 w-3.5"
-                />
-                <Layers className="h-3.5 w-3.5 text-sky-400" />
-                <span className="flex-1 truncate">{t('sidebar.weekNumbers')}</span>
-              </label>
-            </div>
-          </div>
+                  {/* Week Numbers Toggle */}
+                  <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={showWeekNumbers}
+                      onChange={(e) => toggleWeekNumbers(e.target.checked)}
+                      className="rounded accent-indigo-500 h-3.5 w-3.5"
+                    />
+                    <Layers className="h-3.5 w-3.5 text-sky-400" />
+                    <span className="flex-1 truncate">{t('sidebar.weekNumbers')}</span>
+                  </label>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Sync Status footer */}
           <div className="mt-auto pt-3 border-t border-slate-800/80 space-y-2">
@@ -723,6 +822,7 @@ export const App: React.FC = () => {
             <MonthView
               anchorDate={anchorDate}
               occurrences={selectedColorFilter ? occurrences.filter((o) => o.color === selectedColorFilter) : occurrences}
+              tasks={tasks}
               showLunar={showLunar}
               showWeekNumbers={showWeekNumbers}
               onSelectDate={(date) => {
@@ -797,6 +897,7 @@ export const App: React.FC = () => {
             <ListView
               anchorDate={anchorDate}
               occurrences={selectedColorFilter ? occurrences.filter((o) => o.color === selectedColorFilter) : occurrences}
+              tasks={tasks}
               showLunar={showLunar}
               onSelectOccurrence={(occ) => {
                 setEditorData({ occurrence: occ })
@@ -824,6 +925,13 @@ export const App: React.FC = () => {
           setEditorData({ event })
           setIsEditorOpen(true)
         }}
+      />
+
+      {/* Theme Settings Modal */}
+      <ThemeSettingsModal
+        isOpen={isThemeModalOpen}
+        onClose={() => setIsThemeModalOpen(false)}
+        onThemeChanged={(theme) => setThemeConfig(theme)}
       />
 
       {/* Full Event Editor Dialog */}

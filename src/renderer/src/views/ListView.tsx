@@ -1,12 +1,14 @@
 import React from 'react'
 import { DateTime } from 'luxon'
-import { CalendarDays, Clock, MapPin, Sparkles, Repeat } from 'lucide-react'
+import { CalendarDays, Clock, MapPin, Sparkles, Repeat, CheckCircle2 } from 'lucide-react'
 import type { ExpandedOccurrence } from '@shared/event-model'
+import type { TaskItem } from '@shared/task-model'
 import LunarLabel from '../components/LunarLabel'
 
 interface ListViewProps {
   anchorDate: DateTime
   occurrences: ExpandedOccurrence[]
+  tasks?: TaskItem[]
   showLunar: boolean
   onSelectOccurrence?: (occ: ExpandedOccurrence) => void
   onAddEvent?: () => void
@@ -15,6 +17,7 @@ interface ListViewProps {
 export const ListView: React.FC<ListViewProps> = ({
   anchorDate,
   occurrences,
+  tasks = [],
   showLunar,
   onSelectOccurrence,
   onAddEvent
@@ -101,8 +104,27 @@ export const ListView: React.FC<ListViewProps> = ({
               )}
             </div>
 
-            {/* Event List for this Date */}
+            {/* Event & Task List for this Date */}
             <div className="grid gap-2 pl-2">
+              {tasks
+                .filter((t) => t.dueDate === date.toFormat('yyyy-MM-dd') && t.showOnCalendar !== false)
+                .map((task) => (
+                  <div
+                    key={task.id}
+                    className="p-2.5 rounded-xl bg-slate-900/50 border border-emerald-500/20 flex items-center justify-between gap-3 text-xs text-slate-300 shadow-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                      <span className={`font-medium ${task.completed ? 'line-through text-slate-500' : 'text-emerald-200'}`}>
+                        {task.title}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-md font-medium">
+                      Nhiệm vụ
+                    </span>
+                  </div>
+                ))}
+
               {items.map((occ) => {
                 const startDt = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
                 const endDt = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local')
@@ -140,21 +162,21 @@ export const ListView: React.FC<ListViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-4 text-xs text-slate-400 shrink-0">
-                      {occ.location && (
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5 text-slate-500" />
-                          <span>{occ.location}</span>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-1 font-mono text-slate-300">
-                        <Clock className="h-3.5 w-3.5 text-indigo-400" />
+                      <div className="flex items-center gap-1.5 font-mono">
+                        <Clock className="h-3.5 w-3.5 text-slate-500" />
                         <span>
                           {occ.allDay
                             ? 'Cả ngày'
-                            : `${startDt.toFormat('HH:mm')} – ${endDt.toFormat('HH:mm')}`}
+                            : `${startDt.toFormat('HH:mm')} - ${endDt.toFormat('HH:mm')}`}
                         </span>
                       </div>
+
+                      {occ.location && (
+                        <div className="flex items-center gap-1 text-slate-400 max-w-[150px] truncate">
+                          <MapPin className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                          <span className="truncate">{occ.location}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )

@@ -59,6 +59,20 @@ const goneApi: GoneAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.ICS.IMPORT, targetCalendarId, icsContent),
     exportIcs: (calendarId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.ICS.EXPORT, calendarId)
+  },
+  tasks: {
+    list: (includeCompleted?: boolean) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK.LIST, includeCompleted),
+    create: (input) => ipcRenderer.invoke(IPC_CHANNELS.TASK.CREATE, input),
+    update: (id, input) => ipcRenderer.invoke(IPC_CHANNELS.TASK.UPDATE, id, input),
+    toggle: (id) => ipcRenderer.invoke(IPC_CHANNELS.TASK.TOGGLE, id),
+    delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.TASK.DELETE, id)
+  },
+  mini: {
+    openMain: () => ipcRenderer.invoke(IPC_CHANNELS.MINI.OPEN_MAIN),
+    toggle: () => ipcRenderer.invoke(IPC_CHANNELS.MINI.TOGGLE),
+    getUpcoming: (limit?: number) => ipcRenderer.invoke(IPC_CHANNELS.MINI.GET_UPCOMING, limit),
+    setAlwaysOnTop: (flag: boolean) => ipcRenderer.invoke(IPC_CHANNELS.MINI.SET_ALWAYS_ON_TOP, flag)
   }
 }
 

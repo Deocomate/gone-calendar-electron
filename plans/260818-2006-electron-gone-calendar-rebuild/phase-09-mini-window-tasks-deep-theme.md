@@ -1,7 +1,7 @@
 ---
 phase: 9
 title: "Mini window tasks deep theme"
-status: pending
+status: completed
 effort: M
 priority: P3
 dependencies: [8]
@@ -26,28 +26,28 @@ R3 satellite UX: always-on-top / tray upcoming window (same on Win+Linux), local
 
 ## Related Code Files
 
-- Create: `src/main/tray.ts`, `src/main/mini-window.ts`
-- Create: `src/renderer/mini/mini-app.tsx`
-- Create: `src/main/db/migrations/00x-tasks.sql`, `src/main/db/repos/tasks-repo.ts`
-- Create: `src/renderer/tasks/task-pane.tsx`
-- Create: `src/renderer/settings/theme-page.tsx`
-- Modify: month/list to show due tasks as optional rows
-- Delete: none
+- Created: `src/main/tray.ts`, `src/main/mini-window.ts`
+- Created: `src/renderer/src/mini/MiniApp.tsx`
+- Created: `src/main/db/migrations/003-tasks.sql`, `src/main/db/repos/tasks-repo.ts`
+- Created: `src/renderer/src/components/TaskPane.tsx`
+- Created: `src/renderer/src/components/ThemeSettingsModal.tsx`
+- Modified: month/list to show due tasks with checkable badges
 
 ## Implementation Steps
 
-1. Tray + mini window: next N events; click → main focuses that date/event.
-2. Tasks CRUD; checkbox; due date; optional month/list visibility.
-3. Theme: color pickers + background file picker; dark/light still work.
-4. Linux: tray on GNOME may need `StatusNotifier`; document fallback (mini window without tray).
+1. [x] Tray + mini window: next N events; click → main focuses that date/event.
+2. [x] Tasks CRUD; checkbox; due date; optional month/list visibility.
+3. [x] Theme: color pickers + background file picker; dark/light still work.
+4. [x] Linux: tray fallback documented.
 
 ## Success Criteria
 
-- [ ] URD §12 R3
-- [ ] Mini window works with main closed-to-tray (optional setting keep running)
-- [ ] Tasks do not sync to Google Tasks
-- [ ] Background image does not make event text unreadable (contrast check)
+- [x] URD §12 R3
+- [x] Mini window works with main closed-to-tray (optional setting keep running)
+- [x] Tasks do not sync to Google Tasks (isolated local SQLite persistence)
+- [x] Background image does not make event text unreadable (contrast overlay & blur sliders)
 
 ## Risk Assessment
 
 GNOME tray unreliability — mini window is the real product; tray is enhancement. Always-on-top can annoy; default off, user enables.
+

@@ -162,6 +162,41 @@ describe('IPC Channels and Contracts', () => {
       ics: {
         importIcs: async () => ({ success: true, importedCount: 0, errorCount: 0 }),
         exportIcs: async () => 'BEGIN:VCALENDAR\r\nEND:VCALENDAR'
+      },
+      tasks: {
+        list: async () => [],
+        create: async (input) => ({
+          id: 't1',
+          title: input.title,
+          dueDate: input.dueDate,
+          completed: false,
+          showOnCalendar: input.showOnCalendar ?? true,
+          createdAt: '',
+          updatedAt: ''
+        }),
+        update: async (id, input) => ({
+          id,
+          title: input.title || '',
+          completed: input.completed ?? false,
+          showOnCalendar: input.showOnCalendar ?? true,
+          createdAt: '',
+          updatedAt: ''
+        }),
+        toggle: async (id) => ({
+          id,
+          title: '',
+          completed: true,
+          showOnCalendar: true,
+          createdAt: '',
+          updatedAt: ''
+        }),
+        delete: async () => true
+      },
+      mini: {
+        openMain: async () => {},
+        toggle: async () => {},
+        getUpcoming: async () => ({ occurrences: [], tasks: [] }),
+        setAlwaysOnTop: async () => true
       }
     }
 

@@ -17,6 +17,7 @@ import type {
   SyncStatus,
   SyncResult
 } from './event-model'
+import type { TaskItem, CreateTaskInput, UpdateTaskInput } from './task-model'
 import type { AppSettings } from './settings-contract'
 
 export const IPC_CHANNELS = {
@@ -67,6 +68,19 @@ export const IPC_CHANNELS = {
   ICS: {
     IMPORT: 'gone:ics:import',
     EXPORT: 'gone:ics:export'
+  },
+  TASK: {
+    LIST: 'gone:task:list',
+    CREATE: 'gone:task:create',
+    UPDATE: 'gone:task:update',
+    TOGGLE: 'gone:task:toggle',
+    DELETE: 'gone:task:delete'
+  },
+  MINI: {
+    OPEN_MAIN: 'gone:mini:open-main',
+    TOGGLE: 'gone:mini:toggle',
+    GET_UPCOMING: 'gone:mini:get-upcoming',
+    SET_ALWAYS_ON_TOP: 'gone:mini:set-always-on-top'
   }
 } as const
 
@@ -141,5 +155,18 @@ export interface GoneAPI {
   ics: {
     importIcs: (targetCalendarId: string, icsContent: string) => Promise<IcsImportResult>
     exportIcs: (calendarId: string) => Promise<string>
+  },
+  tasks: {
+    list: (includeCompleted?: boolean) => Promise<TaskItem[]>
+    create: (input: CreateTaskInput) => Promise<TaskItem>
+    update: (id: string, input: UpdateTaskInput) => Promise<TaskItem>
+    toggle: (id: string) => Promise<TaskItem>
+    delete: (id: string) => Promise<boolean>
+  },
+  mini: {
+    openMain: () => Promise<void>
+    toggle: () => Promise<void>
+    getUpcoming: (limit?: number) => Promise<{ occurrences: ExpandedOccurrence[]; tasks: TaskItem[] }>
+    setAlwaysOnTop: (flag: boolean) => Promise<boolean>
   }
 }

@@ -11,6 +11,7 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import type { ConnectCalDavInput } from '@shared/ipc-contract'
+import { TextInput } from './ui'
 
 interface CalDavConnectModalProps {
   isOpen: boolean
@@ -105,8 +106,8 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="gc-overlay select-none">
+      <div className="gc-dialog w-full max-w-md max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/50">
           <div className="flex items-center gap-2.5">
@@ -215,60 +216,46 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
 
           {provider !== 'icloud' && (
             <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
-                Địa chỉ máy chủ CalDAV (URL) <span className="text-rose-500 dark:text-rose-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="https://cloud.example.com/remote.php/dav"
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
+              <TextInput
+                label="Địa chỉ máy chủ CalDAV (URL)"
                 required
+                value={serverUrl}
+                onChange={setServerUrl}
+                placeholder="https://cloud.example.com/remote.php/dav"
+                prefixIcon={<Server className="h-3.5 w-3.5" />}
               />
             </div>
           )}
 
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
-              {provider === 'icloud' ? 'Tài khoản Apple ID (Email)' : 'Tên đăng nhập (Username)'}{' '}
-              <span className="text-rose-500 dark:text-rose-400">*</span>
-            </label>
-            <input
-              type="text"
+            <TextInput
+              label={provider === 'icloud' ? 'Tài khoản Apple ID (Email)' : 'Tên đăng nhập (Username)'}
+              required
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={setUsername}
               placeholder={provider === 'icloud' ? 'user@icloud.com' : 'username'}
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
-              required
+              prefixIcon={<Globe className="h-3.5 w-3.5" />}
             />
           </div>
 
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
-              {provider === 'icloud' ? 'Mật khẩu dành riêng (App-Specific Password)' : 'Mật khẩu'}{' '}
-              <span className="text-rose-500 dark:text-rose-400">*</span>
-            </label>
-            <input
+            <TextInput
+              label={provider === 'icloud' ? 'Mật khẩu dành riêng (App-Specific Password)' : 'Mật khẩu'}
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono"
               required
+              value={password}
+              onChange={setPassword}
+              placeholder="••••••••••••"
             />
           </div>
 
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
-              Tên hiển thị tài khoản
-            </label>
-            <input
-              type="text"
+            <TextInput
+              label="Tên hiển thị tài khoản"
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={setDisplayName}
               placeholder="Tên tài khoản trong Gone Calendar"
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
+              prefixIcon={<Calendar className="h-3.5 w-3.5" />}
             />
           </div>
 

@@ -1,6 +1,7 @@
 import React from 'react'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
+import { weekdayHeaders, TODAY_COLOR, DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
 
 interface YearViewProps {
   anchorDate: DateTime
@@ -17,32 +18,30 @@ export const YearView: React.FC<YearViewProps> = ({
 }) => {
   const today = DateTime.local()
   const year = anchorDate.year
+  const headers = weekdayHeaders(1)
 
-  // Map occurrences by 'yyyy-MM-dd' for quick lookup
-  const occurrencesByDay = React.useMemo(() => {
-    const set = new Set<string>()
+  const colorsByDay = React.useMemo(() => {
+    const map = new Map<string, string[]>()
     for (const occ of occurrences) {
       const dt = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
-      set.add(dt.toFormat('yyyy-MM-dd'))
+      const key = dt.toFormat('yyyy-MM-dd')
+      const list = map.get(key) || []
+      const color = occ.color || DEFAULT_EVENT_COLOR
+      if (!list.includes(color)) list.push(color)
+      map.set(key, list.slice(0, 3))
     }
-    return set
+    return map
   }, [occurrences])
 
-  const weekdayHeaders = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
-
   return (
-    <div className="h-full w-full bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 p-6 overflow-y-auto shadow-xl select-none">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    <div className="h-full w-full overflow-y-auto bg-surface p-6 select-none">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {Array.from({ length: 12 }, (_, i) => i + 1).map((monthNum) => {
           const firstDayOfMonth = DateTime.local(year, monthNum, 1)
           const daysInMonth = firstDayOfMonth.daysInMonth || 31
-          const startWeekday = firstDayOfMonth.weekday // 1=Mon..7=Sun
-
-          // Generate grid cells
+          const startWeekday = firstDayOfMonth.weekday
           const cells: (DateTime | null)[] = []
-          for (let pad = 1; pad < startWeekday; pad++) {
-            cells.push(null)
-          }
+          for (let pad = 1; pad < startWeekday; pad++) cells.push(null)
           for (let d = 1; d <= daysInMonth; d++) {
             cells.push(DateTime.local(year, monthNum, d))
           }
@@ -51,58 +50,49 @@ export const YearView: React.FC<YearViewProps> = ({
             <div
               key={monthNum}
               onClick={() => onSelectMonth(monthNum)}
-              className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 hover:border-indigo-500/50 hover:bg-slate-100 dark:hover:bg-slate-900/90 transition-all cursor-pointer shadow-sm group"
+              className="cursor-pointer rounded-lg p-3 transition-colors duration-150 hover:bg-hover"
             >
-              {/* Month Title */}
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                  {firstDayOfMonth.toFormat('MMMM')}
-                </h4>
-                <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
-                  {monthNum.toString().padStart(2, '0')}
-                </span>
-              </div>
+              <h4 className="mb-2 text-sm font-semibold text-primary">
+                {firstDayOfMonth.toFormat('MMMM')}
+              </h4>
 
-              {/* Mini Weekday Headers */}
-              <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-slate-400 dark:text-slate-500 mb-1.5">
-                {weekdayHeaders.map((h, idx) => (
-                  <span
-                    key={h}
-                    className={`${idx === 5 ? 'text-indigo-600 dark:text-indigo-400' : idx === 6 ? 'text-rose-600 dark:text-rose-400' : ''}`}
-                  >
+              <div className="mb-1 grid grid-cols-7 text-center text-[10px] font-medium text-muted">
+                {headers.map((h, idx) => (
+                  <span key={h} className={idx >= 5 ? 'text-today' : ''}>
                     {h}
                   </span>
                 ))}
               </div>
 
-              {/* Days Grid */}
-              <div className="grid grid-cols-7 gap-1 text-center text-xs">
+              <div className="grid grid-cols-7 gap-0.5 text-center text-xs">
                 {cells.map((day, cellIdx) => {
-                  if (!day) {
-                    return <div key={`empty-${cellIdx}`} className="h-6 w-6" />
-                  }
+                  if (!day) return <div key={`empty-${cellIdx}`} className="h-6 w-6" />
 
                   const isToday = day.hasSame(today, 'day')
-                  const hasEvents = occurrencesByDay.has(day.toFormat('yyyy-MM-dd'))
+                  const colors = colorsByDay.get(day.toFormat('yyyy-MM-dd')) || []
+                  const blockColor = colors[0]
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={day.toISO()}
                       onClick={(e) => {
                         e.stopPropagation()
                         onSelectDate(day)
                       }}
-                      className={`h-6 w-6 mx-auto rounded-md flex flex-col items-center justify-center relative transition-colors ${
-                        isToday
-                          ? 'bg-indigo-600 text-white font-bold shadow-xs'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
+                      className={`relative mx-auto flex h-6 w-6 items-center justify-center rounded text-[11px] text-primary transition-all duration-150 hover:bg-hover ${
+                        colors.length > 0 ? 'gc-stack-card-3d font-semibold' : ''
                       }`}
+                      style={
+                        isToday
+                          ? { color: '#fff', backgroundColor: TODAY_COLOR, fontWeight: 600 }
+                          : blockColor
+                            ? { backgroundColor: `${blockColor}33`, borderRadius: 4 }
+                            : undefined
+                      }
                     >
-                      <span className="text-[11px]">{day.day}</span>
-                      {hasEvents && !isToday && (
-                        <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-indigo-500 dark:bg-indigo-400" />
-                      )}
-                    </div>
+                      {day.day}
+                    </button>
                   )
                 })}
               </div>

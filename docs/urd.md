@@ -193,13 +193,20 @@ IDs are stable for plans and tests.
 
 ```text
 Main window
-├── Sidebar: calendars on/off, add account, mini month (optional)
-├── Toolbar: view switch, today, date, search (R2), settings
-├── Canvas: Day | Week | Month | Year | List
-└── Dialogs: event editor, account onboarding, Move/Copy popover, recurrence scope
+├── Top bar: sidebar toggle, Today, prev/next, period title,
+│            search icon, view dropdown, Create, overflow (⋯)
+├── Left sidebar (collapsible): mini month with event color bars,
+│            calendar visibility, holiday subscriptions, local tasks
+├── Canvas (edge-to-edge): Day | Week | Month | Year | List
+└── Dialogs: event editor, account onboarding, Move/Copy popover,
+             recurrence scope, settings, appearance, shortcuts
+
+Overflow menu: color filter, accounts/sync, sample ICS import,
+keyboard shortcuts, theme mode, appearance, language, settings.
 
 R3: Mini/tray window (upcoming list)
 Settings: language, week numbers, lunar, theme, notification, accounts
+Default theme: light. Dark and system remain available.
 ```
 
 ## 9. Data (logical)

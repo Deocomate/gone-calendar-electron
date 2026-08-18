@@ -42,7 +42,7 @@ describe('IPC Channels and Contracts', () => {
           showWeekNumbers: true,
           firstDayOfWeek: 1,
           timeFormat: '24h',
-          theme: 'system'
+          theme: 'light'
         }),
         get: async () => true as any,
         set: async () => true

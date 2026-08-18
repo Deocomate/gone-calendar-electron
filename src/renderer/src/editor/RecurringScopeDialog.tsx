@@ -22,12 +22,9 @@ export const RecurringScopeDialog: React.FC<RecurringScopeDialogProps> = ({
   const isDelete = action === 'delete'
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 relative">
-        <button
-          onClick={onCancel}
-          className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-        >
+    <div className="gc-overlay select-none">
+      <div className="gc-dialog w-full max-w-md p-6">
+        <button type="button" onClick={onCancel} className="gc-icon-btn absolute top-3 right-3">
           <X className="h-4 w-4" />
         </button>
 

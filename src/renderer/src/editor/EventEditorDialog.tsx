@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { DateTime } from 'luxon'
 import {
-  Clock,
   MapPin,
   Video,
   FileText,
@@ -10,7 +9,8 @@ import {
   X,
   AlertTriangle,
   Share2,
-  Users
+  Users,
+  Calendar as CalendarIcon
 } from 'lucide-react'
 import type {
   Calendar,
@@ -21,6 +21,14 @@ import type {
   UpdateEventInput
 } from '@shared/event-model'
 import AttendeeInput from '../components/AttendeeInput'
+import {
+  DatePicker,
+  TimePicker,
+  CustomSelect,
+  TextInput,
+  TextArea,
+  ToggleSwitch
+} from '../components/ui'
 
 export interface EventEditorInitialData {
   occurrence?: ExpandedOccurrence
@@ -46,13 +54,13 @@ interface EventEditorDialogProps {
 }
 
 const COLOR_PALETTE = [
-  '#6366f1', // Indigo
-  '#8b5cf6', // Violet
-  '#0ea5e9', // Sky
-  '#10b981', // Emerald
-  '#f59e0b', // Amber
-  '#f43f5e', // Rose
-  '#64748b'  // Slate
+  '#34C77B',
+  '#4A90E2',
+  '#F3722C',
+  '#1A73E8',
+  '#E63946',
+  '#10b981',
+  '#64748b'
 ]
 
 const TIMEZONE_OPTIONS = [
@@ -209,11 +217,58 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, isDirty, onClose])
 
+  // Options for custom selects
+  const calendarOptions = useMemo(
+    () =>
+      (calendars || []).map((cal) => ({
+        value: cal.id,
+        label: cal.name,
+        color: cal.color,
+        badge: cal.isReadOnly ? 'Chỉ đọc' : undefined,
+        disabled: cal.isReadOnly
+      })),
+    [calendars]
+  )
+
+  const timezoneOptions = useMemo(
+    () =>
+      TIMEZONE_OPTIONS.map((tz) => ({
+        value: tz,
+        label: tz
+      })),
+    []
+  )
+
   if (!isOpen) return null
 
   const handleFieldChange = (setter: React.Dispatch<React.SetStateAction<any>>, val: any) => {
     setter(val)
     setIsDirty(true)
+  }
+
+  const handleStartDateChange = (newStart: string) => {
+    setStartDateStr(newStart)
+    setIsDirty(true)
+    // If end date is missing or before start date, auto-sync end date
+    if (!endDateStr || endDateStr < newStart) {
+      setEndDateStr(newStart)
+    }
+  }
+
+  const handleStartTimeChange = (newStart: string) => {
+    setStartTimeStr(newStart)
+    setIsDirty(true)
+    // If start date equals end date, make sure end time is after start time
+    if (startDateStr === endDateStr || !endDateStr) {
+      const [sh, sm] = newStart.split(':').map(Number)
+      const [eh, em] = endTimeStr.split(':').map(Number)
+      if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+        if (eh * 60 + em <= sh * 60 + sm) {
+          const nextHour = (sh + 1) % 24
+          setEndTimeStr(`${nextHour.toString().padStart(2, '0')}:${sm.toString().padStart(2, '0')}`)
+        }
+      }
+    }
   }
 
   const handleCloseAttempt = () => {
@@ -312,17 +367,17 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
     }
   }
 
-  const selectedCalendar = calendars.find((c) => c.id === calendarId)
+  const selectedCalendar = (calendars || []).find((c) => c.id === calendarId)
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="gc-overlay select-none">
+      <div className="gc-dialog w-full max-w-2xl">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/50 shrink-0">
+        <div className="flex shrink-0 items-center justify-between border-b border-hairline bg-app px-6 py-4">
           <div className="flex items-center gap-3">
             <div
-              className="h-4 w-4 rounded-full shadow-md"
-              style={{ backgroundColor: color || selectedCalendar?.color || '#6366f1' }}
+              className="h-4 w-4 rounded-full shadow-md transition-colors"
+              style={{ backgroundColor: color || selectedCalendar?.color || '#4A90E2' }}
             />
             <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
               {isEditing ? 'Chỉnh sửa sự kiện' : 'Tạo sự kiện mới'}
@@ -331,7 +386,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
           <button
             onClick={handleCloseAttempt}
-            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="gc-icon-btn"
           >
             <X className="h-4 w-4" />
           </button>
@@ -345,17 +400,18 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
               Tiêu đề sự kiện (Title) *
             </label>
             <div className="flex items-center gap-3">
-              <input
-                type="text"
-                placeholder="VD: Họp định kỳ tuần, Thiết kế UI..."
-                value={title}
-                onChange={(e) => handleFieldChange(setTitle, e.target.value)}
-                className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 font-medium"
-                autoFocus
-              />
+              <div className="flex-1">
+                <TextInput
+                  value={title}
+                  onChange={(val) => handleFieldChange(setTitle, val)}
+                  placeholder="VD: Họp định kỳ tuần, Thiết kế UI..."
+                  autoFocus
+                  inputClassName="text-sm font-medium"
+                />
+              </div>
 
               {/* Color Circles */}
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 shrink-0">
                 {COLOR_PALETTE.map((c) => (
                   <button
                     key={c}
@@ -372,105 +428,92 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
             </div>
           </div>
 
-          {/* Calendar Selector */}
+          {/* Calendar & Timezone Selectors */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-                Lịch (Calendar) *
-              </label>
-              <div className="relative">
-                <select
-                  value={calendarId}
-                  onChange={(e) => handleFieldChange(setCalendarId, e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 cursor-pointer"
-                >
-                  {calendars.map((cal) => (
-                    <option key={cal.id} value={cal.id} disabled={cal.isReadOnly}>
-                      {cal.name} {cal.isReadOnly ? '(Read-only)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <CustomSelect
+                label="Lịch (Calendar) *"
+                value={calendarId}
+                onChange={(val) => handleFieldChange(setCalendarId, val)}
+                options={calendarOptions}
+                placeholder="Chọn lịch..."
+              />
             </div>
 
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-                Múi giờ (Timezone)
-              </label>
-              <select
+              <CustomSelect
+                label="Múi giờ (Timezone)"
                 value={tzid}
-                onChange={(e) => handleFieldChange(setTzid, e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 cursor-pointer"
-              >
-                {TIMEZONE_OPTIONS.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => handleFieldChange(setTzid, val)}
+                options={timezoneOptions}
+                searchable
+                searchPlaceholder="Tìm múi giờ..."
+              />
             </div>
           </div>
 
           {/* All Day Toggle */}
-          <div className="flex items-center gap-2 py-1">
-            <input
-              type="checkbox"
-              id="allDayCheck"
+          <div className="py-1">
+            <ToggleSwitch
               checked={allDay}
-              onChange={(e) => handleFieldChange(setAllDay, e.target.checked)}
-              className="rounded accent-indigo-500 h-4 w-4 cursor-pointer"
+              onChange={(checked) => handleFieldChange(setAllDay, checked)}
+              label="Sự kiện cả ngày (All-day)"
+              description="Không cố định khung giờ bắt đầu và kết thúc"
             />
-            <label htmlFor="allDayCheck" className="text-slate-700 dark:text-slate-300 font-medium cursor-pointer">
-              Sự kiện cả ngày (All-day)
-            </label>
           </div>
 
           {/* Date & Time Range */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
-            {/* Start */}
-            <div className="space-y-1.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-950/40 border border-slate-200/90 dark:border-slate-800/80">
+            {/* Start Date & Time */}
+            <div className="min-w-0 space-y-1.5">
               <label className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
-                <Clock className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
+                <CalendarIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
                 Bắt đầu (Start)
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={startDateStr}
-                  onChange={(e) => handleFieldChange(setStartDateStr, e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
-                />
-                {!allDay && (
-                  <input
-                    type="time"
-                    value={startTimeStr}
-                    onChange={(e) => handleFieldChange(setStartTimeStr, e.target.value)}
-                    className="w-24 px-2 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono"
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex-1 min-w-0">
+                  <DatePicker
+                    value={startDateStr}
+                    onChange={handleStartDateChange}
+                    placeholder="Chọn ngày bắt đầu"
                   />
+                </div>
+                {!allDay && (
+                  <div className="w-24 shrink-0">
+                    <TimePicker
+                      value={startTimeStr}
+                      onChange={handleStartTimeChange}
+                    />
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* End */}
-            <div className="space-y-1.5">
+            {/* End Date & Time */}
+            <div className="min-w-0 space-y-1.5">
               <label className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
-                <Clock className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
+                <CalendarIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
                 Kết thúc (End)
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={endDateStr}
-                  onChange={(e) => handleFieldChange(setEndDateStr, e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
-                />
-                {!allDay && (
-                  <input
-                    type="time"
-                    value={endTimeStr}
-                    onChange={(e) => handleFieldChange(setEndTimeStr, e.target.value)}
-                    className="w-24 px-2 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono"
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex-1 min-w-0">
+                  <DatePicker
+                    value={endDateStr}
+                    onChange={(val) => handleFieldChange(setEndDateStr, val)}
+                    minDate={startDateStr}
+                    placeholder="Chọn ngày kết thúc"
                   />
+                </div>
+                {!allDay && (
+                  <div className="w-24 shrink-0">
+                    <TimePicker
+                      value={endTimeStr}
+                      onChange={(val) => handleFieldChange(setEndTimeStr, val)}
+                      startTime={startDateStr === endDateStr ? startTimeStr : undefined}
+                      showQuickDurations={startDateStr === endDateStr}
+                      align="right"
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -495,10 +538,10 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                   key={preset.id}
                   type="button"
                   onClick={() => handleFieldChange(setRecurrencePreset, preset.id)}
-                  className={`px-3 py-2 rounded-lg border text-center transition-all cursor-pointer ${
+                  className={`px-3 py-2 rounded-xl border text-center transition-all cursor-pointer text-xs ${
                     recurrencePreset === preset.id
                       ? 'bg-indigo-600 border-indigo-500 text-white font-semibold shadow-xs'
-                      : 'bg-slate-100 hover:bg-slate-200/70 border-slate-200 text-slate-700 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50'
+                      : 'bg-slate-100 hover:bg-slate-200/70 border-slate-200 text-slate-700 dark:bg-slate-950/80 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50'
                   }`}
                 >
                   {preset.label}
@@ -507,12 +550,11 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
             </div>
 
             {recurrencePreset === 'custom' && (
-              <input
-                type="text"
-                placeholder="RFC 5545 RRULE (VD: FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=10)"
+              <TextInput
                 value={customRrule}
-                onChange={(e) => handleFieldChange(setCustomRrule, e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 font-mono text-xs focus:outline-hidden focus:border-indigo-500"
+                onChange={(val) => handleFieldChange(setCustomRrule, val)}
+                placeholder="RFC 5545 RRULE (VD: FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=10)"
+                inputClassName="font-mono text-xs"
               />
             )}
           </div>
@@ -520,30 +562,24 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
           {/* Location & Meeting URL */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-                Địa điểm (Location)
-              </label>
-              <input
-                type="text"
-                placeholder="VD: Phòng họp A, Tầng 3"
+              <TextInput
+                label="Địa điểm (Location)"
                 value={location}
-                onChange={(e) => handleFieldChange(setLocation, e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
+                onChange={(val) => handleFieldChange(setLocation, val)}
+                placeholder="VD: Phòng họp A, Tầng 3"
+                prefixIcon={<MapPin className="h-3.5 w-3.5" />}
               />
             </div>
 
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                <Video className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-                Link họp trực tuyến (Meeting URL)
-              </label>
-              <input
+              <TextInput
+                label="Link họp trực tuyến (Meeting URL)"
                 type="url"
-                placeholder="https://meet.google.com/..."
                 value={meetingUrl}
-                onChange={(e) => handleFieldChange(setMeetingUrl, e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono text-xs"
+                onChange={(val) => handleFieldChange(setMeetingUrl, val)}
+                placeholder="https://meet.google.com/..."
+                prefixIcon={<Video className="h-3.5 w-3.5" />}
+                inputClassName="font-mono text-xs"
               />
             </div>
           </div>
@@ -562,16 +598,13 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
           {/* Notes / Description */}
           <div>
-            <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-              Ghi chú (Notes & Description)
-            </label>
-            <textarea
-              rows={3}
-              placeholder="Thêm mô tả chi tiết, nội dung cuộc họp..."
+            <TextArea
+              label="Ghi chú (Notes & Description)"
               value={notes}
-              onChange={(e) => handleFieldChange(setNotes, e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 resize-none leading-relaxed"
+              onChange={(val) => handleFieldChange(setNotes, val)}
+              placeholder="Thêm mô tả chi tiết, nội dung cuộc họp..."
+              rows={3}
+              icon={<FileText className="h-3.5 w-3.5 text-slate-400" />}
             />
           </div>
         </form>
@@ -584,7 +617,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                 <button
                   type="button"
                   onClick={handleShare}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors font-medium text-xs border border-slate-200 dark:border-slate-700 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors font-medium text-xs border border-slate-200 dark:border-slate-700 cursor-pointer"
                   title="Xuất file .ics và mở trong thư mục"
                 >
                   <Share2 className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
@@ -599,7 +632,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                       onDelete(eventId, data?.occurrence?.originalStartUtc, isRecurringOccurrence)
                     }
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-300 transition-colors font-medium text-xs cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-300 transition-colors font-medium text-xs cursor-pointer"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   <span>Xóa sự kiện</span>
@@ -612,14 +645,14 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
             <button
               type="button"
               onClick={handleCloseAttempt}
-              className="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Hủy bỏ (Cancel)
             </button>
             <button
               type="button"
               onClick={handleSubmit}
-              className="px-5 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
+              className="px-5 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
             >
               {isEditing ? 'Lưu thay đổi' : 'Tạo sự kiện'}
             </button>
@@ -640,7 +673,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
               <div className="flex justify-center gap-3">
                 <button
                   onClick={() => setShowDiscardConfirm(false)}
-                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl transition-colors cursor-pointer"
                 >
                   Tiếp tục sửa
                 </button>
@@ -649,7 +682,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                     setShowDiscardConfirm(false)
                     onClose()
                   }}
-                  className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-xl transition-colors cursor-pointer"
                 >
                   Hủy thay đổi
                 </button>

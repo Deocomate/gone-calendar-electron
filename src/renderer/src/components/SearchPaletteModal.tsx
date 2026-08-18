@@ -107,8 +107,8 @@ export const SearchPaletteModal: React.FC<SearchPaletteModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-start justify-center pt-20 p-4 z-50 animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+    <div className="gc-overlay items-start pt-20 select-none">
+      <div className="gc-dialog w-full max-w-2xl max-h-[80vh]">
         {/* Search Header Input */}
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 bg-slate-50 dark:bg-slate-950/60">
           <Search className="h-5 w-5 text-slate-400 shrink-0" />

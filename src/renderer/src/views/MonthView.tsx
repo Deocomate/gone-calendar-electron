@@ -1,9 +1,14 @@
-import React from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { DateTime } from 'luxon'
+import { Layers } from 'lucide-react'
 import type { ExpandedOccurrence } from '@shared/event-model'
 import type { TaskItem } from '@shared/task-model'
+import { weekdayHeaders, TODAY_COLOR, DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
 import LunarLabel from '../components/LunarLabel'
 import WeekNumber from '../components/WeekNumber'
+import EventPill from '../components/EventPill'
+import EventHoverFlyout, { type HoverFlyoutData } from '../components/EventHoverFlyout'
+import { prepareDropEvent, type CalendarDropTarget } from '../dnd/drop-target'
 
 interface MonthViewProps {
   anchorDate: DateTime
@@ -11,10 +16,155 @@ interface MonthViewProps {
   tasks?: TaskItem[]
   showLunar: boolean
   showWeekNumbers: boolean
+  draggedOccurrenceId?: string
+  dropTarget?: CalendarDropTarget | null
   onSelectDate?: (date: DateTime) => void
   onSelectOccurrence?: (occ: ExpandedOccurrence) => void
   onDragStart?: (e: React.DragEvent, occ: ExpandedOccurrence) => void
+  onDragEnd?: () => void
+  onDragOverTarget?: (target: CalendarDropTarget) => void
   onDropOnDate?: (e: React.DragEvent, targetDate: DateTime) => void
+}
+
+interface MonthDayCellProps {
+  day: DateTime
+  anchorDate: DateTime
+  dayOccurrences: ExpandedOccurrence[]
+  dayTasks: TaskItem[]
+  showLunar: boolean
+  isDropTarget: boolean
+  draggedOccurrenceId?: string
+  onSelectDate?: (date: DateTime) => void
+  onSelectOccurrence?: (occ: ExpandedOccurrence) => void
+  onDragStart?: (e: React.DragEvent, occ: ExpandedOccurrence) => void
+  onDragEnd?: () => void
+  onDragOverTarget?: (target: CalendarDropTarget) => void
+  onDropOnDate?: (e: React.DragEvent, targetDate: DateTime) => void
+  onShowFlyout: (data: HoverFlyoutData) => void
+  onHideFlyout: () => void
+}
+
+const MonthDayCell: React.FC<MonthDayCellProps> = ({
+  day,
+  anchorDate,
+  dayOccurrences,
+  dayTasks,
+  showLunar,
+  isDropTarget,
+  draggedOccurrenceId,
+  onSelectDate,
+  onSelectOccurrence,
+  onDragStart,
+  onDragEnd,
+  onDragOverTarget,
+  onDropOnDate,
+  onShowFlyout,
+  onHideFlyout
+}) => {
+  const today = DateTime.local()
+  const dayKey = day.toFormat('yyyy-MM-dd')
+  const isCurrentMonth = day.month === anchorDate.month
+  const isToday = day.hasSame(today, 'day')
+  const totalItems = dayOccurrences.length + dayTasks.length
+  const overflow = totalItems - 2
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (totalItems > 0) {
+      const rect = e.currentTarget.getBoundingClientRect()
+      onShowFlyout({
+        title: day.toFormat('cccc, dd/MM/yyyy'),
+        subtitle: `${totalItems} sự kiện & nhiệm vụ`,
+        occurrences: dayOccurrences,
+        tasks: dayTasks,
+        anchorRect: rect
+      })
+    }
+  }
+
+  return (
+    <div
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={onHideFlyout}
+      onClick={() => onSelectDate?.(day)}
+      onDragOver={(e) => {
+        prepareDropEvent(e)
+        onDragOverTarget?.({ dateKey: dayKey })
+      }}
+      onDrop={(e) => onDropOnDate?.(e, day)}
+      className={`gc-cell relative flex min-h-0 min-w-0 cursor-pointer flex-col p-1 overflow-hidden transition-all ${
+        isCurrentMonth ? 'bg-surface' : 'bg-app'
+      } ${isDropTarget ? 'is-drop-target' : ''}`}
+    >
+      {/* Day number & lunar */}
+      <div className="mb-0.5 flex items-center justify-between px-0.5 min-w-0">
+        <span
+          className={`flex h-6 w-6 items-center justify-center rounded-full text-xs shrink-0 ${
+            isToday
+              ? 'font-semibold text-white'
+              : isCurrentMonth
+                ? 'text-primary font-medium'
+                : 'text-muted'
+          }`}
+          style={isToday ? { backgroundColor: TODAY_COLOR } : undefined}
+        >
+          {day.day}
+        </span>
+        <div className="flex items-center gap-1">
+          {totalItems >= 2 && (
+            <span
+              className="flex items-center gap-0.5 px-1 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-mono text-[9px] font-bold border border-indigo-200/50 dark:border-indigo-800/50"
+              title={`${totalItems} sự kiện`}
+            >
+              <Layers className="w-2.5 h-2.5" />
+              {totalItems}
+            </span>
+          )}
+          {showLunar && <LunarLabel day={day.day} month={day.month} year={day.year} />}
+        </div>
+      </div>
+
+      {/* Events preview */}
+      <div className="min-h-0 flex-1 space-y-0.5 overflow-hidden">
+        {dayOccurrences.slice(0, 2).map((occ) => {
+          const occTime = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
+          return (
+            <EventPill
+              key={occ.id}
+              dense
+              draggable
+              isDragging={draggedOccurrenceId === occ.id}
+              title={occ.title}
+              color={occ.color}
+              time={occ.allDay ? undefined : occTime.toFormat('HH:mm')}
+              onDragStart={(e) => onDragStart?.(e, occ)}
+              onDragEnd={onDragEnd}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelectOccurrence?.(occ)
+              }}
+            />
+          )
+        })}
+
+        {dayTasks.slice(0, Math.max(0, 2 - dayOccurrences.length)).map((task) => (
+          <div
+            key={task.id}
+            className="gc-event gc-event-dense truncate rounded-none px-1.5 py-0.5 text-[10px] font-medium text-white min-w-0"
+            style={{ backgroundColor: DEFAULT_EVENT_COLOR }}
+            title={`Nhiệm vụ: ${task.title}`}
+          >
+            ✓ {task.title}
+          </div>
+        ))}
+
+        {overflow > 0 && (
+          <div className="px-1 text-[10px] font-medium text-muted truncate">
+            +{overflow} thêm
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export const MonthView: React.FC<MonthViewProps> = ({
@@ -23,23 +173,60 @@ export const MonthView: React.FC<MonthViewProps> = ({
   tasks = [],
   showLunar,
   showWeekNumbers,
+  draggedOccurrenceId,
+  dropTarget,
   onSelectDate,
   onSelectOccurrence,
   onDragStart,
+  onDragEnd,
+  onDragOverTarget,
   onDropOnDate
 }) => {
-  const today = DateTime.local()
+  const [hoverData, setHoverData] = useState<HoverFlyoutData | null>(null)
+  const hoverTimerRef = useRef<any>(null)
+
+  useEffect(() => {
+    if (draggedOccurrenceId) {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+      setHoverData(null)
+    }
+  }, [draggedOccurrenceId])
+
+  const handleShowFlyout = useCallback(
+    (data: HoverFlyoutData) => {
+      if (draggedOccurrenceId) return
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = setTimeout(() => {
+        if (!draggedOccurrenceId) {
+          setHoverData(data)
+        }
+      }, 120)
+    },
+    [draggedOccurrenceId]
+  )
+
+  const handleHideFlyout = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    hoverTimerRef.current = setTimeout(() => {
+      setHoverData(null)
+    }, 180)
+  }, [])
+
+  const handleDragStartWithDismiss = (e: React.DragEvent, occ: ExpandedOccurrence) => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    setHoverData(null)
+    onDragStart?.(e, occ)
+  }
+
   const monthStart = anchorDate.startOf('month')
-  const startDayOfWeek = monthStart.weekday // 1=Mon..7=Sun
+  const startDayOfWeek = monthStart.weekday
   const gridStart = monthStart.minus({ days: startDayOfWeek - 1 }).startOf('day')
 
-  // Generate 42 calendar cell days (6 weeks x 7 days)
   const days: DateTime[] = []
   for (let i = 0; i < 42; i++) {
     days.push(gridStart.plus({ days: i }))
   }
 
-  // Group occurrences by YYYY-MM-DD
   const occurrencesByDay = React.useMemo(() => {
     const map = new Map<string, ExpandedOccurrence[]>()
     for (const occ of occurrences) {
@@ -52,7 +239,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
     return map
   }, [occurrences])
 
-  // Group tasks by YYYY-MM-DD
   const tasksByDay = React.useMemo(() => {
     const map = new Map<string, TaskItem[]>()
     for (const t of tasks) {
@@ -65,25 +251,27 @@ export const MonthView: React.FC<MonthViewProps> = ({
     return map
   }, [tasks])
 
-  const weekdayHeaders = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+  const headers = weekdayHeaders(1)
+  const gridColumnsClass = showWeekNumbers
+    ? 'grid-cols-[28px_repeat(7,minmax(0,1fr))]'
+    : 'grid-cols-[repeat(7,minmax(0,1fr))]'
 
   return (
-    <div className="h-full w-full flex flex-col bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shadow-xl select-none">
-      {/* Weekday Header Row */}
-      <div className={`grid ${showWeekNumbers ? 'grid-cols-[40px_repeat(7,1fr)]' : 'grid-cols-7'} border-b border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/70 text-xs font-semibold py-2.5 text-center`}>
-        {showWeekNumbers && <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center justify-center">#</div>}
-        {weekdayHeaders.map((h, idx) => (
-          <div
-            key={h}
-            className={`${idx === 5 ? 'text-indigo-600 dark:text-indigo-400' : idx === 6 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-300'}`}
-          >
+    <div className="flex h-full w-full flex-col overflow-hidden bg-surface select-none relative">
+      {/* Header Row */}
+      <div
+        className={`grid border-b border-hairline py-2 text-center text-xs font-semibold text-muted ${gridColumnsClass}`}
+      >
+        {showWeekNumbers && <div />}
+        {headers.map((h, idx) => (
+          <div key={h} className={`min-w-0 truncate ${idx >= 5 ? 'text-today' : ''}`}>
             {h}
           </div>
         ))}
       </div>
 
-      {/* 6-Week Calendar Grid */}
-      <div className="flex-1 grid grid-rows-6 divide-y divide-slate-200 dark:divide-slate-800/60 overflow-hidden">
+      {/* 6 Weeks Grid */}
+      <div className="grid min-h-0 flex-1 grid-rows-6 divide-y divide-hairline">
         {Array.from({ length: 6 }).map((_, weekIdx) => {
           const weekDays = days.slice(weekIdx * 7, weekIdx * 7 + 7)
           const firstDayOfWeek = weekDays[0]
@@ -91,118 +279,61 @@ export const MonthView: React.FC<MonthViewProps> = ({
           return (
             <div
               key={weekIdx}
-              className={`grid ${showWeekNumbers ? 'grid-cols-[40px_repeat(7,1fr)]' : 'grid-cols-7'} divide-x divide-slate-200 dark:divide-slate-800/60 min-h-0`}
+              className={`grid min-h-0 divide-x divide-hairline ${gridColumnsClass}`}
             >
-              {/* Week Number Column */}
               {showWeekNumbers && (
-                <div className="bg-slate-50 dark:bg-slate-950/40 flex items-center justify-center border-r border-slate-200 dark:border-slate-800/60">
+                <div className="flex items-center justify-center bg-app min-w-0">
                   <WeekNumber weekNumber={firstDayOfWeek.weekNumber} />
                 </div>
               )}
 
-              {/* 7 Days in Week */}
               {weekDays.map((day) => {
                 const dayKey = day.toFormat('yyyy-MM-dd')
-                const isCurrentMonth = day.month === anchorDate.month
-                const isToday = day.hasSame(today, 'day')
                 const dayOccurrences = occurrencesByDay.get(dayKey) || []
                 const dayTasks = tasksByDay.get(dayKey) || []
+                const isDropTarget = dropTarget?.dateKey === dayKey && dropTarget.hour === undefined
 
                 return (
-                  <div
+                  <MonthDayCell
                     key={dayKey}
-                    onClick={() => onSelectDate?.(day)}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.add('bg-indigo-100', 'dark:bg-indigo-900/20')
-                    }}
-                    onDragLeave={(e) => {
-                      e.currentTarget.classList.remove('bg-indigo-100', 'dark:bg-indigo-900/20')
-                    }}
-                    onDrop={(e) => {
-                      e.currentTarget.classList.remove('bg-indigo-100', 'dark:bg-indigo-900/20')
-                      onDropOnDate?.(e, day)
-                    }}
-                    className={`flex flex-col p-1.5 min-h-0 transition-colors cursor-pointer hover:bg-slate-100/70 dark:hover:bg-slate-800/30 ${
-                      !isCurrentMonth ? 'bg-slate-100/50 dark:bg-slate-950/40 opacity-40' : 'bg-transparent'
-                    }`}
-                  >
-                    {/* Date Number + Lunar Label */}
-                    <div className="flex items-center justify-between mb-1 px-1">
-                      <span
-                        className={`text-xs font-semibold rounded-full h-6 w-6 flex items-center justify-center ${
-                          isToday
-                            ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/40'
-                            : isCurrentMonth
-                              ? 'text-slate-800 dark:text-slate-200'
-                              : 'text-slate-400 dark:text-slate-500'
-                        }`}
-                      >
-                        {day.day}
-                      </span>
-
-                      {showLunar && (
-                        <LunarLabel day={day.day} month={day.month} year={day.year} />
-                      )}
-                    </div>
-
-                    {/* Event Chips & Task Badges */}
-                    <div className="flex-1 space-y-1 overflow-hidden">
-                      {dayOccurrences.slice(0, 2).map((occ) => {
-                        const occTime = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
-                        return (
-                          <div
-                            key={occ.id}
-                            draggable
-                            onDragStart={(e) => onDragStart?.(e, occ)}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onSelectOccurrence?.(occ)
-                            }}
-                            className="group px-1.5 py-0.5 rounded text-[11px] font-medium truncate flex items-center gap-1 cursor-grab active:cursor-grabbing transition-all hover:scale-[1.02] shadow-xs"
-                            style={{
-                              backgroundColor: occ.color ? `${occ.color}22` : '#6366f122',
-                              borderLeft: `3px solid ${occ.color || '#6366f1'}`
-                            }}
-                            title={`${occ.title} (${occ.allDay ? 'All day' : occTime.toFormat('HH:mm')})`}
-                          >
-                            {!occ.allDay && (
-                              <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">
-                                {occTime.toFormat('HH:mm')}
-                              </span>
-                            )}
-                            <span className="truncate text-slate-800 dark:text-slate-200">{occ.title}</span>
-                          </div>
-                        )
-                      })}
-
-                      {/* Due Tasks */}
-                      {dayTasks.slice(0, 2).map((task) => (
-                        <div
-                          key={task.id}
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium truncate flex items-center gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
-                          title={`Nhiệm vụ: ${task.title}`}
-                        >
-                          <span className="text-[9px]">✓</span>
-                          <span className={`truncate ${task.completed ? 'line-through opacity-60' : ''}`}>
-                            {task.title}
-                          </span>
-                        </div>
-                      ))}
-
-                      {dayOccurrences.length + dayTasks.length > 3 && (
-                        <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 px-1 hover:underline">
-                          +{dayOccurrences.length + dayTasks.length - 3} {showLunar ? 'khác' : 'more'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    day={day}
+                    anchorDate={anchorDate}
+                    dayOccurrences={dayOccurrences}
+                    dayTasks={dayTasks}
+                    showLunar={showLunar}
+                    isDropTarget={isDropTarget}
+                    draggedOccurrenceId={draggedOccurrenceId}
+                    onSelectDate={onSelectDate}
+                    onSelectOccurrence={onSelectOccurrence}
+                    onDragStart={handleDragStartWithDismiss}
+                    onDragEnd={onDragEnd}
+                    onDragOverTarget={onDragOverTarget}
+                    onDropOnDate={onDropOnDate}
+                    onShowFlyout={handleShowFlyout}
+                    onHideFlyout={handleHideFlyout}
+                  />
                 )
               })}
             </div>
           )
         })}
       </div>
+
+      {/* Floating Side Popover */}
+      <EventHoverFlyout
+        data={hoverData}
+        onMouseEnter={() => {
+          if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+        }}
+        onMouseLeave={handleHideFlyout}
+        onSelectOccurrence={(occ) => {
+          setHoverData(null)
+          onSelectOccurrence?.(occ)
+        }}
+        onDragStart={handleDragStartWithDismiss}
+        onDragEnd={onDragEnd}
+        draggedOccurrenceId={draggedOccurrenceId}
+      />
     </div>
   )
 }

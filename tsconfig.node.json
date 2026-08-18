@@ -20,9 +20,11 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "baseUrl": ".",
+    "jsx": "react-jsx",
     "paths": {
       "@main/*": ["src/main/*"],
       "@preload/*": ["src/preload/*"],
+      "@renderer/*": ["src/renderer/src/*"],
       "@shared/*": ["src/shared/*"]
     }
   },
@@ -32,5 +34,9 @@
     "src/preload/**/*",
     "src/shared/**/*",
     "tests/**/*"
+  ],
+  "exclude": [
+    "tests/ui-components.test.ts",
+    "tests/drop-target.test.ts"
   ]
 }

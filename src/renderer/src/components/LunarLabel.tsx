@@ -12,13 +12,13 @@ export const LunarLabel: React.FC<LunarLabelProps> = ({ day, month, year, classN
   const lunar = convertSolarToLunar(day, month, year)
   const info = formatLunarLabel(lunar)
 
-  let badgeStyle = 'text-slate-400 dark:text-slate-500'
+  let badgeStyle = 'text-muted'
   if (info.isTet) {
-    badgeStyle = 'text-rose-600 dark:text-rose-400 font-bold'
+    badgeStyle = 'font-bold text-today'
   } else if (info.isFirstDay) {
-    badgeStyle = 'text-indigo-600 dark:text-indigo-400 font-semibold'
+    badgeStyle = 'font-semibold text-accent'
   } else if (info.isFullMoon) {
-    badgeStyle = 'text-amber-600 dark:text-amber-400 font-medium'
+    badgeStyle = 'font-medium text-amber-600 dark:text-amber-400'
   }
 
   return (

@@ -1,8 +1,9 @@
 import React from 'react'
 import { DateTime } from 'luxon'
-import { CalendarDays, Clock, MapPin, Sparkles, Repeat, CheckCircle2 } from 'lucide-react'
+import { CalendarDays, Clock, MapPin, Repeat, CheckCircle2, Layers } from 'lucide-react'
 import type { ExpandedOccurrence } from '@shared/event-model'
 import type { TaskItem } from '@shared/task-model'
+import { TODAY_COLOR, DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
 import LunarLabel from '../components/LunarLabel'
 
 interface ListViewProps {
@@ -24,7 +25,6 @@ export const ListView: React.FC<ListViewProps> = ({
 }) => {
   const today = DateTime.local()
 
-  // Group occurrences by YYYY-MM-DD
   const groupedOccurrences = React.useMemo(() => {
     const groups: { date: DateTime; items: ExpandedOccurrence[] }[] = []
     const map = new Map<string, ExpandedOccurrence[]>()
@@ -37,7 +37,6 @@ export const ListView: React.FC<ListViewProps> = ({
       map.set(key, list)
     }
 
-    // Sort keys chronologically
     const sortedKeys = Array.from(map.keys()).sort()
     for (const key of sortedKeys) {
       groups.push({
@@ -51,134 +50,108 @@ export const ListView: React.FC<ListViewProps> = ({
 
   if (occurrences.length === 0) {
     return (
-      <div className="h-full w-full bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 p-8 flex flex-col items-center justify-center text-center shadow-xl select-none">
-        <div className="h-16 w-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-4">
-          <CalendarDays className="h-8 w-8 text-indigo-500 dark:text-indigo-400" />
+      <div className="flex h-full w-full flex-col items-center justify-center bg-surface p-8 text-center select-none">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-hover">
+          <CalendarDays className="h-8 w-8 text-accent" />
         </div>
-        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-2">
-          {anchorDate.toFormat('MMMM yyyy')} — Không có sự kiện
+        <h3 className="mb-2 text-lg font-semibold text-primary">
+          {anchorDate.toFormat('MMMM yyyy')}
         </h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-5">
-          Không tìm thấy sự kiện nào trong khoảng thời gian này.
-        </p>
-        <button
-          onClick={onAddEvent}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
-        >
-          + Tạo sự kiện mới
+        <p className="mb-5 max-w-sm text-sm text-muted">Không có sự kiện nào trong khoảng thời gian này.</p>
+        <button type="button" onClick={onAddEvent} className="gc-btn-primary">
+          + Tạo sự kiện
         </button>
       </div>
     )
   }
 
   return (
-    <div className="h-full w-full bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 p-4 md:p-6 overflow-y-auto shadow-xl select-none space-y-6">
+    <div className="h-full w-full space-y-6 overflow-y-auto bg-surface p-5 select-none">
       {groupedOccurrences.map(({ date, items }) => {
         const isToday = date.hasSame(today, 'day')
+        const isWeekend = date.weekday >= 6
+        const dayTasks = tasks.filter(
+          (t) => t.dueDate === date.toFormat('yyyy-MM-dd') && t.showOnCalendar !== false
+        )
+        const totalDayCount = items.length + dayTasks.length
 
         return (
-          <div key={date.toISO()} className="space-y-3">
-            {/* Sticky Date Header */}
-            <div className="sticky top-0 z-10 bg-slate-100/90 dark:bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs">
-              <div className="flex items-center gap-2.5">
+          <div key={date.toISO()} className="gc-stack-container space-y-2.5">
+            <div className="sticky top-0 z-10 flex items-center justify-between bg-surface/90 backdrop-blur-md py-1.5 border-b border-hairline">
+              <div className="flex items-center gap-2">
                 <span
-                  className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                  className="rounded-full px-3 py-1 text-sm font-semibold"
+                  style={
                     isToday
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300'
-                  }`}
+                      ? { color: TODAY_COLOR, backgroundColor: `${TODAY_COLOR}14` }
+                      : isWeekend
+                        ? { color: TODAY_COLOR, backgroundColor: 'var(--color-hover-fill)' }
+                        : undefined
+                  }
                 >
-                  {date.toFormat('dd/MM')}
+                  {date.toFormat('d cccc')}
                 </span>
-                <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 capitalize">
-                  {date.toFormat('cccc')}
-                </span>
+                {totalDayCount >= 2 && (
+                  <span className="flex items-center gap-1 text-[11px] font-bold text-muted bg-hover px-2 py-0.5 rounded-full">
+                    <Layers className="w-3 h-3 text-indigo-500" />
+                    {totalDayCount}
+                  </span>
+                )}
               </div>
-
               {showLunar && (
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                  <Sparkles className="h-3 w-3 text-amber-500 dark:text-amber-400" />
-                  <span>Âm lịch:</span>
-                  <LunarLabel day={date.day} month={date.month} year={date.year} />
-                </div>
+                <LunarLabel day={date.day} month={date.month} year={date.year} />
               )}
             </div>
 
-            {/* Event & Task List for this Date */}
-            <div className="grid gap-2 pl-2">
-              {tasks
-                .filter((t) => t.dueDate === date.toFormat('yyyy-MM-dd') && t.showOnCalendar !== false)
-                .map((task) => (
-                  <div
-                    key={task.id}
-                    className="p-2.5 rounded-xl bg-emerald-500/5 dark:bg-slate-900/50 border border-emerald-500/20 flex items-center justify-between gap-3 text-xs text-slate-700 dark:text-slate-300 shadow-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
-                      <span className={`font-medium ${task.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-emerald-800 dark:text-emerald-200'}`}>
-                        {task.title}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-md font-medium">
-                      Nhiệm vụ
-                    </span>
+            <div className="grid gap-2 pl-1">
+              {dayTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="gc-stack-card-3d flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm text-white shadow-xs"
+                  style={{ backgroundColor: DEFAULT_EVENT_COLOR }}
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span className={task.completed ? 'line-through opacity-70' : ''}>{task.title}</span>
                   </div>
-                ))}
+                </div>
+              ))}
 
-              {items.map((occ) => {
+              {items.map((occ, idx) => {
                 const startDt = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
                 const endDt = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local')
+                const bg = occ.color || DEFAULT_EVENT_COLOR
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={occ.id}
                     onClick={() => onSelectOccurrence?.(occ)}
-                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-100/80 dark:hover:bg-slate-900 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs group"
+                    className="gc-event gc-stack-card-3d flex w-full cursor-pointer flex-col gap-1 rounded-lg px-3.5 py-3 text-left text-white shadow-xs sm:flex-row sm:items-center sm:justify-between"
+                    style={{
+                      backgroundColor: bg,
+                      animationDelay: `${idx * 20}ms`
+                    }}
                   >
-                    <div className="flex items-start gap-3">
-                      <span
-                        className="h-3 w-3 rounded-full mt-1 shrink-0"
-                        style={{ backgroundColor: occ.color || '#6366f1' }}
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
-                            {occ.title}
-                          </h4>
-                          {occ.isRecurring && (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 border border-sky-500/20">
-                              <Repeat className="h-2.5 w-2.5" />
-                              Lặp lại
-                            </span>
-                          )}
-                        </div>
-
-                        {occ.notes && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
-                            {occ.notes}
-                          </p>
-                        )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold">{occ.title}</h4>
+                        {occ.isRecurring && <Repeat className="h-3.5 w-3.5 opacity-80" />}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 shrink-0">
-                      <div className="flex items-center gap-1.5 font-mono">
-                        <Clock className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-                        <span>
-                          {occ.allDay
-                            ? 'Cả ngày'
-                            : `${startDt.toFormat('HH:mm')} - ${endDt.toFormat('HH:mm')}`}
-                        </span>
-                      </div>
-
+                    <div className="flex items-center gap-3 text-xs opacity-90">
+                      <span className="inline-flex items-center gap-1 font-mono">
+                        <Clock className="h-3.5 w-3.5" />
+                        {occ.allDay ? 'Cả ngày' : `${startDt.toFormat('HH:mm')} - ${endDt.toFormat('HH:mm')}`}
+                      </span>
                       {occ.location && (
-                        <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 max-w-[150px] truncate">
-                          <MapPin className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
-                          <span className="truncate">{occ.location}</span>
-                        </div>
+                        <span className="inline-flex max-w-[150px] items-center gap-1 truncate">
+                          <MapPin className="h-3.5 w-3.5 shrink-0" />
+                          {occ.location}
+                        </span>
                       )}
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>

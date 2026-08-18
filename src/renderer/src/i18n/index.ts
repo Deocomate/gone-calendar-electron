@@ -18,11 +18,22 @@ export const resources = {
         next: 'Sau'
       },
       actions: {
-        newEvent: 'Tạo sự kiện',
+        newEvent: 'Tạo',
         quickAdd: 'Thêm nhanh',
         settings: 'Cài đặt',
         sync: 'Đồng bộ',
-        refresh: 'Làm mới'
+        refresh: 'Làm mới',
+        search: 'Tìm kiếm',
+        more: 'Thêm',
+        toggleSidebar: 'Thu gọn thanh bên',
+        filterColor: 'Lọc màu',
+        accounts: 'Tài khoản & đồng bộ',
+        importIcs: 'Nhập ICS mẫu',
+        keyboard: 'Phím tắt',
+        appearance: 'Giao diện nâng cao'
+      },
+      filter: {
+        all: 'Tất cả'
       },
       sidebar: {
         myCalendars: 'Lịch của tôi',
@@ -30,7 +41,8 @@ export const resources = {
         accounts: 'Tài khoản đã kết nối',
         addAccount: 'Thêm tài khoản',
         lunarEnabled: 'Lịch âm & Tiết khí',
-        weekNumbers: 'Số thứ tự tuần'
+        weekNumbers: 'Số thứ tự tuần',
+        tasks: 'Nhiệm vụ'
       },
       settings: {
         title: 'Cài đặt ứng dụng',
@@ -69,11 +81,22 @@ export const resources = {
         next: 'Next'
       },
       actions: {
-        newEvent: 'New Event',
+        newEvent: 'Create',
         quickAdd: 'Quick Add',
         settings: 'Settings',
         sync: 'Sync',
-        refresh: 'Refresh'
+        refresh: 'Refresh',
+        search: 'Search',
+        more: 'More',
+        toggleSidebar: 'Toggle sidebar',
+        filterColor: 'Filter by color',
+        accounts: 'Accounts & sync',
+        importIcs: 'Import sample ICS',
+        keyboard: 'Keyboard shortcuts',
+        appearance: 'Appearance'
+      },
+      filter: {
+        all: 'All'
       },
       sidebar: {
         myCalendars: 'My Calendars',
@@ -81,7 +104,8 @@ export const resources = {
         accounts: 'Connected Accounts',
         addAccount: 'Add Account',
         lunarEnabled: 'Lunar & Solar Terms',
-        weekNumbers: 'Week Numbers'
+        weekNumbers: 'Week Numbers',
+        tasks: 'Tasks'
       },
       settings: {
         title: 'Application Settings',

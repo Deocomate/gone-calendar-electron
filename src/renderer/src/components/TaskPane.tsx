@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Plus, CheckCircle2, Circle, Trash2, Eye, EyeOff, Filter } from 'lucide-react'
 import { DateTime } from 'luxon'
 import type { TaskItem } from '@shared/task-model'
+import { DatePicker } from './ui'
 
 interface TaskPaneProps {
   onTasksChanged?: () => void
@@ -117,8 +118,8 @@ export const TaskPane: React.FC<TaskPaneProps> = ({ onTasksChanged }) => {
             onClick={() => setFilter(p.id as any)}
             className={`px-2 py-1 rounded-md font-medium transition-colors cursor-pointer ${
               filter === p.id
-                ? 'bg-indigo-600 text-white font-semibold shadow-xs'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-slate-200'
+                ? 'bg-accent font-semibold text-white'
+                : 'bg-hover text-muted hover:text-primary'
             }`}
           >
             {p.label}
@@ -139,16 +140,19 @@ export const TaskPane: React.FC<TaskPaneProps> = ({ onTasksChanged }) => {
           className="w-full bg-transparent border-none text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-hidden"
         />
         <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-800/60 text-[11px]">
-          <input
-            type="date"
-            value={newDueDate}
-            onChange={(e) => setNewDueDate(e.target.value)}
-            className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-md px-1.5 py-0.5 text-[10px] text-slate-700 dark:text-slate-300 focus:outline-hidden"
-          />
+          <div className="flex-1 max-w-[140px]">
+            <DatePicker
+              value={newDueDate}
+              onChange={setNewDueDate}
+              placeholder="Chọn hạn"
+              compact={true}
+              showPresets={false}
+            />
+          </div>
 
           <button
             type="submit"
-            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+            className="gc-btn-primary px-2.5 py-1.5 text-xs font-semibold rounded-lg shrink-0 cursor-pointer"
           >
             <Plus className="h-3 w-3" />
             <span>Thêm</span>

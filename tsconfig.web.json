@@ -34,6 +34,8 @@
   "include": [
     "src/renderer/src/**/*",
     "src/renderer/src/env.d.ts",
-    "src/shared/**/*"
+    "src/shared/**/*",
+    "tests/ui-components.test.ts",
+    "tests/drop-target.test.ts"
   ]
 }

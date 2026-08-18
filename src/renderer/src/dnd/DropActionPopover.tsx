@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Move, Copy, X, CalendarCheck } from 'lucide-react'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
@@ -24,6 +24,17 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
   onCopy,
   onCancel
 }) => {
+  useEffect(() => {
+    if (!pendingDrop) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancel()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [pendingDrop, onCancel])
+
   if (!pendingDrop) return null
 
   // Ensure popover remains on-screen
@@ -36,10 +47,11 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
     : `${pendingDrop.targetStart.toFormat('dd/MM HH:mm')} – ${pendingDrop.targetEnd.toFormat('HH:mm')}`
 
   return (
-    <div className="fixed inset-0 z-50 pointer-events-auto bg-black/40 backdrop-blur-xs select-none">
+    <div className="gc-dnd-overlay pointer-events-auto select-none" onClick={onCancel}>
       <div
         style={{ left: `${x}px`, top: `${y}px` }}
-        className="fixed w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+        className="animate-popover fixed w-72 rounded-xl border border-hairline bg-surface p-4 text-primary shadow-2xl"
       >
         <div className="flex items-center justify-between mb-3 border-b border-slate-100 dark:border-slate-800 pb-2">
           <div className="truncate pr-2">

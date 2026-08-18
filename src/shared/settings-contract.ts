@@ -19,8 +19,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   showWeekNumbers: true,
   firstDayOfWeek: 1, // ISO standard Monday
   timeFormat: '24h',
-  theme: 'system',
-  themeAccent: '#6366f1',
+  theme: 'light',
+  themeAccent: '#1A73E8',
   themeCustomBg: '',
   themeOverlayOpacity: 0.8,
   themeBlur: 8

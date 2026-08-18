@@ -43,18 +43,15 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in select-none">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+    <div className="gc-overlay select-none">
+      <div className="gc-dialog w-full max-w-lg">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60">
+        <div className="flex items-center justify-between border-b border-hairline bg-app px-6 py-4">
           <div className="flex items-center gap-2">
-            <Keyboard className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Phím tắt bàn phím (Keyboard Shortcuts)</h3>
+            <Keyboard className="h-5 w-5 text-accent" />
+            <h3 className="text-sm font-semibold text-primary">Phím tắt bàn phím</h3>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-          >
+          <button type="button" onClick={onClose} className="gc-icon-btn">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -84,13 +81,9 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow-sm cursor-pointer"
-          >
-            Đã hiểu (Got it)
+        <div className="flex justify-end border-t border-hairline bg-app px-6 py-3">
+          <button type="button" onClick={onClose} className="gc-btn-primary">
+            Đã hiểu
           </button>
         </div>
       </div>

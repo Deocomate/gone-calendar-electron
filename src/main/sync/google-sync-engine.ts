@@ -1,0 +1,367 @@
+import type { ISqliteDatabase } from '../db/sqlite-driver'
+import { GoogleOAuthManager } from '../oauth/google-oauth'
+import {
+  mapGoogleEventToDomain,
+  mapDomainEventToGoogle,
+  type GoogleCalendarApiEvent
+} from './google-event-mapper'
+import type { SyncResult } from '@shared/event-model'
+
+const GOOGLE_API_BASE = 'https://www.googleapis.com/calendar/v3'
+
+export class GoogleSyncEngine {
+  private oauthManager: GoogleOAuthManager
+
+  constructor(private db: ISqliteDatabase) {
+    this.oauthManager = new GoogleOAuthManager(db)
+  }
+
+  /**
+   * Sync calendar list from Google
+   */
+  async syncCalendarList(accountId: string, accessToken: string): Promise<string[]> {
+    const res = await fetch(`${GOOGLE_API_BASE}/users/me/calendarList`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Google calendars: ${await res.text()}`)
+    }
+
+    const data = await res.json()
+    const items = data.items || []
+    const now = new Date().toISOString()
+    const syncedCalIds: string[] = []
+
+    for (const item of items) {
+      const isReadOnly = item.accessRole === 'reader' || item.accessRole === 'freeBusyReader'
+      const isPrimary = item.primary === true
+      const color = item.backgroundColor || '#4285f4'
+      const name = item.summary || 'Google Calendar'
+
+      const existingCal = this.db
+        .prepare('SELECT id FROM calendars WHERE id = ?')
+        .get<{ id: string }>(item.id)
+
+      if (!existingCal) {
+        this.db
+          .prepare(
+            `INSERT INTO calendars (id, account_id, name, color, is_visible, is_read_only, is_default, created_at, updated_at)
+             VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`
+          )
+          .run(item.id, accountId, name, color, isReadOnly ? 1 : 0, isPrimary ? 1 : 0, now, now)
+      } else {
+        this.db
+          .prepare(
+            `UPDATE calendars SET name = ?, color = ?, is_read_only = ?, updated_at = ?
+             WHERE id = ?`
+          )
+          .run(name, color, isReadOnly ? 1 : 0, now, item.id)
+      }
+
+      syncedCalIds.push(item.id)
+    }
+
+    return syncedCalIds
+  }
+
+  /**
+   * Pull incremental events for a calendar using syncToken
+   */
+  async pullCalendarEvents(
+    calendarId: string,
+    accessToken: string
+  ): Promise<{ pulledCount: number }> {
+    // Read existing syncToken from sync_state table
+    const syncRow = this.db
+      .prepare('SELECT sync_token FROM sync_state WHERE calendar_id = ?')
+      .get<{ sync_token: string }>(calendarId)
+
+    let url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=250`
+    if (syncRow?.sync_token) {
+      url += `&syncToken=${encodeURIComponent(syncRow.sync_token)}`
+    }
+
+    let res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+
+    // Handle 410 Gone (syncToken expired/invalidated) -> full resync
+    if (res.status === 410) {
+      url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=250`
+      res = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      })
+    }
+
+    if (!res.ok) {
+      throw new Error(`Google event pull failed for ${calendarId}: ${await res.text()}`)
+    }
+
+    const data = await res.json()
+    const items: GoogleCalendarApiEvent[] = data.items || []
+    let pulledCount = 0
+
+    // Database transaction to apply batch updates
+    this.db.transaction(() => {
+      for (const gEvent of items) {
+        const mapped = mapGoogleEventToDomain(gEvent, calendarId)
+
+        if (mapped.isException && mapped.exception) {
+          // Occurrence exception
+          const now = new Date().toISOString()
+          const exc = mapped.exception
+          const excId = `exc_${exc.masterEventId}_${exc.originalStartUtc.replace(/[:.]/g, '')}`
+
+          this.db
+            .prepare(
+              `INSERT INTO event_exceptions (
+                id, master_event_id, original_start_utc, is_cancelled,
+                title, notes, location, dtstart_utc, dtend_utc, tzid, color,
+                created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(master_event_id, original_start_utc) DO UPDATE SET
+                is_cancelled = excluded.is_cancelled,
+                title = excluded.title,
+                notes = excluded.notes,
+                location = excluded.location,
+                dtstart_utc = excluded.dtstart_utc,
+                dtend_utc = excluded.dtend_utc,
+                tzid = excluded.tzid,
+                color = excluded.color,
+                updated_at = excluded.updated_at`
+            )
+            .run(
+              excId,
+              exc.masterEventId,
+              exc.originalStartUtc,
+              exc.isCancelled ? 1 : 0,
+              exc.title || null,
+              exc.notes || null,
+              exc.location || null,
+              exc.dtStartUtc || null,
+              exc.dtEndUtc || null,
+              exc.tzid || null,
+              exc.color || null,
+              now,
+              now
+            )
+          pulledCount++
+        } else if (mapped.event) {
+          // Master event
+          const evt = mapped.event
+          const now = new Date().toISOString()
+
+          this.db
+            .prepare(
+              `INSERT INTO events (
+                id, calendar_id, uid, title, notes, location,
+                dtstart_utc, dtend_utc, tzid, all_day, rrule, color,
+                meeting_url, etag, dirty, is_deleted, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                notes = excluded.notes,
+                location = excluded.location,
+                dtstart_utc = excluded.dtstart_utc,
+                dtend_utc = excluded.dtend_utc,
+                tzid = excluded.tzid,
+                all_day = excluded.all_day,
+                rrule = excluded.rrule,
+                color = excluded.color,
+                meeting_url = excluded.meeting_url,
+                etag = excluded.etag,
+                dirty = 0,
+                is_deleted = excluded.is_deleted,
+                updated_at = excluded.updated_at`
+            )
+            .run(
+              evt.id,
+              evt.calendarId,
+              evt.uid || `${evt.id}@google.com`,
+              evt.title,
+              evt.notes || null,
+              evt.location || null,
+              evt.dtStartUtc,
+              evt.dtEndUtc,
+              evt.tzid || 'UTC',
+              evt.allDay ? 1 : 0,
+              evt.rrule || null,
+              evt.color || null,
+              evt.meetingUrl || null,
+              evt.etag || null,
+              evt.isDeleted ? 1 : 0,
+              now,
+              now
+            )
+          pulledCount++
+        }
+      }
+
+      // Save nextSyncToken
+      if (data.nextSyncToken) {
+        const now = new Date().toISOString()
+        this.db
+          .prepare(
+            `INSERT INTO sync_state (calendar_id, sync_token, updated_at)
+             VALUES (?, ?, ?)
+             ON CONFLICT(calendar_id) DO UPDATE SET sync_token = excluded.sync_token, updated_at = excluded.updated_at`
+          )
+          .run(calendarId, data.nextSyncToken, now)
+      }
+    })()
+
+    return { pulledCount }
+  }
+
+  /**
+   * Push local dirty modifications to Google Calendar
+   */
+  async pushDirtyEvents(
+    calendarId: string,
+    accessToken: string
+  ): Promise<{ pushedCount: number; errorCount: number }> {
+    const dirtyRows = this.db
+      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1')
+      .all<any>(calendarId)
+
+    let pushedCount = 0
+    let errorCount = 0
+
+    for (const row of dirtyRows) {
+      try {
+        const isDeleted = row.is_deleted === 1
+        const googleEventId = row.id
+
+        if (isDeleted) {
+          // DELETE
+          const delRes = await fetch(
+            `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
+            {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${accessToken}` }
+            }
+          )
+
+          if (delRes.ok || delRes.status === 404 || delRes.status === 410) {
+            this.db.prepare('DELETE FROM events WHERE id = ?').run(row.id)
+            pushedCount++
+          } else {
+            errorCount++
+          }
+        } else {
+          // INSERT or UPDATE
+          const payload = mapDomainEventToGoogle({
+            id: row.id,
+            calendarId: row.calendar_id,
+            uid: row.uid,
+            title: row.title,
+            notes: row.notes,
+            location: row.location,
+            dtStartUtc: row.dtstart_utc,
+            dtEndUtc: row.dtend_utc,
+            tzid: row.tzid,
+            allDay: row.all_day === 1,
+            rrule: row.rrule,
+            etag: row.etag
+          } as any)
+
+          let putRes: Response
+          if (row.etag) {
+            // Existing event update
+            putRes = await fetch(
+              `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
+              {
+                method: 'PUT',
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+              }
+            )
+          } else {
+            // New event insertion
+            putRes = await fetch(
+              `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events`,
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+              }
+            )
+          }
+
+          if (putRes.ok) {
+            const resJson = await putRes.json()
+            const now = new Date().toISOString()
+            this.db
+              .prepare(
+                `UPDATE events SET id = ?, etag = ?, dirty = 0, updated_at = ? WHERE id = ?`
+              )
+              .run(resJson.id, resJson.etag, now, row.id)
+            pushedCount++
+          } else if (putRes.status === 412) {
+            // Precondition failed (ETag conflict): preserve local dirty row, record conflict
+            console.warn(`Conflict on event ${row.id}: ETag precondition failed (412)`)
+            errorCount++
+          } else {
+            errorCount++
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to push dirty event ${row.id}:`, err)
+        errorCount++
+      }
+    }
+
+    return { pushedCount, errorCount }
+  }
+
+  /**
+   * Sync all Google accounts
+   */
+  async syncAll(clientId?: string, clientSecret?: string): Promise<SyncResult> {
+    const activeGoogleAccounts = this.db
+      .prepare("SELECT * FROM accounts WHERE type = 'google' AND is_active = 1")
+      .all<any>()
+
+    if (activeGoogleAccounts.length === 0) {
+      return { success: true, pulledCount: 0, pushedCount: 0, errorCount: 0, message: 'No Google accounts connected' }
+    }
+
+    let totalPulled = 0
+    let totalPushed = 0
+    let totalErrors = 0
+
+    for (const acc of activeGoogleAccounts) {
+      try {
+        const token = await this.oauthManager.getValidAccessToken(acc.id, clientId || '', clientSecret)
+        const calendarIds = await this.syncCalendarList(acc.id, token)
+
+        for (const calId of calendarIds) {
+          const pushRes = await this.pushDirtyEvents(calId, token)
+          totalPushed += pushRes.pushedCount
+          totalErrors += pushRes.errorCount
+
+          const pullRes = await this.pullCalendarEvents(calId, token)
+          totalPulled += pullRes.pulledCount
+        }
+      } catch (err: any) {
+        console.error(`Sync failed for account ${acc.id}:`, err)
+        totalErrors++
+      }
+    }
+
+    return {
+      success: totalErrors === 0,
+      pulledCount: totalPulled,
+      pushedCount: totalPushed,
+      errorCount: totalErrors,
+      message: `Sync finished: pulled ${totalPulled}, pushed ${totalPushed}`
+    }
+  }
+}

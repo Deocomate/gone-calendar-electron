@@ -67,7 +67,7 @@ Renderer never talks to Google/Graph/CalDAV directly.
 | 2 | [Domain SQLite ICS recurrence](./phase-02-domain-sqlite-ics-recurrence.md) | Completed | Local CRUD API |
 | 3 | [Custom views lunar week numbers](./phase-03-custom-views-lunar-week-numbers.md) | Completed | 5 views on local data |
 | 4 | [Event editor and drag-drop](./phase-04-event-editor-and-drag-drop.md) | Completed | UR-EDIT + UR-DND |
-| 5 | [Google sync offline notifications](./phase-05-google-sync-offline-notifications.md) | Pending | **R1** |
+| 5 | [Google sync offline notifications](./phase-05-google-sync-offline-notifications.md) | Completed | **R1** |
 | 6 | [Microsoft Graph adapter](./phase-06-microsoft-graph-adapter.md) | Pending | Graph two-way |
 | 7 | [CalDAV adapter onboarding](./phase-07-caldav-adapter-onboarding.md) | Pending | Nextcloud/generic Must; iCloud best-effort |
 | 8 | [Invite share search filters](./phase-08-invite-share-search-filters.md) | Pending | **R2** |

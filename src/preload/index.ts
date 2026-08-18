@@ -14,6 +14,15 @@ const goneApi: GoneAPI = {
     get: (key) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.GET, key),
     set: (key, value) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.SET, key, value)
   },
+  auth: {
+    connectGoogle: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.CONNECT_GOOGLE),
+    disconnectGoogle: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_GOOGLE, accountId),
+    listAccounts: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.LIST_ACCOUNTS)
+  },
+  sync: {
+    triggerNow: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC.TRIGGER_NOW),
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC.GET_STATUS)
+  },
   calendars: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.CALENDAR.LIST),
     create: (data: { name: string; color: string }) =>

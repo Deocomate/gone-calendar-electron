@@ -2,6 +2,7 @@ import { app, ipcMain } from 'electron'
 import { IPC_CHANNELS, type AppLocale } from '@shared/ipc-contract'
 import { registerCalendarIpcHandlers } from './ipc/calendar-ipc'
 import { registerSettingsIpcHandlers } from './ipc/settings-ipc'
+import { registerAuthSyncIpcHandlers } from './ipc/auth-sync-ipc'
 
 let currentLocale: AppLocale = 'vi'
 
@@ -36,8 +37,9 @@ export function registerIpcHandlers(): void {
     return process.platform
   })
 
-  // Register domain calendar, event, and settings IPC handlers
+  // Register domain calendar, event, settings, auth, and sync IPC handlers
   registerSettingsIpcHandlers()
   registerCalendarIpcHandlers()
+  registerAuthSyncIpcHandlers()
 }
 

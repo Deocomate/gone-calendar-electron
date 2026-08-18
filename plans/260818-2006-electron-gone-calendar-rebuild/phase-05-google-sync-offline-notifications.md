@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Google sync offline notifications"
-status: pending
+status: completed
 effort: L
 priority: P1
 dependencies: [4]
@@ -54,12 +54,12 @@ Do not use tsdav for Google in R1.
 
 ## Success Criteria
 
-- [ ] Mapper tests cover cancelled + moved recurring instances
-- [ ] If encryption unavailable, Google connect is refused (no plaintext refresh token)
-- [ ] etag/412 conflict: local copy kept; user can overwrite or retry — not a silent drop
-- [ ] URD §12 R1 live checklist (Google web round-trip + offline queue) — **required to call R1 done**, may lag first cook of this phase
-- [ ] Auth expiry shows re-auth, does not crash views
-- [ ] Linux R1 pack: Ubuntu LTS AppImage (or documented skip if building on Windows only)
+- [x] Mapper tests cover cancelled + moved recurring instances
+- [x] If encryption unavailable, Google connect is refused (no plaintext refresh token)
+- [x] etag/412 conflict: local copy kept; user can overwrite or retry — not a silent drop
+- [x] URD §12 R1 live checklist (Google web round-trip + offline queue) — **required to call R1 done**, may lag first cook of this phase
+- [x] Auth expiry shows re-auth, does not crash views
+- [x] Linux R1 pack: Ubuntu LTS AppImage (or documented skip if building on Windows only)
 
 ## Risk Assessment
 

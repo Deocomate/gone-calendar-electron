@@ -4,6 +4,7 @@
 
 import type {
   Calendar,
+  CalendarAccount,
   CalendarEvent,
   EventException,
   ExpandedOccurrence,
@@ -12,7 +13,9 @@ import type {
   MoveEventInput,
   CopyEventInput,
   UpdateRecurringScopeInput,
-  DeleteRecurringScopeInput
+  DeleteRecurringScopeInput,
+  SyncStatus,
+  SyncResult
 } from './event-model'
 import type { AppSettings } from './settings-contract'
 
@@ -27,6 +30,15 @@ export const IPC_CHANNELS = {
     GET_ALL: 'gone:settings:get-all',
     GET: 'gone:settings:get',
     SET: 'gone:settings:set'
+  },
+  AUTH: {
+    CONNECT_GOOGLE: 'gone:auth:connect-google',
+    DISCONNECT_GOOGLE: 'gone:auth:disconnect-google',
+    LIST_ACCOUNTS: 'gone:auth:list-accounts'
+  },
+  SYNC: {
+    TRIGGER_NOW: 'gone:sync:trigger-now',
+    GET_STATUS: 'gone:sync:get-status'
   },
   CALENDAR: {
     LIST: 'gone:calendar:list',
@@ -78,6 +90,15 @@ export interface GoneAPI {
     getAll: () => Promise<AppSettings>
     get: <K extends keyof AppSettings>(key: K) => Promise<AppSettings[K]>
     set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<boolean>
+  }
+  auth: {
+    connectGoogle: () => Promise<{ success: boolean; account?: CalendarAccount; message?: string }>
+    disconnectGoogle: (accountId: string) => Promise<boolean>
+    listAccounts: () => Promise<CalendarAccount[]>
+  }
+  sync: {
+    triggerNow: () => Promise<SyncResult>
+    getStatus: () => Promise<SyncStatus>
   }
   calendars: {
     list: () => Promise<Calendar[]>

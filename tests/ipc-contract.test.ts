@@ -47,6 +47,15 @@ describe('IPC Channels and Contracts', () => {
         get: async () => true as any,
         set: async () => true
       },
+      auth: {
+        connectGoogle: async () => ({ success: true }),
+        disconnectGoogle: async () => true,
+        listAccounts: async () => []
+      },
+      sync: {
+        triggerNow: async () => ({ success: true, pulledCount: 0, pushedCount: 0, errorCount: 0 }),
+        getStatus: async () => ({ isSyncing: false, pendingPushesCount: 0, connectedAccounts: [] })
+      },
       calendars: {
         list: async () => [],
         create: async (d) => ({

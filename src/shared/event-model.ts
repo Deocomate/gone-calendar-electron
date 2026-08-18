@@ -1,5 +1,5 @@
 /**
- * Canonical Calendar, Event, and Recurrence Domain Models
+ * Canonical Calendar, Event, Recurrence, and Sync Domain Models
  */
 
 export type AccountType = 'local' | 'google' | 'graph' | 'caldav'
@@ -142,4 +142,20 @@ export interface DeleteRecurringScopeInput {
   masterEventId: string
   originalStartUtc: string
   scope: RecurringEditScope
+}
+
+export interface SyncStatus {
+  lastSyncTime?: string
+  isSyncing: boolean
+  lastError?: string
+  pendingPushesCount: number
+  connectedAccounts: CalendarAccount[]
+}
+
+export interface SyncResult {
+  success: boolean
+  pulledCount: number
+  pushedCount: number
+  errorCount: number
+  message?: string
 }

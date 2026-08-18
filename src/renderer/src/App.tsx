@@ -15,7 +15,8 @@ import {
   Sparkles,
   RotateCw,
   X,
-  FileUp
+  FileUp,
+  Users
 } from 'lucide-react'
 import type { AppLocale } from '@shared/ipc-contract'
 import type {
@@ -34,6 +35,7 @@ import ListView from './views/ListView'
 import EventEditorDialog, { type EventEditorInitialData } from './editor/EventEditorDialog'
 import RecurringScopeDialog from './editor/RecurringScopeDialog'
 import DropActionPopover, { type PendingDropAction } from './dnd/DropActionPopover'
+import AccountManagerModal from './components/AccountManagerModal'
 import { useEventDnD } from './dnd/use-event-dnd'
 
 export type CalendarViewType = 'day' | 'week' | 'month' | 'year' | 'list'
@@ -46,6 +48,7 @@ export const App: React.FC = () => {
   const [appVersion, setAppVersion] = useState<string>('0.1.0')
   const [platform, setPlatform] = useState<string>('win32')
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false)
   const [showLunar, setShowLunar] = useState<boolean>(true)
   const [showWeekNumbers, setShowWeekNumbers] = useState<boolean>(true)
 
@@ -614,18 +617,28 @@ export const App: React.FC = () => {
           </div>
 
           {/* Sync Status footer */}
-          <div className="mt-auto pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>{occurrences.length} {i18n.language === 'vi' ? 'sự kiện' : 'events'}</span>
-            </div>
+          <div className="mt-auto pt-3 border-t border-slate-800/80 space-y-2">
             <button
-              onClick={() => loadCalendarsAndEvents()}
-              className="text-slate-400 hover:text-slate-200 p-1"
-              title={t('actions.refresh')}
+              onClick={() => setIsAccountModalOpen(true)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-800/60 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700/60 transition-colors"
             >
-              <RotateCw className="h-3 w-3" />
+              <Users className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Quản lý Tài khoản (Sync)</span>
             </button>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{occurrences.length} {i18n.language === 'vi' ? 'sự kiện' : 'events'}</span>
+              </div>
+              <button
+                onClick={() => loadCalendarsAndEvents()}
+                className="text-slate-400 hover:text-slate-200 p-1"
+                title={t('actions.refresh')}
+              >
+                <RotateCw className="h-3 w-3" />
+              </button>
+            </div>
           </div>
         </aside>
 
@@ -760,6 +773,13 @@ export const App: React.FC = () => {
         onMove={handleDropMove}
         onCopy={handleDropCopy}
         onCancel={() => setPendingDrop(null)}
+      />
+
+      {/* Account Manager Modal */}
+      <AccountManagerModal
+        isOpen={isAccountModalOpen}
+        onClose={() => setIsAccountModalOpen(false)}
+        onAccountsChanged={() => loadCalendarsAndEvents()}
       />
 
       {/* Settings Modal */}

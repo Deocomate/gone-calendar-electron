@@ -43,6 +43,8 @@ export function createSqliteDriver(dbPath: string): ISqliteDatabase {
     }
     rawDb.exec('PRAGMA foreign_keys = ON;')
 
+    let txnDepth = 0
+
     const driver: ISqliteDatabase = {
       exec(sql: string): void {
         rawDb.exec(sql)
@@ -67,14 +69,31 @@ export function createSqliteDriver(dbPath: string): ISqliteDatabase {
       },
       transaction<T>(fn: () => T): () => T {
         return () => {
-          rawDb.exec('BEGIN')
+          txnDepth++
+          const savepointName = `sp_${Date.now()}_${txnDepth}`
+          if (txnDepth === 1) {
+            rawDb.exec('BEGIN')
+          } else {
+            rawDb.exec(`SAVEPOINT ${savepointName}`)
+          }
+
           try {
             const result = fn()
-            rawDb.exec('COMMIT')
+            if (txnDepth === 1) {
+              rawDb.exec('COMMIT')
+            } else {
+              rawDb.exec(`RELEASE SAVEPOINT ${savepointName}`)
+            }
             return result
-          } catch (error) {
-            rawDb.exec('ROLLBACK')
-            throw error
+          } catch (innerError) {
+            if (txnDepth === 1) {
+              rawDb.exec('ROLLBACK')
+            } else {
+              rawDb.exec(`ROLLBACK TO SAVEPOINT ${savepointName}`)
+            }
+            throw innerError
+          } finally {
+            txnDepth--
           }
         }
       },

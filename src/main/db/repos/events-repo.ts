@@ -134,7 +134,7 @@ export class EventsRepo {
 
     const now = new Date().toISOString()
     const id = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    const uid = `${id}@gone.calendar`
+    const uid = input.uid || `${id}@gone.calendar`
     const tzid = input.tzid || 'UTC'
     const allDay = input.allDay ? 1 : 0
     const dirty = 1

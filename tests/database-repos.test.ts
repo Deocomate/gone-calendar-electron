@@ -128,4 +128,18 @@ describe('Database Repositories & Read-Only Protections', () => {
       })
     ).toThrowError(ReadOnlyCalendarError)
   })
+
+  it('should support nested transactions using savepoints without errors', () => {
+    db.transaction(() => {
+      calendarsRepo.createCalendar({ name: 'Outer Cal', color: '#111111' })
+
+      db.transaction(() => {
+        calendarsRepo.createCalendar({ name: 'Inner Cal', color: '#222222' })
+      })()
+    })()
+
+    const names = calendarsRepo.listCalendars().map((c) => c.name)
+    expect(names).toContain('Outer Cal')
+    expect(names).toContain('Inner Cal')
+  })
 })

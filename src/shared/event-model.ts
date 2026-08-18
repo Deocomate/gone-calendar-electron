@@ -97,6 +97,7 @@ export interface CreateEventInput {
   exdate?: string
   color?: string
   meetingUrl?: string
+  uid?: string
 }
 
 export interface UpdateEventInput {

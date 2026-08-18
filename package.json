@@ -1,0 +1,42 @@
+{
+  "name": "gone-calendar",
+  "version": "0.1.0",
+  "description": "Desktop Calendar for Windows and Linux with modern UX and multi-provider sync",
+  "main": "./out/main/index.js",
+  "author": "Gone Calendar Team",
+  "homepage": "https://github.com/gone-calendar/gone-calendar",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test": "vitest run",
+    "pack:win": "npm run build && electron-builder --win --x64",
+    "pack:linux": "npm run build && electron-builder --linux AppImage --x64"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "i18next": "^24.2.2",
+    "lucide-react": "^1.16.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-i18next": "^15.4.1",
+    "tailwind-merge": "^3.0.2",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.9",
+    "@types/node": "^22.13.9",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^35.7.2",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^5.0.0",
+    "tailwindcss": "^4.0.9",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.8"
+  }
+}

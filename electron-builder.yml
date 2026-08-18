@@ -1,0 +1,32 @@
+appId: app.gonecalendar.desktop
+productName: Gone Calendar
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Gone Calendar
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Office;Calendar;
+  synopsis: Modern desktop calendar with multi-provider sync
+  description: Gone Calendar desktop client for Windows and Linux
+  icon: resources/icon.png

@@ -558,7 +558,7 @@ export const App: React.FC = () => {
               anchorDate={anchorDate}
               occurrences={occurrences}
               onSelectMonth={(month) => {
-                setAnchorDate((d) => d.set({ month }))
+                setAnchorDate((d) => d.set({ month, day: 1 }))
                 setCurrentView('month')
               }}
               onSelectDate={(date) => {

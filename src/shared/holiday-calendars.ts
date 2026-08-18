@@ -2,6 +2,13 @@ import { DateTime } from 'luxon'
 import { convertLunarToSolar } from './lunar-vietnam'
 import type { CreateEventInput } from './event-model'
 
+export const HOLIDAY_CALENDAR_META = {
+  vietnam: { name: 'Ngày lễ Việt Nam', color: '#ef4444' },
+  international: { name: 'International Holidays', color: '#3b82f6' }
+} as const
+
+export type HolidayCalendarType = keyof typeof HOLIDAY_CALENDAR_META
+
 export interface HolidayDefinition {
   title: string
   notes?: string
@@ -111,7 +118,7 @@ export function getInternationalHolidays(year: number): Array<{
  */
 export function generateHolidayEvents(
   calendarId: string,
-  type: 'vietnam' | 'international',
+  type: HolidayCalendarType,
   years: number[]
 ): CreateEventInput[] {
   const results: CreateEventInput[] = []

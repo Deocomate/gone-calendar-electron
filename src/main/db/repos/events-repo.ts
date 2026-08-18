@@ -106,7 +106,8 @@ function mapRowToException(row: ExceptionRow): EventException {
 export class EventsRepo {
   constructor(private db: ISqliteDatabase) {}
 
-  private checkReadOnlyCalendar(calendarId: string): void {
+  private checkReadOnlyCalendar(calendarId: string, allowReadOnly = false): void {
+    if (allowReadOnly) return
     const row = this.db
       .prepare('SELECT is_read_only FROM calendars WHERE id = ?')
       .get<{ is_read_only: number }>(calendarId)
@@ -181,8 +182,8 @@ export class EventsRepo {
     return rows.map(mapRowToException)
   }
 
-  createEvent(input: CreateEventInput): CalendarEvent {
-    this.checkReadOnlyCalendar(input.calendarId)
+  createEvent(input: CreateEventInput, options?: { allowReadOnly?: boolean }): CalendarEvent {
+    this.checkReadOnlyCalendar(input.calendarId, options?.allowReadOnly === true)
 
     const now = new Date().toISOString()
     const id = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`

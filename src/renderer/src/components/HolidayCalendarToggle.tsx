@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { CalendarHeart, Check, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import type { Calendar } from '@shared/event-model'
+import { HOLIDAY_CALENDAR_META, type HolidayCalendarType } from '@shared/holiday-calendars'
 
 interface HolidayCalendarToggleProps {
   calendars: Calendar[]
@@ -11,13 +12,15 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
   calendars,
   onCalendarsChanged
 }) => {
-  const [loadingType, setLoadingType] = useState<'vietnam' | 'international' | null>(null)
+  const [loadingType, setLoadingType] = useState<HolidayCalendarType | null>(null)
   const [isExpanded, setIsExpanded] = useState(true)
 
-  const isVietnamSubscribed = calendars.some((c) => c.name === 'Ngày lễ Việt Nam')
-  const isInternationalSubscribed = calendars.some((c) => c.name === 'International Holidays')
+  const isVietnamSubscribed = calendars.some((c) => c.name === HOLIDAY_CALENDAR_META.vietnam.name)
+  const isInternationalSubscribed = calendars.some(
+    (c) => c.name === HOLIDAY_CALENDAR_META.international.name
+  )
 
-  const handleToggle = async (type: 'vietnam' | 'international') => {
+  const handleToggle = async (type: HolidayCalendarType) => {
     if (!window.gone?.holidays) return
     setLoadingType(type)
 

@@ -3,6 +3,10 @@ import { createSqliteDriver, type ISqliteDatabase } from '../src/main/db/sqlite-
 import { runMigrations, seedDefaultData } from '../src/main/db/database'
 import { CalendarsRepo } from '../src/main/db/repos/calendars-repo'
 import { EventsRepo, ReadOnlyCalendarError } from '../src/main/db/repos/events-repo'
+import {
+  subscribeHolidayCalendar,
+  unsubscribeHolidayCalendar
+} from '../src/main/holidays/holiday-subscription'
 
 describe('Database Repositories & Read-Only Protections', () => {
   let db: ISqliteDatabase
@@ -127,6 +131,33 @@ describe('Database Repositories & Read-Only Protections', () => {
         isCancelled: true
       })
     ).toThrowError(ReadOnlyCalendarError)
+  })
+
+  it('should seed holiday events into a read-only calendar via system subscribe', () => {
+    const first = subscribeHolidayCalendar(db, 'vietnam')
+    expect(first.count).toBeGreaterThan(15)
+
+    const seeded = eventsRepo.queryEventsByCalendar(first.calendarId)
+    expect(seeded.length).toBe(first.count)
+
+    const cal = calendarsRepo.getCalendarById(first.calendarId)
+    expect(cal?.isReadOnly).toBe(true)
+
+    expect(() =>
+      eventsRepo.createEvent({
+        calendarId: first.calendarId,
+        title: 'User should not write here',
+        dtStartUtc: '2026-01-01T00:00:00.000Z',
+        dtEndUtc: '2026-01-01T23:59:59.999Z'
+      })
+    ).toThrowError(ReadOnlyCalendarError)
+
+    const second = subscribeHolidayCalendar(db, 'vietnam')
+    expect(second.calendarId).toBe(first.calendarId)
+    expect(eventsRepo.queryEventsByCalendar(second.calendarId).length).toBe(second.count)
+
+    expect(unsubscribeHolidayCalendar(db, 'vietnam')).toBe(true)
+    expect(calendarsRepo.getCalendarById(first.calendarId)).toBeNull()
   })
 
   it('should support nested transactions using savepoints without errors', () => {

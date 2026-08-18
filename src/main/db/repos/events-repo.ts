@@ -4,9 +4,14 @@ import type {
   EventException,
   ExpandedOccurrence,
   CreateEventInput,
-  UpdateEventInput
+  UpdateEventInput,
+  MoveEventInput,
+  CopyEventInput,
+  UpdateRecurringScopeInput,
+  DeleteRecurringScopeInput
 } from '@shared/event-model'
 import { expandOccurrences } from '@shared/expand-occurrences'
+import { DateTime } from 'luxon'
 
 export class ReadOnlyCalendarError extends Error {
   constructor(calendarId: string) {
@@ -348,5 +353,170 @@ export class EventsRepo {
 
     // Sort chronologically by startUtc
     return occurrences.sort((a, b) => a.startUtc.localeCompare(b.startUtc))
+  }
+
+  moveEvent(input: MoveEventInput): CalendarEvent {
+    const existing = this.getEventById(input.eventId)
+    if (!existing) {
+      throw new Error(`Event not found: ${input.eventId}`)
+    }
+    this.checkReadOnlyCalendar(existing.event.calendarId)
+    if (input.targetCalendarId && input.targetCalendarId !== existing.event.calendarId) {
+      this.checkReadOnlyCalendar(input.targetCalendarId)
+    }
+
+    const now = new Date().toISOString()
+    const targetCalendarId = input.targetCalendarId || existing.event.calendarId
+
+    this.db
+      .prepare(
+        `UPDATE events SET
+          calendar_id = ?, dtstart_utc = ?, dtend_utc = ?,
+          dirty = 1, updated_at = ?
+         WHERE id = ?`
+      )
+      .run(targetCalendarId, input.dtStartUtc, input.dtEndUtc, now, input.eventId)
+
+    const updated = this.getEventById(input.eventId)
+    return updated!.event
+  }
+
+  copyEvent(input: CopyEventInput): CalendarEvent {
+    const existing = this.getEventById(input.sourceEventId)
+    if (!existing) {
+      throw new Error(`Source event not found: ${input.sourceEventId}`)
+    }
+    const targetCalendarId = input.targetCalendarId || existing.event.calendarId
+    this.checkReadOnlyCalendar(targetCalendarId)
+
+    // Generate new ID and new unique UID for the copied event
+    const now = new Date().toISOString()
+    const newId = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const newUid = `${newId}@gone.calendar`
+
+    this.db
+      .prepare(
+        `INSERT INTO events (
+          id, calendar_id, uid, title, notes, location,
+          dtstart_utc, dtend_utc, tzid, all_day, rrule, exdate,
+          color, meeting_url, dirty, is_deleted, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`
+      )
+      .run(
+        newId,
+        targetCalendarId,
+        newUid,
+        existing.event.title,
+        existing.event.notes || null,
+        existing.event.location || null,
+        input.dtStartUtc,
+        input.dtEndUtc,
+        existing.event.tzid,
+        existing.event.allDay ? 1 : 0,
+        existing.event.rrule || null,
+        existing.event.exdate || null,
+        existing.event.color || null,
+        existing.event.meetingUrl || null,
+        now,
+        now
+      )
+
+    const copied = this.getEventById(newId)
+    return copied!.event
+  }
+
+  updateRecurringScope(input: UpdateRecurringScopeInput): boolean {
+    const master = this.getEventById(input.masterEventId)
+    if (!master) {
+      throw new Error(`Master event not found: ${input.masterEventId}`)
+    }
+    this.checkReadOnlyCalendar(master.event.calendarId)
+
+    if (input.scope === 'all') {
+      this.updateEvent(input.masterEventId, input.updateInput)
+      return true
+    }
+
+    if (input.scope === 'this') {
+      this.upsertException({
+        masterEventId: input.masterEventId,
+        originalStartUtc: input.originalStartUtc,
+        isCancelled: false,
+        title: input.updateInput.title,
+        notes: input.updateInput.notes,
+        location: input.updateInput.location,
+        dtStartUtc: input.updateInput.dtStartUtc,
+        dtEndUtc: input.updateInput.dtEndUtc,
+        tzid: input.updateInput.tzid,
+        color: input.updateInput.color
+      })
+      return true
+    }
+
+    if (input.scope === 'future') {
+      // 1. Cap master event with UNTIL right before this occurrence
+      const occDt = DateTime.fromISO(input.originalStartUtc, { zone: 'utc' })
+      const untilUtc = occDt.minus({ seconds: 1 }).toFormat("yyyyMMdd'T'HHmmss'Z'")
+
+      let cleanRrule = master.event.rrule || ''
+      cleanRrule = cleanRrule.replace(/;?UNTIL=[^;]+/gi, '').replace(/;?COUNT=\d+/gi, '')
+      const cappedRrule = `${cleanRrule};UNTIL=${untilUtc}`
+
+      this.updateEvent(input.masterEventId, { rrule: cappedRrule })
+
+      // 2. Create new recurring event starting from this occurrence
+      this.createEvent({
+        calendarId: master.event.calendarId,
+        title: input.updateInput.title ?? master.event.title,
+        notes: input.updateInput.notes ?? master.event.notes,
+        location: input.updateInput.location ?? master.event.location,
+        dtStartUtc: input.updateInput.dtStartUtc ?? input.originalStartUtc,
+        dtEndUtc: input.updateInput.dtEndUtc ?? master.event.dtEndUtc,
+        tzid: input.updateInput.tzid ?? master.event.tzid,
+        allDay: input.updateInput.allDay ?? master.event.allDay,
+        rrule: input.updateInput.rrule ?? cleanRrule,
+        color: input.updateInput.color ?? master.event.color,
+        meetingUrl: input.updateInput.meetingUrl ?? master.event.meetingUrl
+      })
+
+      return true
+    }
+
+    return false
+  }
+
+  deleteRecurringScope(input: DeleteRecurringScopeInput): boolean {
+    const master = this.getEventById(input.masterEventId)
+    if (!master) {
+      throw new Error(`Master event not found: ${input.masterEventId}`)
+    }
+    this.checkReadOnlyCalendar(master.event.calendarId)
+
+    if (input.scope === 'all') {
+      return this.deleteEvent(input.masterEventId)
+    }
+
+    if (input.scope === 'this') {
+      this.upsertException({
+        masterEventId: input.masterEventId,
+        originalStartUtc: input.originalStartUtc,
+        isCancelled: true
+      })
+      return true
+    }
+
+    if (input.scope === 'future') {
+      const occDt = DateTime.fromISO(input.originalStartUtc, { zone: 'utc' })
+      const untilUtc = occDt.minus({ seconds: 1 }).toFormat("yyyyMMdd'T'HHmmss'Z'")
+
+      let cleanRrule = master.event.rrule || ''
+      cleanRrule = cleanRrule.replace(/;?UNTIL=[^;]+/gi, '').replace(/;?COUNT=\d+/gi, '')
+      const cappedRrule = `${cleanRrule};UNTIL=${untilUtc}`
+
+      this.updateEvent(input.masterEventId, { rrule: cappedRrule })
+      return true
+    }
+
+    return false
   }
 }

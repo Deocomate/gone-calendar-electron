@@ -11,6 +11,8 @@ interface MonthViewProps {
   showWeekNumbers: boolean
   onSelectDate?: (date: DateTime) => void
   onSelectOccurrence?: (occ: ExpandedOccurrence) => void
+  onDragStart?: (e: React.DragEvent, occ: ExpandedOccurrence) => void
+  onDropOnDate?: (e: React.DragEvent, targetDate: DateTime) => void
 }
 
 export const MonthView: React.FC<MonthViewProps> = ({
@@ -19,7 +21,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
   showLunar,
   showWeekNumbers,
   onSelectDate,
-  onSelectOccurrence
+  onSelectOccurrence,
+  onDragStart,
+  onDropOnDate
 }) => {
   const today = DateTime.local()
   const monthStart = anchorDate.startOf('month')
@@ -91,6 +95,17 @@ export const MonthView: React.FC<MonthViewProps> = ({
                   <div
                     key={dayKey}
                     onClick={() => onSelectDate?.(day)}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.add('bg-indigo-900/20')
+                    }}
+                    onDragLeave={(e) => {
+                      e.currentTarget.classList.remove('bg-indigo-900/20')
+                    }}
+                    onDrop={(e) => {
+                      e.currentTarget.classList.remove('bg-indigo-900/20')
+                      onDropOnDate?.(e, day)
+                    }}
                     className={`flex flex-col p-1.5 min-h-0 transition-colors cursor-pointer hover:bg-slate-800/30 ${
                       !isCurrentMonth ? 'bg-slate-950/40 opacity-40' : 'bg-transparent'
                     }`}
@@ -121,11 +136,13 @@ export const MonthView: React.FC<MonthViewProps> = ({
                         return (
                           <div
                             key={occ.id}
+                            draggable
+                            onDragStart={(e) => onDragStart?.(e, occ)}
                             onClick={(e) => {
                               e.stopPropagation()
                               onSelectOccurrence?.(occ)
                             }}
-                            className="group px-1.5 py-0.5 rounded text-[11px] font-medium truncate flex items-center gap-1 cursor-pointer transition-all hover:scale-[1.02] shadow-xs"
+                            className="group px-1.5 py-0.5 rounded text-[11px] font-medium truncate flex items-center gap-1 cursor-grab active:cursor-grabbing transition-all hover:scale-[1.02] shadow-xs"
                             style={{
                               backgroundColor: occ.color ? `${occ.color}22` : '#6366f122',
                               borderLeft: `3px solid ${occ.color || '#6366f1'}`

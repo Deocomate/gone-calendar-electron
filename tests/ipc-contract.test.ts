@@ -105,6 +105,36 @@ describe('IPC Channels and Contracts', () => {
           updatedAt: ''
         }),
         delete: async () => true,
+        move: async (input) => ({
+          id: input.eventId,
+          calendarId: input.targetCalendarId || 'c1',
+          uid: 'u1',
+          title: '',
+          dtStartUtc: input.dtStartUtc,
+          dtEndUtc: input.dtEndUtc,
+          tzid: 'UTC',
+          allDay: false,
+          dirty: false,
+          isDeleted: false,
+          createdAt: '',
+          updatedAt: ''
+        }),
+        copy: async (input) => ({
+          id: 'e2',
+          calendarId: input.targetCalendarId || 'c1',
+          uid: 'u2',
+          title: '',
+          dtStartUtc: input.dtStartUtc,
+          dtEndUtc: input.dtEndUtc,
+          tzid: 'UTC',
+          allDay: false,
+          dirty: false,
+          isDeleted: false,
+          createdAt: '',
+          updatedAt: ''
+        }),
+        updateScope: async () => true,
+        deleteScope: async () => true,
         upsertException: async (ex) => ({
           id: 'ex1',
           masterEventId: ex.masterEventId,

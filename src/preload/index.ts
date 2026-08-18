@@ -30,6 +30,10 @@ const goneApi: GoneAPI = {
     update: (id: string, input: UpdateEventInput) =>
       ipcRenderer.invoke(IPC_CHANNELS.EVENT.UPDATE, id, input),
     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.DELETE, id),
+    move: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.MOVE, input),
+    copy: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.COPY, input),
+    updateScope: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.UPDATE_SCOPE, input),
+    deleteScope: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.DELETE_SCOPE, input),
     upsertException: (exception: Omit<EventException, 'id' | 'createdAt' | 'updatedAt'>) =>
       ipcRenderer.invoke(IPC_CHANNELS.EVENT.UPSERT_EXCEPTION, exception)
   },

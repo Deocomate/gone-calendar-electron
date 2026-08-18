@@ -113,6 +113,50 @@ export function registerCalendarIpcHandlers(): void {
     }
   )
 
+  ipcMain.handle(IPC_CHANNELS.EVENT.MOVE, (_event, input: any) => {
+    try {
+      return eventsRepo.moveEvent(input)
+    } catch (err: any) {
+      if (err instanceof ReadOnlyCalendarError) {
+        throw new Error(`Move rejected: ${err.message}`)
+      }
+      throw err
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EVENT.COPY, (_event, input: any) => {
+    try {
+      return eventsRepo.copyEvent(input)
+    } catch (err: any) {
+      if (err instanceof ReadOnlyCalendarError) {
+        throw new Error(`Copy rejected: ${err.message}`)
+      }
+      throw err
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EVENT.UPDATE_SCOPE, (_event, input: any) => {
+    try {
+      return eventsRepo.updateRecurringScope(input)
+    } catch (err: any) {
+      if (err instanceof ReadOnlyCalendarError) {
+        throw new Error(`Recurring update rejected: ${err.message}`)
+      }
+      throw err
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EVENT.DELETE_SCOPE, (_event, input: any) => {
+    try {
+      return eventsRepo.deleteRecurringScope(input)
+    } catch (err: any) {
+      if (err instanceof ReadOnlyCalendarError) {
+        throw new Error(`Recurring delete rejected: ${err.message}`)
+      }
+      throw err
+    }
+  })
+
   // 3. ICS Import / Export handlers
   ipcMain.handle(
     IPC_CHANNELS.ICS.IMPORT,

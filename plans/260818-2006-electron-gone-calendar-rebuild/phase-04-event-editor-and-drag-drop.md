@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Event editor and drag-drop"
-status: pending
+status: completed
 effort: L
 priority: P1
 dependencies: [3]
@@ -47,11 +47,11 @@ Copy recurring: **whole series** (URD R1). Stretch instance-copy is phase 10.
 
 ## Success Criteria
 
-- [ ] Blank click never shows title-only popover
-- [ ] Move relocates one event; Copy leaves original
-- [ ] Drop on original slot does nothing
-- [ ] Recurring save asks this / future / all
-- [ ] Cancel on dirty editor confirms
+- [x] Blank click never shows title-only popover
+- [x] Move relocates one event; Copy leaves original
+- [x] Drop on original slot does nothing
+- [x] Recurring save asks this / future / all
+- [x] Cancel on dirty editor confirms
 
 ## Risk Assessment
 

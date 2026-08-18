@@ -114,3 +114,32 @@ export interface UpdateEventInput {
   meetingUrl?: string
   isDeleted?: boolean
 }
+
+export type RecurringEditScope = 'this' | 'future' | 'all'
+
+export interface MoveEventInput {
+  eventId: string
+  dtStartUtc: string
+  dtEndUtc: string
+  targetCalendarId?: string
+}
+
+export interface CopyEventInput {
+  sourceEventId: string
+  dtStartUtc: string
+  dtEndUtc: string
+  targetCalendarId?: string
+}
+
+export interface UpdateRecurringScopeInput {
+  masterEventId: string
+  originalStartUtc: string
+  scope: RecurringEditScope
+  updateInput: UpdateEventInput
+}
+
+export interface DeleteRecurringScopeInput {
+  masterEventId: string
+  originalStartUtc: string
+  scope: RecurringEditScope
+}

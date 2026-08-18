@@ -11,6 +11,8 @@ interface WeekViewProps {
   showWeekNumbers: boolean
   onSelectOccurrence?: (occ: ExpandedOccurrence) => void
   onSelectSlot?: (start: DateTime, end: DateTime) => void
+  onDragStart?: (e: React.DragEvent, occ: ExpandedOccurrence) => void
+  onDropOnDate?: (e: React.DragEvent, targetDate: DateTime, targetHour?: number) => void
 }
 
 const HOUR_HEIGHT = 54 // pixels per hour
@@ -21,7 +23,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
   showLunar,
   showWeekNumbers,
   onSelectOccurrence,
-  onSelectSlot
+  onSelectSlot,
+  onDragStart,
+  onDropOnDate
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null)
   const today = DateTime.local()
@@ -94,12 +98,19 @@ export const WeekView: React.FC<WeekViewProps> = ({
               })
 
               return (
-                <div key={dayStr} className="p-1 space-y-1">
+                <div
+                  key={dayStr}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => onDropOnDate?.(e, day)}
+                  className="p-1 space-y-1"
+                >
                   {dayAllDay.map((occ) => (
                     <div
                       key={occ.id}
+                      draggable
+                      onDragStart={(e) => onDragStart?.(e, occ)}
                       onClick={() => onSelectOccurrence?.(occ)}
-                      className="px-2 py-0.5 rounded text-[11px] font-medium text-white truncate cursor-pointer shadow-xs"
+                      className="px-2 py-0.5 rounded text-[11px] font-medium text-white truncate cursor-grab active:cursor-grabbing shadow-xs"
                       style={{ backgroundColor: occ.color || '#6366f1' }}
                     >
                       {occ.title}
@@ -142,11 +153,18 @@ export const WeekView: React.FC<WeekViewProps> = ({
               <div
                 key={dayKey}
                 className="relative cursor-pointer hover:bg-slate-900/20"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const dropY = e.clientY - rect.top
+                  const droppedHour = Math.floor(dropY / HOUR_HEIGHT)
+                  onDropOnDate?.(e, day, droppedHour)
+                }}
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect()
                   const clickY = e.clientY - rect.top
                   const clickedHour = Math.floor(clickY / HOUR_HEIGHT)
-                  const startSlot = day.set({ hour: clickedHour, minute: 0 })
+                  const startSlot = day.set({ hour: clickedHour, minute: 0, second: 0 })
                   const endSlot = startSlot.plus({ hours: 1 })
                   onSelectSlot?.(startSlot, endSlot)
                 }}
@@ -185,6 +203,8 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   return (
                     <div
                       key={occ.id}
+                      draggable
+                      onDragStart={(e) => onDragStart?.(e, occ)}
                       onClick={(e) => {
                         e.stopPropagation()
                         onSelectOccurrence?.(occ)
@@ -195,7 +215,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         backgroundColor: occ.color ? `${occ.color}33` : '#6366f133',
                         borderLeft: `4px solid ${occ.color || '#6366f1'}`
                       }}
-                      className="absolute inset-x-1 rounded-lg p-1.5 text-xs text-slate-100 overflow-hidden shadow-md backdrop-blur-xs transition-all hover:z-30 hover:scale-[1.01] cursor-pointer"
+                      className="absolute inset-x-1 rounded-lg p-1.5 text-xs text-slate-100 overflow-hidden shadow-md backdrop-blur-xs transition-all hover:z-30 hover:scale-[1.01] cursor-grab active:cursor-grabbing"
                     >
                       <div className="font-semibold text-[11px] truncate leading-tight">
                         {occ.title}

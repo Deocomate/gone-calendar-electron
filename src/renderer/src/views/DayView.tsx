@@ -9,6 +9,8 @@ interface DayViewProps {
   showLunar: boolean
   onSelectOccurrence?: (occ: ExpandedOccurrence) => void
   onSelectSlot?: (start: DateTime, end: DateTime) => void
+  onDragStart?: (e: React.DragEvent, occ: ExpandedOccurrence) => void
+  onDropOnDate?: (e: React.DragEvent, targetDate: DateTime, targetHour?: number) => void
 }
 
 const HOUR_HEIGHT = 60
@@ -18,7 +20,9 @@ export const DayView: React.FC<DayViewProps> = ({
   occurrences,
   showLunar,
   onSelectOccurrence,
-  onSelectSlot
+  onSelectSlot,
+  onDragStart,
+  onDropOnDate
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null)
   const today = DateTime.local()
@@ -67,12 +71,18 @@ export const DayView: React.FC<DayViewProps> = ({
         </div>
 
         {allDayOccurrences.length > 0 && (
-          <div className="flex items-center gap-2 max-w-md overflow-x-auto">
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => onDropOnDate?.(e, anchorDate)}
+            className="flex items-center gap-2 max-w-md overflow-x-auto p-1"
+          >
             {allDayOccurrences.map((occ) => (
               <div
                 key={occ.id}
+                draggable
+                onDragStart={(e) => onDragStart?.(e, occ)}
                 onClick={() => onSelectOccurrence?.(occ)}
-                className="px-3 py-1 rounded-lg text-xs font-semibold text-white truncate cursor-pointer shadow-md"
+                className="px-3 py-1 rounded-lg text-xs font-semibold text-white truncate cursor-grab active:cursor-grabbing shadow-md"
                 style={{ backgroundColor: occ.color || '#6366f1' }}
               >
                 {occ.title}
@@ -101,11 +111,18 @@ export const DayView: React.FC<DayViewProps> = ({
           {/* Main Day Timeline Area */}
           <div
             className="relative cursor-pointer hover:bg-slate-900/10"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect()
+              const dropY = e.clientY - rect.top
+              const droppedHour = Math.floor(dropY / HOUR_HEIGHT)
+              onDropOnDate?.(e, anchorDate, droppedHour)
+            }}
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect()
               const clickY = e.clientY - rect.top
               const clickedHour = Math.floor(clickY / HOUR_HEIGHT)
-              const startSlot = anchorDate.set({ hour: clickedHour, minute: 0 })
+              const startSlot = anchorDate.set({ hour: clickedHour, minute: 0, second: 0 })
               const endSlot = startSlot.plus({ hours: 1 })
               onSelectSlot?.(startSlot, endSlot)
             }}
@@ -144,6 +161,8 @@ export const DayView: React.FC<DayViewProps> = ({
               return (
                 <div
                   key={occ.id}
+                  draggable
+                  onDragStart={(e) => onDragStart?.(e, occ)}
                   onClick={(e) => {
                     e.stopPropagation()
                     onSelectOccurrence?.(occ)
@@ -154,7 +173,7 @@ export const DayView: React.FC<DayViewProps> = ({
                     backgroundColor: occ.color ? `${occ.color}33` : '#6366f133',
                     borderLeft: `5px solid ${occ.color || '#6366f1'}`
                   }}
-                  className="absolute inset-x-4 rounded-xl p-3 text-xs text-slate-100 overflow-hidden shadow-lg backdrop-blur-md transition-all hover:z-30 hover:scale-[1.005] cursor-pointer"
+                  className="absolute inset-x-4 rounded-xl p-3 text-xs text-slate-100 overflow-hidden shadow-lg backdrop-blur-md transition-all hover:z-30 hover:scale-[1.005] cursor-grab active:cursor-grabbing"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-sm text-slate-100">{occ.title}</span>

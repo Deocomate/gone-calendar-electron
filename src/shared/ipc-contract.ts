@@ -8,7 +8,11 @@ import type {
   EventException,
   ExpandedOccurrence,
   CreateEventInput,
-  UpdateEventInput
+  UpdateEventInput,
+  MoveEventInput,
+  CopyEventInput,
+  UpdateRecurringScopeInput,
+  DeleteRecurringScopeInput
 } from './event-model'
 import type { AppSettings } from './settings-contract'
 
@@ -36,6 +40,10 @@ export const IPC_CHANNELS = {
     CREATE: 'gone:event:create',
     UPDATE: 'gone:event:update',
     DELETE: 'gone:event:delete',
+    MOVE: 'gone:event:move',
+    COPY: 'gone:event:copy',
+    UPDATE_SCOPE: 'gone:event:update-scope',
+    DELETE_SCOPE: 'gone:event:delete-scope',
     UPSERT_EXCEPTION: 'gone:event:upsert-exception'
   },
   ICS: {
@@ -83,6 +91,10 @@ export interface GoneAPI {
     create: (input: CreateEventInput) => Promise<CalendarEvent>
     update: (id: string, input: UpdateEventInput) => Promise<CalendarEvent>
     delete: (id: string) => Promise<boolean>
+    move: (input: MoveEventInput) => Promise<CalendarEvent>
+    copy: (input: CopyEventInput) => Promise<CalendarEvent>
+    updateScope: (input: UpdateRecurringScopeInput) => Promise<boolean>
+    deleteScope: (input: DeleteRecurringScopeInput) => Promise<boolean>
     upsertException: (exception: Omit<EventException, 'id' | 'createdAt' | 'updatedAt'>) => Promise<EventException>
   }
   ics: {

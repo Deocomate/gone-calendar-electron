@@ -18,13 +18,23 @@ import {
   FileUp
 } from 'lucide-react'
 import type { AppLocale } from '@shared/ipc-contract'
-import type { Calendar, ExpandedOccurrence } from '@shared/event-model'
+import type {
+  Calendar,
+  ExpandedOccurrence,
+  CreateEventInput,
+  UpdateEventInput,
+  RecurringEditScope
+} from '@shared/event-model'
 import { useVisibleRange } from './hooks/use-visible-range'
 import MonthView from './views/MonthView'
 import WeekView from './views/WeekView'
 import DayView from './views/DayView'
 import YearView from './views/YearView'
 import ListView from './views/ListView'
+import EventEditorDialog, { type EventEditorInitialData } from './editor/EventEditorDialog'
+import RecurringScopeDialog from './editor/RecurringScopeDialog'
+import DropActionPopover, { type PendingDropAction } from './dnd/DropActionPopover'
+import { useEventDnD } from './dnd/use-event-dnd'
 
 export type CalendarViewType = 'day' | 'week' | 'month' | 'year' | 'list'
 
@@ -42,10 +52,28 @@ export const App: React.FC = () => {
   // Domain state
   const [calendars, setCalendars] = useState<Calendar[]>([])
   const [occurrences, setOccurrences] = useState<ExpandedOccurrence[]>([])
-  const [quickEventTitle, setQuickEventTitle] = useState<string>('')
-  const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false)
-  const [selectedSlot, setSelectedSlot] = useState<{ start: DateTime; end: DateTime } | null>(null)
   const [importStatus, setImportStatus] = useState<string | null>(null)
+
+  // Full Event Editor Dialog State
+  const [isEditorOpen, setIsEditorOpen] = useState<boolean>(false)
+  const [editorData, setEditorData] = useState<EventEditorInitialData | null>(null)
+
+  // Recurring Scope Dialog State
+  const [pendingRecurringScope, setPendingRecurringScope] = useState<{
+    action: 'edit' | 'delete'
+    title: string
+    eventId: string
+    occurrenceStartUtc: string
+    input?: UpdateEventInput
+  } | null>(null)
+
+  // Drag and Drop
+  const {
+    pendingDrop,
+    setPendingDrop,
+    handleDragStart,
+    handleDropOnDate
+  } = useEventDnD()
 
   const visibleRange = useVisibleRange(anchorDate, currentView, i18n.language)
 
@@ -194,35 +222,129 @@ export const App: React.FC = () => {
     }
   }
 
-  const handleCreateQuickEvent = async () => {
-    if (!quickEventTitle.trim() || calendars.length === 0 || !window.gone?.events) {
-      return
-    }
-
-    const targetCal = calendars.find((c) => !c.isReadOnly) || calendars[0]
-    if (!targetCal || targetCal.isReadOnly) {
-      alert('Calendar is read-only!')
-      return
-    }
-
-    const startDt = selectedSlot ? selectedSlot.start : anchorDate.set({ hour: 10, minute: 0 })
-    const endDt = selectedSlot ? selectedSlot.end : startDt.plus({ hours: 1 })
+  // Handle Event Saving (New vs Update vs Recurring Scope)
+  const handleSaveEditorEvent = async (payload: {
+    isNew: boolean
+    eventId?: string
+    occurrenceStartUtc?: string
+    isRecurringOccurrence?: boolean
+    input: CreateEventInput | UpdateEventInput
+  }) => {
+    if (!window.gone?.events) return
 
     try {
-      await window.gone.events.create({
-        calendarId: targetCal.id,
-        title: quickEventTitle.trim(),
-        dtStartUtc: startDt.toUTC().toISO()!,
-        dtEndUtc: endDt.toUTC().toISO()!,
-        tzid: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Ho_Chi_Minh',
-        allDay: false
+      if (payload.isNew) {
+        await window.gone.events.create(payload.input as CreateEventInput)
+        setIsEditorOpen(false)
+        await loadCalendarsAndEvents()
+      } else if (payload.eventId) {
+        if (payload.isRecurringOccurrence && payload.occurrenceStartUtc) {
+          // Trigger recurring scope dialog
+          setIsEditorOpen(false)
+          setPendingRecurringScope({
+            action: 'edit',
+            title: (payload.input as UpdateEventInput).title || 'Recurring Event',
+            eventId: payload.eventId,
+            occurrenceStartUtc: payload.occurrenceStartUtc,
+            input: payload.input as UpdateEventInput
+          })
+        } else {
+          // Standard single event update
+          await window.gone.events.update(payload.eventId, payload.input as UpdateEventInput)
+          setIsEditorOpen(false)
+          await loadCalendarsAndEvents()
+        }
+      }
+    } catch (err: any) {
+      alert(`Save error: ${err.message}`)
+    }
+  }
+
+  // Handle Event Deletion
+  const handleDeleteEvent = async (
+    eventId: string,
+    occurrenceStartUtc?: string,
+    isRecurring?: boolean
+  ) => {
+    if (!window.gone?.events) return
+
+    if (isRecurring && occurrenceStartUtc) {
+      setIsEditorOpen(false)
+      setPendingRecurringScope({
+        action: 'delete',
+        title: 'Recurring Event',
+        eventId,
+        occurrenceStartUtc
       })
-      setQuickEventTitle('')
-      setSelectedSlot(null)
-      setIsQuickAddOpen(false)
+    } else {
+      if (confirm('Bạn có chắc chắn muốn xóa sự kiện này?')) {
+        try {
+          await window.gone.events.delete(eventId)
+          setIsEditorOpen(false)
+          await loadCalendarsAndEvents()
+        } catch (err: any) {
+          alert(`Delete error: ${err.message}`)
+        }
+      }
+    }
+  }
+
+  // Handle Recurring Scope Confirmation ('this' | 'future' | 'all')
+  const handleConfirmRecurringScope = async (scope: RecurringEditScope) => {
+    if (!pendingRecurringScope || !window.gone?.events) return
+
+    try {
+      if (pendingRecurringScope.action === 'edit' && pendingRecurringScope.input) {
+        await window.gone.events.updateScope({
+          masterEventId: pendingRecurringScope.eventId,
+          originalStartUtc: pendingRecurringScope.occurrenceStartUtc,
+          scope,
+          updateInput: pendingRecurringScope.input
+        })
+      } else if (pendingRecurringScope.action === 'delete') {
+        await window.gone.events.deleteScope({
+          masterEventId: pendingRecurringScope.eventId,
+          originalStartUtc: pendingRecurringScope.occurrenceStartUtc,
+          scope
+        })
+      }
+      setPendingRecurringScope(null)
       await loadCalendarsAndEvents()
     } catch (err: any) {
-      alert(`Create event error: ${err.message}`)
+      alert(`Scope update error: ${err.message}`)
+    }
+  }
+
+  // Drag and Drop Actions
+  const handleDropMove = async (drop: PendingDropAction) => {
+    if (!window.gone?.events) return
+    try {
+      await window.gone.events.move({
+        eventId: drop.occurrence.eventId,
+        dtStartUtc: drop.targetStart.toUTC().toISO()!,
+        dtEndUtc: drop.targetEnd.toUTC().toISO()!,
+        targetCalendarId: drop.targetCalendarId
+      })
+      setPendingDrop(null)
+      await loadCalendarsAndEvents()
+    } catch (err: any) {
+      alert(`Move error: ${err.message}`)
+    }
+  }
+
+  const handleDropCopy = async (drop: PendingDropAction) => {
+    if (!window.gone?.events) return
+    try {
+      await window.gone.events.copy({
+        sourceEventId: drop.occurrence.eventId,
+        dtStartUtc: drop.targetStart.toUTC().toISO()!,
+        dtEndUtc: drop.targetEnd.toUTC().toISO()!,
+        targetCalendarId: drop.targetCalendarId
+      })
+      setPendingDrop(null)
+      await loadCalendarsAndEvents()
+    } catch (err: any) {
+      alert(`Copy error: ${err.message}`)
     }
   }
 
@@ -331,8 +453,11 @@ export const App: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              setSelectedSlot(null)
-              setIsQuickAddOpen(true)
+              setEditorData({
+                initialStart: anchorDate.set({ hour: 9, minute: 0, second: 0 }),
+                initialEnd: anchorDate.set({ hour: 10, minute: 0, second: 0 })
+              })
+              setIsEditorOpen(true)
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-all shadow-md shadow-indigo-600/25"
           >
@@ -382,7 +507,7 @@ export const App: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
         <aside className="w-64 border-r border-slate-800/80 bg-slate-900/30 flex flex-col p-4 gap-6 shrink-0">
-          {/* Mini Calendar Card Placeholder */}
+          {/* Mini Calendar Card */}
           <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-xs">
             <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-3">
               <span>{anchorDate.toFormat('MMMM yyyy')}</span>
@@ -488,7 +613,7 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Sync Status / Offline footer */}
+          {/* Sync Status footer */}
           <div className="mt-auto pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -522,9 +647,18 @@ export const App: React.FC = () => {
               showLunar={showLunar}
               showWeekNumbers={showWeekNumbers}
               onSelectDate={(date) => {
-                setAnchorDate(date)
-                setCurrentView('day')
+                setEditorData({
+                  initialStart: date.set({ hour: 9, minute: 0, second: 0 }),
+                  initialEnd: date.set({ hour: 10, minute: 0, second: 0 })
+                })
+                setIsEditorOpen(true)
               }}
+              onSelectOccurrence={(occ) => {
+                setEditorData({ occurrence: occ })
+                setIsEditorOpen(true)
+              }}
+              onDragStart={handleDragStart}
+              onDropOnDate={handleDropOnDate}
             />
           )}
 
@@ -535,9 +669,15 @@ export const App: React.FC = () => {
               showLunar={showLunar}
               showWeekNumbers={showWeekNumbers}
               onSelectSlot={(start, end) => {
-                setSelectedSlot({ start, end })
-                setIsQuickAddOpen(true)
+                setEditorData({ initialStart: start, initialEnd: end })
+                setIsEditorOpen(true)
               }}
+              onSelectOccurrence={(occ) => {
+                setEditorData({ occurrence: occ })
+                setIsEditorOpen(true)
+              }}
+              onDragStart={handleDragStart}
+              onDropOnDate={handleDropOnDate}
             />
           )}
 
@@ -547,9 +687,15 @@ export const App: React.FC = () => {
               occurrences={occurrences}
               showLunar={showLunar}
               onSelectSlot={(start, end) => {
-                setSelectedSlot({ start, end })
-                setIsQuickAddOpen(true)
+                setEditorData({ initialStart: start, initialEnd: end })
+                setIsEditorOpen(true)
               }}
+              onSelectOccurrence={(occ) => {
+                setEditorData({ occurrence: occ })
+                setIsEditorOpen(true)
+              }}
+              onDragStart={handleDragStart}
+              onDropOnDate={handleDropOnDate}
             />
           )}
 
@@ -573,63 +719,48 @@ export const App: React.FC = () => {
               anchorDate={anchorDate}
               occurrences={occurrences}
               showLunar={showLunar}
-              onAddEvent={() => setIsQuickAddOpen(true)}
+              onSelectOccurrence={(occ) => {
+                setEditorData({ occurrence: occ })
+                setIsEditorOpen(true)
+              }}
+              onAddEvent={() => {
+                setEditorData({
+                  initialStart: anchorDate.set({ hour: 9, minute: 0 }),
+                  initialEnd: anchorDate.set({ hour: 10, minute: 0 })
+                })
+                setIsEditorOpen(true)
+              }}
             />
           )}
         </main>
       </div>
 
-      {/* Quick Add Event Dialog */}
-      {isQuickAddOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 relative">
-            <button
-              onClick={() => setIsQuickAddOpen(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
+      {/* Full Event Editor Dialog */}
+      <EventEditorDialog
+        isOpen={isEditorOpen}
+        calendars={calendars}
+        data={editorData}
+        onSave={handleSaveEditorEvent}
+        onDelete={handleDeleteEvent}
+        onClose={() => setIsEditorOpen(false)}
+      />
 
-            <h3 className="text-base font-bold text-slate-100 mb-4 flex items-center gap-2">
-              <Plus className="h-4 w-4 text-indigo-400" />
-              {t('actions.newEvent')}
-            </h3>
+      {/* Recurring Scope Selection Dialog */}
+      <RecurringScopeDialog
+        isOpen={Boolean(pendingRecurringScope)}
+        title={pendingRecurringScope?.title || ''}
+        action={pendingRecurringScope?.action || 'edit'}
+        onConfirm={handleConfirmRecurringScope}
+        onCancel={() => setPendingRecurringScope(null)}
+      />
 
-            {selectedSlot && (
-              <div className="text-xs text-slate-400 mb-3 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
-                {selectedSlot.start.toFormat('dd/MM/yyyy HH:mm')} – {selectedSlot.end.toFormat('HH:mm')}
-              </div>
-            )}
-
-            <input
-              type="text"
-              placeholder="Event title (e.g. Design review)"
-              value={quickEventTitle}
-              onChange={(e) => setQuickEventTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreateQuickEvent()
-              }}
-              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-hidden focus:border-indigo-500 mb-4"
-              autoFocus
-            />
-
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsQuickAddOpen(false)}
-                className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateQuickEvent}
-                className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors shadow-md shadow-indigo-600/30"
-              >
-                Create Event
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Drag and Drop Move/Copy/Cancel Popover */}
+      <DropActionPopover
+        pendingDrop={pendingDrop}
+        onMove={handleDropMove}
+        onCopy={handleDropCopy}
+        onCancel={() => setPendingDrop(null)}
+      />
 
       {/* Settings Modal */}
       {isSettingsOpen && (

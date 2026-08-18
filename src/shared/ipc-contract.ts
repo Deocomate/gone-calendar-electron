@@ -10,6 +10,7 @@ import type {
   CreateEventInput,
   UpdateEventInput
 } from './event-model'
+import type { AppSettings } from './settings-contract'
 
 export const IPC_CHANNELS = {
   APP: {
@@ -17,6 +18,11 @@ export const IPC_CHANNELS = {
     GET_LOCALE: 'gone:app:get-locale',
     SET_LOCALE: 'gone:app:set-locale',
     GET_PLATFORM: 'gone:app:get-platform'
+  },
+  SETTINGS: {
+    GET_ALL: 'gone:settings:get-all',
+    GET: 'gone:settings:get',
+    SET: 'gone:settings:set'
   },
   CALENDAR: {
     LIST: 'gone:calendar:list',
@@ -59,6 +65,11 @@ export interface GoneAPI {
     getLocale: () => Promise<AppLocale>
     setLocale: (locale: AppLocale) => Promise<boolean>
     getPlatform: () => Promise<string>
+  }
+  settings: {
+    getAll: () => Promise<AppSettings>
+    get: <K extends keyof AppSettings>(key: K) => Promise<AppSettings[K]>
+    set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<boolean>
   }
   calendars: {
     list: () => Promise<Calendar[]>

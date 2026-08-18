@@ -36,6 +36,17 @@ describe('IPC Channels and Contracts', () => {
         },
         getPlatform: async () => 'win32'
       },
+      settings: {
+        getAll: async () => ({
+          showLunar: true,
+          showWeekNumbers: true,
+          firstDayOfWeek: 1,
+          timeFormat: '24h',
+          theme: 'system'
+        }),
+        get: async () => true as any,
+        set: async () => true
+      },
       calendars: {
         list: async () => [],
         create: async (d) => ({

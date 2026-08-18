@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Custom views lunar week numbers"
-status: pending
+status: completed
 effort: L
 priority: P1
 dependencies: [2]
@@ -48,10 +48,11 @@ Lunar format: `dd/M`; emphasize month on lunar day 1. Default on if locale is `v
 
 ## Success Criteria
 
-- [ ] All five views switch without losing selected date
-- [ ] Lunar tests pass; labels hide via toggle
-- [ ] Week numbers on month/week/year/list
-- [ ] Empty slot click still no editor (phase 4) but selection range is captured
+- [x] All five views switch without losing selected date
+- [x] Lunar tests pass; labels hide via toggle
+- [x] Week numbers on month/week/year/list
+- [x] Empty slot click still no editor (phase 4) but selection range is captured
+
 
 ## Risk Assessment
 

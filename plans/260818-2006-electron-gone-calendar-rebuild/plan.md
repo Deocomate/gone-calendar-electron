@@ -65,7 +65,7 @@ Renderer never talks to Google/Graph/CalDAV directly.
 |-------|------|--------|-------|
 | 1 | [Scaffold electron-vite React TypeScript](./phase-01-scaffold-electron-vite-react-typescript.md) | Completed | Dev app + pack skeleton |
 | 2 | [Domain SQLite ICS recurrence](./phase-02-domain-sqlite-ics-recurrence.md) | Completed | Local CRUD API |
-| 3 | [Custom views lunar week numbers](./phase-03-custom-views-lunar-week-numbers.md) | Pending | 5 views on local data |
+| 3 | [Custom views lunar week numbers](./phase-03-custom-views-lunar-week-numbers.md) | Completed | 5 views on local data |
 | 4 | [Event editor and drag-drop](./phase-04-event-editor-and-drag-drop.md) | Pending | UR-EDIT + UR-DND |
 | 5 | [Google sync offline notifications](./phase-05-google-sync-offline-notifications.md) | Pending | **R1** |
 | 6 | [Microsoft Graph adapter](./phase-06-microsoft-graph-adapter.md) | Pending | Graph two-way |

@@ -1,0 +1,79 @@
+import { DateTime } from 'luxon'
+
+export type CalendarViewType = 'day' | 'week' | 'month' | 'year' | 'list'
+
+export interface VisibleRange {
+  startUtc: string
+  endUtc: string
+  label: string
+}
+
+/**
+ * Calculate the exact query date range and human label for the current view and anchor date
+ */
+export function getVisibleRange(
+  anchorDate: DateTime,
+  view: CalendarViewType,
+  locale: string = 'vi'
+): VisibleRange {
+  let start: DateTime = anchorDate
+  let end: DateTime = anchorDate
+  let label: string = ''
+
+  const isVi = locale === 'vi'
+
+  switch (view) {
+    case 'month': {
+      const monthStart = anchorDate.startOf('month')
+      // Monday of the first week of the month (ISO standard 1=Mon)
+      const weekDay = monthStart.weekday // 1=Mon..7=Sun
+      start = monthStart.minus({ days: weekDay - 1 }).startOf('day')
+      // 42 days total (6 weeks x 7 days)
+      end = start.plus({ days: 41 }).endOf('day')
+      label = isVi
+        ? `Tháng ${anchorDate.month}, ${anchorDate.year}`
+        : `${anchorDate.toFormat('MMMM yyyy')}`
+      break
+    }
+    case 'week': {
+      const weekDay = anchorDate.weekday
+      start = anchorDate.minus({ days: weekDay - 1 }).startOf('day')
+      end = start.plus({ days: 6 }).endOf('day')
+      const startFmt = start.toFormat('dd/MM')
+      const endFmt = end.toFormat('dd/MM/yyyy')
+      label = isVi
+        ? `Tuần ${anchorDate.weekNumber} (${startFmt} – ${endFmt})`
+        : `Week ${anchorDate.weekNumber} (${start.toFormat('MMM d')} – ${end.toFormat('MMM d, yyyy')})`
+      break
+    }
+    case 'day': {
+      start = anchorDate.startOf('day')
+      end = anchorDate.endOf('day')
+      label = isVi
+        ? `${anchorDate.toFormat('cccc, dd/MM/yyyy')}`
+        : `${anchorDate.toFormat('cccc, MMMM d, yyyy')}`
+      break
+    }
+    case 'year': {
+      start = anchorDate.startOf('year')
+      end = anchorDate.endOf('year')
+      label = isVi ? `Năm ${anchorDate.year}` : `Year ${anchorDate.year}`
+      break
+    }
+    case 'list': {
+      // 7 days before to 30 days after anchor
+      start = anchorDate.minus({ days: 7 }).startOf('day')
+      end = anchorDate.plus({ days: 30 }).endOf('day')
+      label = isVi
+        ? `Lịch trình (${anchorDate.toFormat('MM/yyyy')})`
+        : `Schedule (${anchorDate.toFormat('MMMM yyyy')})`
+      break
+    }
+  }
+
+  return {
+    startUtc: start.toUTC().toISO() || start.toISO()!,
+    endUtc: end.toUTC().toISO() || end.toISO()!,
+    label
+  }
+}

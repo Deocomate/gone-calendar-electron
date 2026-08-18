@@ -9,6 +9,11 @@ const goneApi: GoneAPI = {
     setLocale: (locale: AppLocale) => ipcRenderer.invoke(IPC_CHANNELS.APP.SET_LOCALE, locale),
     getPlatform: () => ipcRenderer.invoke(IPC_CHANNELS.APP.GET_PLATFORM)
   },
+  settings: {
+    getAll: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.GET_ALL),
+    get: (key) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.GET, key),
+    set: (key, value) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.SET, key, value)
+  },
   calendars: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.CALENDAR.LIST),
     create: (data: { name: string; color: string }) =>

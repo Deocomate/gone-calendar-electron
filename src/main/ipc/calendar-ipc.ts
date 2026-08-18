@@ -1,4 +1,6 @@
-import { ipcMain } from 'electron'
+import { ipcMain, app, shell } from 'electron'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { IPC_CHANNELS, type IcsImportResult } from '@shared/ipc-contract'
 import type { CreateEventInput, UpdateEventInput, EventException } from '@shared/event-model'
 import { CalendarsRepo } from '../db/repos/calendars-repo'
@@ -23,7 +25,13 @@ export function registerCalendarIpcHandlers(): void {
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.CREATE)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.UPDATE)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.DELETE)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.MOVE)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.COPY)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.UPDATE_SCOPE)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.DELETE_SCOPE)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.UPSERT_EXCEPTION)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.SEARCH)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.SHARE_ICS)
 
   ipcMain.removeHandler(IPC_CHANNELS.ICS.IMPORT)
   ipcMain.removeHandler(IPC_CHANNELS.ICS.EXPORT)
@@ -154,6 +162,36 @@ export function registerCalendarIpcHandlers(): void {
         throw new Error(`Recurring delete rejected: ${err.message}`)
       }
       throw err
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EVENT.SEARCH, (_event, query: string, limit?: number) => {
+    return eventsRepo.searchEvents(query, limit)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EVENT.SHARE_ICS, async (_event, eventId: string) => {
+    try {
+      const res = eventsRepo.getEventById(eventId)
+      if (!res) {
+        return { success: false, message: 'Event not found' }
+      }
+      const cal = calendarsRepo.getCalendarById(res.event.calendarId)
+      if (!cal) {
+        return { success: false, message: 'Calendar not found' }
+      }
+
+      const icsContent = generateIcs(cal, [res.event], res.exceptions)
+      const tempDir = app.getPath('temp')
+      const sanitizedTitle = (res.event.title || 'event').replace(/[^a-zA-Z0-9_\-\s]/g, '_').trim().slice(0, 40)
+      const fileName = `${sanitizedTitle || 'event'}.ics`
+      const filePath = join(tempDir, fileName)
+
+      writeFileSync(filePath, icsContent, 'utf-8')
+      shell.showItemInFolder(filePath)
+
+      return { success: true, filePath, icsContent }
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) }
     }
   })
 

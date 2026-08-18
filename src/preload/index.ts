@@ -48,7 +48,11 @@ const goneApi: GoneAPI = {
     updateScope: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.UPDATE_SCOPE, input),
     deleteScope: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.DELETE_SCOPE, input),
     upsertException: (exception: Omit<EventException, 'id' | 'createdAt' | 'updatedAt'>) =>
-      ipcRenderer.invoke(IPC_CHANNELS.EVENT.UPSERT_EXCEPTION, exception)
+      ipcRenderer.invoke(IPC_CHANNELS.EVENT.UPSERT_EXCEPTION, exception),
+    search: (query: string, limit?: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.EVENT.SEARCH, query, limit),
+    shareIcs: (eventId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.EVENT.SHARE_ICS, eventId)
   },
   ics: {
     importIcs: (targetCalendarId: string, icsContent: string) =>

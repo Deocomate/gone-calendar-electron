@@ -3,6 +3,7 @@ import type {
   CalendarEvent,
   EventException,
   ExpandedOccurrence,
+  Attendee,
   CreateEventInput,
   UpdateEventInput,
   MoveEventInput,
@@ -114,6 +115,51 @@ export class EventsRepo {
     }
   }
 
+  private getAttendeesForEvent(eventId: string): Attendee[] {
+    try {
+      const rows = this.db
+        .prepare('SELECT email, display_name, response_status, is_organizer FROM attendees WHERE event_id = ?')
+        .all<any>(eventId)
+
+      return rows.map((r) => ({
+        email: r.email,
+        displayName: r.display_name || undefined,
+        responseStatus: r.response_status,
+        isOrganizer: r.is_organizer === 1
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  private saveAttendees(eventId: string, attendees?: Attendee[]): void {
+    try {
+      this.db.prepare('DELETE FROM attendees WHERE event_id = ?').run(eventId)
+      if (!attendees || attendees.length === 0) return
+
+      const now = new Date().toISOString()
+      const insertStmt = this.db.prepare(
+        `INSERT INTO attendees (id, event_id, email, display_name, response_status, is_organizer, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+
+      for (const att of attendees) {
+        const attId = `att_${Math.random().toString(36).slice(2, 11)}`
+        insertStmt.run(
+          attId,
+          eventId,
+          att.email,
+          att.displayName || null,
+          att.responseStatus || 'needsAction',
+          att.isOrganizer ? 1 : 0,
+          now
+        )
+      }
+    } catch (err) {
+      console.warn('Failed to save attendees:', err)
+    }
+  }
+
   getEventById(id: string): { event: CalendarEvent; exceptions: EventException[] } | null {
     const row = this.db
       .prepare('SELECT * FROM events WHERE id = ? AND is_deleted = 0')
@@ -123,6 +169,7 @@ export class EventsRepo {
     }
 
     const event = mapRowToEvent(row)
+    event.attendees = this.getAttendeesForEvent(id)
     const exceptions = this.getExceptionsForEvent(id)
     return { event, exceptions }
   }
@@ -173,6 +220,10 @@ export class EventsRepo {
         now,
         now
       )
+
+    if (input.attendees) {
+      this.saveAttendees(id, input.attendees)
+    }
 
     const created = this.getEventById(id)
     if (!created) {
@@ -227,6 +278,10 @@ export class EventsRepo {
         now,
         id
       )
+
+    if (input.attendees !== undefined) {
+      this.saveAttendees(id, input.attendees)
+    }
 
     const updated = this.getEventById(id)
     return updated!.event
@@ -518,5 +573,58 @@ export class EventsRepo {
     }
 
     return false
+  }
+
+  searchEvents(query: string, limit = 50): CalendarEvent[] {
+    const trimmed = query.trim()
+    if (!trimmed) return []
+
+    // Try FTS5 MATCH first
+    try {
+      const ftsQuery = trimmed
+        .replace(/[^\w\s\u00C0-\u1EF9]/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((w) => `"${w}"*`)
+        .join(' ')
+
+      if (ftsQuery) {
+        const ftsRows = this.db
+          .prepare(
+            `SELECT e.* FROM events_fts f
+             JOIN events e ON e.id = f.event_id
+             WHERE events_fts MATCH ? AND e.is_deleted = 0
+             ORDER BY e.dtstart_utc DESC LIMIT ?`
+          )
+          .all<EventRow>(ftsQuery, limit)
+
+        if (ftsRows && ftsRows.length > 0) {
+          return ftsRows.map((r) => {
+            const event = mapRowToEvent(r)
+            event.attendees = this.getAttendeesForEvent(r.id)
+            return event
+          })
+        }
+      }
+    } catch {
+      // Fallback to LIKE if FTS fails or is unsupported
+    }
+
+    // Fallback LIKE query
+    const pattern = `%${trimmed}%`
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM events
+         WHERE is_deleted = 0 AND (title LIKE ? OR notes LIKE ? OR location LIKE ?)
+         ORDER BY dtstart_utc DESC LIMIT ?`
+      )
+      .all<EventRow>(pattern, pattern, pattern, limit)
+
+    return rows.map((r) => {
+      const event = mapRowToEvent(r)
+      event.attendees = this.getAttendeesForEvent(r.id)
+      return event
+    })
   }
 }

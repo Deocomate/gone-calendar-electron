@@ -60,7 +60,9 @@ export const IPC_CHANNELS = {
     COPY: 'gone:event:copy',
     UPDATE_SCOPE: 'gone:event:update-scope',
     DELETE_SCOPE: 'gone:event:delete-scope',
-    UPSERT_EXCEPTION: 'gone:event:upsert-exception'
+    UPSERT_EXCEPTION: 'gone:event:upsert-exception',
+    SEARCH: 'gone:event:search',
+    SHARE_ICS: 'gone:event:share-ics'
   },
   ICS: {
     IMPORT: 'gone:ics:import',
@@ -133,6 +135,8 @@ export interface GoneAPI {
     updateScope: (input: UpdateRecurringScopeInput) => Promise<boolean>
     deleteScope: (input: DeleteRecurringScopeInput) => Promise<boolean>
     upsertException: (exception: Omit<EventException, 'id' | 'createdAt' | 'updatedAt'>) => Promise<EventException>
+    search: (query: string, limit?: number) => Promise<CalendarEvent[]>
+    shareIcs: (eventId: string) => Promise<{ success: boolean; filePath?: string; icsContent?: string; message?: string }>
   }
   ics: {
     importIcs: (targetCalendarId: string, icsContent: string) => Promise<IcsImportResult>

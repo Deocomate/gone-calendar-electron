@@ -27,6 +27,15 @@ export interface Calendar {
   updatedAt: string
 }
 
+export type AttendeeResponseStatus = 'accepted' | 'declined' | 'tentative' | 'needsAction'
+
+export interface Attendee {
+  email: string
+  displayName?: string
+  responseStatus?: AttendeeResponseStatus
+  isOrganizer?: boolean
+}
+
 export interface CalendarEvent {
   id: string
   calendarId: string
@@ -43,6 +52,7 @@ export interface CalendarEvent {
   exdate?: string    // Comma-separated ISO strings
   color?: string     // Hex or theme color override
   meetingUrl?: string
+  attendees?: Attendee[]
   etag?: string
   dirty: boolean
   isDeleted: boolean
@@ -97,6 +107,7 @@ export interface CreateEventInput {
   exdate?: string
   color?: string
   meetingUrl?: string
+  attendees?: Attendee[]
   uid?: string
 }
 
@@ -112,6 +123,7 @@ export interface UpdateEventInput {
   exdate?: string
   color?: string
   meetingUrl?: string
+  attendees?: Attendee[]
   isDeleted?: boolean
 }
 

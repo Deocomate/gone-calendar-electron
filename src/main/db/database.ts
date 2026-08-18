@@ -92,6 +92,47 @@ CREATE INDEX IF NOT EXISTS idx_events_uid ON events (uid);
 CREATE INDEX IF NOT EXISTS idx_event_exceptions_master ON event_exceptions (master_event_id, original_start_utc);
 `
 
+const MIGRATION_002_SQL = `
+CREATE TABLE IF NOT EXISTS attendees (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  display_name TEXT,
+  response_status TEXT NOT NULL DEFAULT 'needsAction',
+  is_organizer INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendees_event_id ON attendees(event_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
+  event_id UNINDEXED,
+  title,
+  notes,
+  location,
+  content=''
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_events_fts_insert AFTER INSERT ON events BEGIN
+  INSERT INTO events_fts(event_id, title, notes, location)
+  VALUES (new.id, new.title, COALESCE(new.notes, ''), COALESCE(new.location, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_events_fts_update AFTER UPDATE ON events BEGIN
+  DELETE FROM events_fts WHERE event_id = old.id;
+  INSERT INTO events_fts(event_id, title, notes, location)
+  VALUES (new.id, new.title, COALESCE(new.notes, ''), COALESCE(new.location, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_events_fts_delete AFTER DELETE ON events BEGIN
+  DELETE FROM events_fts WHERE event_id = old.id;
+END;
+
+-- Populate FTS table with existing events
+INSERT OR IGNORE INTO events_fts(event_id, title, notes, location)
+SELECT id, title, COALESCE(notes, ''), COALESCE(location, '') FROM events;
+`
+
 /**
  * Execute all schema migrations in order
  */
@@ -111,6 +152,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_001_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       1,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 2) {
+    db.exec(MIGRATION_002_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      2,
       new Date().toISOString()
     )
   }

@@ -155,7 +155,9 @@ describe('IPC Channels and Contracts', () => {
           isCancelled: ex.isCancelled,
           createdAt: '',
           updatedAt: ''
-        })
+        }),
+        search: async () => [],
+        shareIcs: async () => ({ success: true })
       },
       ics: {
         importIcs: async () => ({ success: true, importedCount: 0, errorCount: 0 }),

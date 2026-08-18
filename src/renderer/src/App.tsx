@@ -16,7 +16,9 @@ import {
   RotateCw,
   X,
   FileUp,
-  Users
+  Users,
+  Search,
+  Filter
 } from 'lucide-react'
 import type { AppLocale } from '@shared/ipc-contract'
 import type {
@@ -36,6 +38,7 @@ import EventEditorDialog, { type EventEditorInitialData } from './editor/EventEd
 import RecurringScopeDialog from './editor/RecurringScopeDialog'
 import DropActionPopover, { type PendingDropAction } from './dnd/DropActionPopover'
 import AccountManagerModal from './components/AccountManagerModal'
+import SearchPaletteModal from './components/SearchPaletteModal'
 import { useEventDnD } from './dnd/use-event-dnd'
 
 export type CalendarViewType = 'day' | 'week' | 'month' | 'year' | 'list'
@@ -49,6 +52,8 @@ export const App: React.FC = () => {
   const [platform, setPlatform] = useState<string>('win32')
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false)
+  const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState<boolean>(false)
+  const [selectedColorFilter, setSelectedColorFilter] = useState<string | null>(null)
   const [showLunar, setShowLunar] = useState<boolean>(true)
   const [showWeekNumbers, setShowWeekNumbers] = useState<boolean>(true)
 
@@ -79,6 +84,18 @@ export const App: React.FC = () => {
   } = useEventDnD()
 
   const visibleRange = useVisibleRange(anchorDate, currentView, i18n.language)
+
+  // Global Ctrl+K / Cmd+K search hotkey listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setIsSearchPaletteOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const loadCalendarsAndEvents = useCallback(async () => {
     if (!window.gone?.calendars || !window.gone?.events) {
@@ -455,6 +472,15 @@ export const App: React.FC = () => {
         {/* Quick Action & Controls */}
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setIsSearchPaletteOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700/60 transition-colors"
+            title="Tìm kiếm sự kiện (Ctrl+K)"
+          >
+            <Search className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Tìm kiếm (Ctrl+K)</span>
+          </button>
+
+          <button
             onClick={() => {
               setEditorData({
                 initialStart: anchorDate.set({ hour: 9, minute: 0, second: 0 }),
@@ -653,10 +679,50 @@ export const App: React.FC = () => {
             </div>
           )}
 
+          {/* Color Filter Pill Row */}
+          <div className="mb-3 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs shrink-0">
+            <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1 mr-1">
+              <Filter className="h-3 w-3" />
+              Lọc màu:
+            </span>
+            <button
+              onClick={() => setSelectedColorFilter(null)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                selectedColorFilter === null
+                  ? 'bg-slate-700 text-white font-semibold shadow-xs'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+              }`}
+            >
+              Tất cả
+            </button>
+            {[
+              { hex: '#6366f1', label: 'Indigo' },
+              { hex: '#8b5cf6', label: 'Violet' },
+              { hex: '#0ea5e9', label: 'Sky' },
+              { hex: '#10b981', label: 'Emerald' },
+              { hex: '#f59e0b', label: 'Amber' },
+              { hex: '#f43f5e', label: 'Rose' },
+              { hex: '#64748b', label: 'Slate' }
+            ].map((c) => (
+              <button
+                key={c.hex}
+                onClick={() => setSelectedColorFilter(selectedColorFilter === c.hex ? null : c.hex)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                  selectedColorFilter === c.hex
+                    ? 'bg-slate-800 text-white font-semibold border border-slate-600 shadow-xs'
+                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                }`}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.hex }} />
+                <span>{c.label}</span>
+              </button>
+            ))}
+          </div>
+
           {currentView === 'month' && (
             <MonthView
               anchorDate={anchorDate}
-              occurrences={occurrences}
+              occurrences={selectedColorFilter ? occurrences.filter((o) => o.color === selectedColorFilter) : occurrences}
               showLunar={showLunar}
               showWeekNumbers={showWeekNumbers}
               onSelectDate={(date) => {
@@ -678,7 +744,7 @@ export const App: React.FC = () => {
           {currentView === 'week' && (
             <WeekView
               anchorDate={anchorDate}
-              occurrences={occurrences}
+              occurrences={selectedColorFilter ? occurrences.filter((o) => o.color === selectedColorFilter) : occurrences}
               showLunar={showLunar}
               showWeekNumbers={showWeekNumbers}
               onSelectSlot={(start, end) => {
@@ -697,7 +763,7 @@ export const App: React.FC = () => {
           {currentView === 'day' && (
             <DayView
               anchorDate={anchorDate}
-              occurrences={occurrences}
+              occurrences={selectedColorFilter ? occurrences.filter((o) => o.color === selectedColorFilter) : occurrences}
               showLunar={showLunar}
               onSelectSlot={(start, end) => {
                 setEditorData({ initialStart: start, initialEnd: end })
@@ -715,7 +781,7 @@ export const App: React.FC = () => {
           {currentView === 'year' && (
             <YearView
               anchorDate={anchorDate}
-              occurrences={occurrences}
+              occurrences={selectedColorFilter ? occurrences.filter((o) => o.color === selectedColorFilter) : occurrences}
               onSelectMonth={(month) => {
                 setAnchorDate((d) => d.set({ month, day: 1 }))
                 setCurrentView('month')
@@ -730,7 +796,7 @@ export const App: React.FC = () => {
           {currentView === 'list' && (
             <ListView
               anchorDate={anchorDate}
-              occurrences={occurrences}
+              occurrences={selectedColorFilter ? occurrences.filter((o) => o.color === selectedColorFilter) : occurrences}
               showLunar={showLunar}
               onSelectOccurrence={(occ) => {
                 setEditorData({ occurrence: occ })
@@ -747,6 +813,18 @@ export const App: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* Search Palette (Ctrl+K) */}
+      <SearchPaletteModal
+        isOpen={isSearchPaletteOpen}
+        onClose={() => setIsSearchPaletteOpen(false)}
+        calendars={calendars}
+        onSelectEvent={(event, targetDate) => {
+          setAnchorDate(DateTime.fromISO(targetDate))
+          setEditorData({ event })
+          setIsEditorOpen(true)
+        }}
+      />
 
       {/* Full Event Editor Dialog */}
       <EventEditorDialog

@@ -8,9 +8,19 @@ import {
   Repeat,
   Trash2,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Share2,
+  Users
 } from 'lucide-react'
-import type { Calendar, CalendarEvent, ExpandedOccurrence, CreateEventInput, UpdateEventInput } from '@shared/event-model'
+import type {
+  Calendar,
+  CalendarEvent,
+  ExpandedOccurrence,
+  Attendee,
+  CreateEventInput,
+  UpdateEventInput
+} from '@shared/event-model'
+import AttendeeInput from '../components/AttendeeInput'
 
 export interface EventEditorInitialData {
   occurrence?: ExpandedOccurrence
@@ -89,9 +99,13 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
   const [recurrencePreset, setRecurrencePreset] = useState<string>('none')
   const [customRrule, setCustomRrule] = useState<string>('')
 
+  // Attendees state
+  const [attendees, setAttendees] = useState<Attendee[]>([])
+
   // Dirty state tracking
   const [isDirty, setIsDirty] = useState<boolean>(false)
   const [showDiscardConfirm, setShowDiscardConfirm] = useState<boolean>(false)
+  const [shareSuccess, setShareSuccess] = useState<boolean>(false)
 
   // Populate form when data changes
   useEffect(() => {
@@ -99,6 +113,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
     setIsDirty(false)
     setShowDiscardConfirm(false)
+    setShareSuccess(false)
 
     const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Ho_Chi_Minh'
     setTzid(userTz)
@@ -113,6 +128,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       setCalendarId(occ.calendarId)
       setAllDay(occ.allDay)
       setTzid(occ.tzid || userTz)
+      setAttendees([])
 
       const startLocal = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
       const endLocal = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local')
@@ -133,6 +149,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       setCalendarId(evt.calendarId)
       setAllDay(evt.allDay)
       setTzid(evt.tzid || userTz)
+      setAttendees(evt.attendees || [])
 
       const startLocal = DateTime.fromISO(evt.dtStartUtc, { zone: 'utc' }).setZone('local')
       const endLocal = DateTime.fromISO(evt.dtEndUtc, { zone: 'utc' }).setZone('local')
@@ -165,6 +182,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       setAllDay(false)
       setRecurrencePreset('none')
       setCustomRrule('')
+      setAttendees([])
 
       const start = data?.initialStart || DateTime.local().set({ hour: 9, minute: 0, second: 0 })
       const end = data?.initialEnd || start.plus({ hours: 1 })
@@ -261,7 +279,8 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       tzid,
       dtStartUtc: startIso,
       dtEndUtc: endIso,
-      rrule: rruleString
+      rrule: rruleString,
+      attendees
     }
 
     const eventId = data?.occurrence?.eventId || data?.event?.id
@@ -274,6 +293,23 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       isRecurringOccurrence,
       input: payloadInput
     })
+  }
+
+  const handleShare = async () => {
+    const eventId = data?.occurrence?.eventId || data?.event?.id
+    if (!eventId || !window.gone?.events?.shareIcs) return
+
+    try {
+      const res = await window.gone.events.shareIcs(eventId)
+      if (res.success) {
+        setShareSuccess(true)
+        setTimeout(() => setShareSuccess(false), 4000)
+      } else {
+        alert(`Chia sẻ thất bại: ${res.message}`)
+      }
+    } catch (err: any) {
+      alert(`Lỗi chia sẻ: ${err.message}`)
+    }
   }
 
   const selectedCalendar = calendars.find((c) => c.id === calendarId)
@@ -512,6 +548,18 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
             </div>
           </div>
 
+          {/* Attendees */}
+          <div>
+            <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 text-slate-500" />
+              Người tham gia (Attendees)
+            </label>
+            <AttendeeInput
+              attendees={attendees}
+              onChange={(newAtts) => handleFieldChange(setAttendees, newAtts)}
+            />
+          </div>
+
           {/* Notes / Description */}
           <div>
             <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
@@ -530,21 +578,33 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
         {/* Modal Footer Controls */}
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between shrink-0">
-          <div>
+          <div className="flex items-center gap-2">
             {isEditing && (
-              <button
-                type="button"
-                onClick={() => {
-                  const eventId = data?.occurrence?.eventId || data?.event?.id
-                  if (eventId) {
-                    onDelete(eventId, data?.occurrence?.originalStartUtc, isRecurringOccurrence)
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors font-medium"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>Xóa sự kiện (Delete)</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors font-medium text-xs border border-slate-700"
+                  title="Xuất file .ics và mở trong thư mục"
+                >
+                  <Share2 className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>{shareSuccess ? '✓ Đã tạo file' : 'Chia sẻ (.ics)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const eventId = data?.occurrence?.eventId || data?.event?.id
+                    if (eventId) {
+                      onDelete(eventId, data?.occurrence?.originalStartUtc, isRecurringOccurrence)
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors font-medium text-xs"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Xóa sự kiện</span>
+                </button>
+              </>
             )}
           </div>
 

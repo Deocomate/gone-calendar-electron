@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Invite share search filters"
-status: pending
+status: completed
 effort: M
 priority: P2
 dependencies: [6, 7]
@@ -49,10 +49,10 @@ R2 collaboration and findability: attendees send/accept where provider allows, `
 
 ## Success Criteria
 
-- [ ] URD §12 R2
-- [ ] Search finds substring in notes
-- [ ] Share produces a file another calendar app can import
-- [ ] Invite path works on Google **or** Graph (document which if CalDAV cannot send)
+- [x] URD §12 R2
+- [x] Search finds substring in notes
+- [x] Share produces a file another calendar app can import
+- [x] Invite path works on Google **or** Graph (document which if CalDAV cannot send)
 
 ## Risk Assessment
 

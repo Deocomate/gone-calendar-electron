@@ -17,6 +17,8 @@ const goneApi: GoneAPI = {
   auth: {
     connectGoogle: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.CONNECT_GOOGLE),
     disconnectGoogle: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_GOOGLE, accountId),
+    connectMicrosoft: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.CONNECT_MICROSOFT),
+    disconnectMicrosoft: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_MICROSOFT, accountId),
     listAccounts: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.LIST_ACCOUNTS)
   },
   sync: {

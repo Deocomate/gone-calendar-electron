@@ -1,9 +1,11 @@
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { GoogleSyncEngine } from './google-sync-engine'
+import { MicrosoftSyncEngine } from './microsoft-sync-engine'
 import type { SyncStatus, SyncResult } from '@shared/event-model'
 
 export class SyncWorker {
-  private engine: GoogleSyncEngine
+  private googleEngine: GoogleSyncEngine
+  private microsoftEngine: MicrosoftSyncEngine
   private timer: NodeJS.Timeout | null = null
   private isSyncing = false
   private lastSyncTime?: string
@@ -11,10 +13,13 @@ export class SyncWorker {
 
   constructor(
     private db: ISqliteDatabase,
-    private clientId?: string,
-    private clientSecret?: string
+    private googleClientId?: string,
+    private googleClientSecret?: string,
+    private msClientId?: string,
+    private msClientSecret?: string
   ) {
-    this.engine = new GoogleSyncEngine(db)
+    this.googleEngine = new GoogleSyncEngine(db)
+    this.microsoftEngine = new MicrosoftSyncEngine(db)
   }
 
   /**
@@ -41,7 +46,7 @@ export class SyncWorker {
   }
 
   /**
-   * Trigger immediate two-way sync
+   * Trigger immediate two-way sync for Google and Microsoft accounts
    */
   async triggerSync(): Promise<SyncResult> {
     if (this.isSyncing) {
@@ -50,11 +55,24 @@ export class SyncWorker {
 
     this.isSyncing = true
     try {
-      const result = await this.engine.syncAll(this.clientId, this.clientSecret)
+      const googleRes = await this.googleEngine.syncAll(this.googleClientId, this.googleClientSecret)
+      const msRes = await this.microsoftEngine.syncAll(this.msClientId, this.msClientSecret)
+
+      const totalPulled = googleRes.pulledCount + msRes.pulledCount
+      const totalPushed = googleRes.pushedCount + msRes.pushedCount
+      const totalErrors = googleRes.errorCount + msRes.errorCount
+
       this.lastSyncTime = new Date().toISOString()
-      this.lastError = result.errorCount > 0 ? result.message : undefined
+      this.lastError = totalErrors > 0 ? `Sync completed with ${totalErrors} errors` : undefined
       this.isSyncing = false
-      return result
+
+      return {
+        success: totalErrors === 0,
+        pulledCount: totalPulled,
+        pushedCount: totalPushed,
+        errorCount: totalErrors,
+        message: `Đồng bộ hoàn tất: đã tải ${totalPulled}, đã đẩy ${totalPushed}`
+      }
     } catch (err: any) {
       this.lastError = err.message || String(err)
       this.isSyncing = false
@@ -71,7 +89,7 @@ export class SyncWorker {
       .get<{ cnt: number }>()
 
     const accounts = this.db
-      .prepare("SELECT * FROM accounts WHERE is_active = 1")
+      .prepare('SELECT * FROM accounts WHERE is_active = 1')
       .all<any>()
       .map((row) => ({
         id: row.id,

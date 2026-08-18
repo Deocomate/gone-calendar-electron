@@ -50,6 +50,8 @@ describe('IPC Channels and Contracts', () => {
       auth: {
         connectGoogle: async () => ({ success: true }),
         disconnectGoogle: async () => true,
+        connectMicrosoft: async () => ({ success: true }),
+        disconnectMicrosoft: async () => true,
         listAccounts: async () => []
       },
       sync: {

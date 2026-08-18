@@ -34,6 +34,8 @@ export const IPC_CHANNELS = {
   AUTH: {
     CONNECT_GOOGLE: 'gone:auth:connect-google',
     DISCONNECT_GOOGLE: 'gone:auth:disconnect-google',
+    CONNECT_MICROSOFT: 'gone:auth:connect-microsoft',
+    DISCONNECT_MICROSOFT: 'gone:auth:disconnect-microsoft',
     LIST_ACCOUNTS: 'gone:auth:list-accounts'
   },
   SYNC: {
@@ -94,6 +96,8 @@ export interface GoneAPI {
   auth: {
     connectGoogle: () => Promise<{ success: boolean; account?: CalendarAccount; message?: string }>
     disconnectGoogle: (accountId: string) => Promise<boolean>
+    connectMicrosoft: () => Promise<{ success: boolean; account?: CalendarAccount; message?: string }>
+    disconnectMicrosoft: (accountId: string) => Promise<boolean>
     listAccounts: () => Promise<CalendarAccount[]>
   }
   sync: {

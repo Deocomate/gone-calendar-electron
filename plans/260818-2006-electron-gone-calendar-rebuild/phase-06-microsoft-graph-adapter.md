@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Microsoft Graph adapter"
-status: pending
+status: completed
 effort: L
 priority: P2
 dependencies: [5]
@@ -47,10 +47,10 @@ Scopes: `Calendars.ReadWrite`, `offline_access`, `User.Read`.
 
 ## Success Criteria
 
-- [ ] 365/Outlook.com events appear in all five views
-- [ ] Edit in app appears in Outlook web
-- [ ] Disconnect removes account calendars from sidebar without wiping local-only calendars
-- [ ] No EWS code paths
+- [x] 365/Outlook.com events appear in all five views
+- [x] Edit in app appears in Outlook web
+- [x] Disconnect removes account calendars from sidebar without wiping local-only calendars
+- [x] No EWS code paths
 
 ## Risk Assessment
 

@@ -67,12 +67,37 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
     }
   }
 
+  const handleConnectMicrosoft = async () => {
+    if (!window.gone?.auth) return
+    setIsLoading(true)
+    setActionMessage('Đang mở trình duyệt để xác thực với Microsoft...')
+    try {
+      const res = await window.gone.auth.connectMicrosoft()
+      if (res.success) {
+        setActionMessage('✓ Kết nối Microsoft 365 / Outlook thành công!')
+        await loadData()
+        onAccountsChanged()
+      } else {
+        setActionMessage(`Kết nối thất bại: ${res.message}`)
+      }
+    } catch (err: any) {
+      setActionMessage(`Lỗi: ${err.message}`)
+    } finally {
+      setIsLoading(false)
+      setTimeout(() => setActionMessage(null), 5000)
+    }
+  }
+
   const handleDisconnect = async (acc: CalendarAccount) => {
     if (!confirm(`Bạn có chắc chắn muốn ngắt kết nối tài khoản "${acc.name}"?`)) return
     if (!window.gone?.auth) return
 
     try {
-      await window.gone.auth.disconnectGoogle(acc.id)
+      if (acc.type === 'google') {
+        await window.gone.auth.disconnectGoogle(acc.id)
+      } else if (acc.type === 'graph') {
+        await window.gone.auth.disconnectMicrosoft(acc.id)
+      }
       await loadData()
       onAccountsChanged()
     } catch (err: any) {
@@ -199,7 +224,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {acc.type === 'google' && (
+                    {(acc.type === 'google' || acc.type === 'graph') && (
                       <button
                         onClick={() => handleDisconnect(acc)}
                         className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
@@ -220,7 +245,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
           </div>
 
           {/* Add Provider Options */}
-          <div className="pt-2">
+          <div className="pt-2 space-y-2.5">
             <button
               onClick={handleConnectGoogle}
               disabled={isLoading}
@@ -228,6 +253,15 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             >
               <Plus className="h-4 w-4" />
               <span>Kết nối Google Calendar (OAuth 2.0)</span>
+            </button>
+
+            <button
+              onClick={handleConnectMicrosoft}
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-sky-600/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Kết nối Microsoft 365 / Outlook (OAuth 2.0)</span>
             </button>
           </div>
         </div>

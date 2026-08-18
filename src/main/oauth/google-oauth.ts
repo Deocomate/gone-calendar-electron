@@ -66,6 +66,23 @@ export class GoogleOAuthManager {
     const state = this.base64UrlEncode(crypto.randomBytes(16))
 
     return new Promise((resolve, reject) => {
+      let timeoutId: NodeJS.Timeout | null = null
+
+      const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        try {
+          server.close()
+        } catch {}
+      }
+
+      timeoutId = setTimeout(() => {
+        cleanup()
+        reject(new Error('Quá thời gian xác thực Google (5 phút). Vui lòng thử lại.'))
+      }, 5 * 60 * 1000)
+
       // Create loopback HTTP server on 127.0.0.1
       const server = http.createServer(async (req, res) => {
         try {
@@ -84,7 +101,7 @@ export class GoogleOAuthManager {
           if (queryError) {
             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
             res.end('<h3>Đăng nhập Google thất bại: ' + queryError + '</h3><p>Bạn có thể đóng tab này.</p>')
-            server.close()
+            cleanup()
             reject(new Error(`Google OAuth error: ${queryError}`))
             return
           }
@@ -92,7 +109,7 @@ export class GoogleOAuthManager {
           if (queryState !== state || !queryCode) {
             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
             res.end('<h3>Lỗi xác thực: State hoặc Code không hợp lệ</h3>')
-            server.close()
+            cleanup()
             reject(new Error('Invalid OAuth state or code'))
             return
           }
@@ -156,7 +173,7 @@ export class GoogleOAuthManager {
             </html>
           `)
 
-          server.close()
+          cleanup()
 
           const accountId = `acc_google_${userInfo.id}`
           const now = new Date().toISOString()
@@ -178,7 +195,7 @@ export class GoogleOAuthManager {
             tokens
           })
         } catch (err: any) {
-          server.close()
+          cleanup()
           reject(err)
         }
       })
@@ -204,6 +221,7 @@ export class GoogleOAuthManager {
       })
 
       server.on('error', (err) => {
+        cleanup()
         reject(err)
       })
     })

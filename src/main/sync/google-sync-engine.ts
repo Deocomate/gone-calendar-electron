@@ -298,11 +298,20 @@ export class GoogleSyncEngine {
           if (putRes.ok) {
             const resJson = await putRes.json()
             const now = new Date().toISOString()
-            this.db
-              .prepare(
-                `UPDATE events SET id = ?, etag = ?, dirty = 0, updated_at = ? WHERE id = ?`
-              )
-              .run(resJson.id, resJson.etag, now, row.id)
+            if (resJson.id && resJson.id !== row.id) {
+              this.db
+                .prepare('UPDATE event_exceptions SET master_event_id = ? WHERE master_event_id = ?')
+                .run(resJson.id, row.id)
+              this.db
+                .prepare(
+                  `UPDATE events SET id = ?, etag = ?, dirty = 0, updated_at = ? WHERE id = ?`
+                )
+                .run(resJson.id, resJson.etag, now, row.id)
+            } else {
+              this.db
+                .prepare(`UPDATE events SET etag = ?, dirty = 0, updated_at = ? WHERE id = ?`)
+                .run(resJson.etag || row.etag, now, row.id)
+            }
             pushedCount++
           } else if (putRes.status === 412) {
             // Precondition failed (ETag conflict): preserve local dirty row, record conflict

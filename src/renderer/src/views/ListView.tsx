@@ -51,19 +51,19 @@ export const ListView: React.FC<ListViewProps> = ({
 
   if (occurrences.length === 0) {
     return (
-      <div className="h-full w-full bg-slate-950/60 rounded-2xl border border-slate-800/80 p-8 flex flex-col items-center justify-center text-center shadow-xl select-none">
+      <div className="h-full w-full bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 p-8 flex flex-col items-center justify-center text-center shadow-xl select-none">
         <div className="h-16 w-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-4">
-          <CalendarDays className="h-8 w-8 text-indigo-400" />
+          <CalendarDays className="h-8 w-8 text-indigo-500 dark:text-indigo-400" />
         </div>
-        <h3 className="text-lg font-bold text-slate-200 mb-2">
+        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-2">
           {anchorDate.toFormat('MMMM yyyy')} — Không có sự kiện
         </h3>
-        <p className="text-sm text-slate-400 max-w-sm mb-5">
+        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-5">
           Không tìm thấy sự kiện nào trong khoảng thời gian này.
         </p>
         <button
           onClick={onAddEvent}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
         >
           + Tạo sự kiện mới
         </button>
@@ -72,32 +72,32 @@ export const ListView: React.FC<ListViewProps> = ({
   }
 
   return (
-    <div className="h-full w-full bg-slate-950/60 rounded-2xl border border-slate-800/80 p-4 md:p-6 overflow-y-auto shadow-xl select-none space-y-6">
+    <div className="h-full w-full bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 p-4 md:p-6 overflow-y-auto shadow-xl select-none space-y-6">
       {groupedOccurrences.map(({ date, items }) => {
         const isToday = date.hasSame(today, 'day')
 
         return (
           <div key={date.toISO()} className="space-y-3">
             {/* Sticky Date Header */}
-            <div className="sticky top-0 z-10 bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-800/80 flex items-center justify-between shadow-xs">
+            <div className="sticky top-0 z-10 bg-slate-100/90 dark:bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800/80 flex items-center justify-between shadow-xs">
               <div className="flex items-center gap-2.5">
                 <span
                   className={`text-xs font-bold px-2 py-0.5 rounded-md ${
                     isToday
                       ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-800 text-slate-300'
+                      : 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
                   {date.toFormat('dd/MM')}
                 </span>
-                <span className="text-sm font-semibold text-slate-200 capitalize">
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 capitalize">
                   {date.toFormat('cccc')}
                 </span>
               </div>
 
               {showLunar && (
-                <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                  <Sparkles className="h-3 w-3 text-amber-400" />
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                  <Sparkles className="h-3 w-3 text-amber-500 dark:text-amber-400" />
                   <span>Âm lịch:</span>
                   <LunarLabel day={date.day} month={date.month} year={date.year} />
                 </div>
@@ -111,15 +111,15 @@ export const ListView: React.FC<ListViewProps> = ({
                 .map((task) => (
                   <div
                     key={task.id}
-                    className="p-2.5 rounded-xl bg-slate-900/50 border border-emerald-500/20 flex items-center justify-between gap-3 text-xs text-slate-300 shadow-xs"
+                    className="p-2.5 rounded-xl bg-emerald-500/5 dark:bg-slate-900/50 border border-emerald-500/20 flex items-center justify-between gap-3 text-xs text-slate-700 dark:text-slate-300 shadow-xs"
                   >
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span className={`font-medium ${task.completed ? 'line-through text-slate-500' : 'text-emerald-200'}`}>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
+                      <span className={`font-medium ${task.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-emerald-800 dark:text-emerald-200'}`}>
                         {task.title}
                       </span>
                     </div>
-                    <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-md font-medium">
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-md font-medium">
                       Nhiệm vụ
                     </span>
                   </div>
@@ -133,7 +133,7 @@ export const ListView: React.FC<ListViewProps> = ({
                   <div
                     key={occ.id}
                     onClick={() => onSelectOccurrence?.(occ)}
-                    className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700 hover:bg-slate-900 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs group"
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-100/80 dark:hover:bg-slate-900 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs group"
                   >
                     <div className="flex items-start gap-3">
                       <span
@@ -142,11 +142,11 @@ export const ListView: React.FC<ListViewProps> = ({
                       />
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-slate-100 group-hover:text-indigo-300 transition-colors">
+                          <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
                             {occ.title}
                           </h4>
                           {occ.isRecurring && (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-mono text-sky-400 bg-sky-500/10 border border-sky-500/20">
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 border border-sky-500/20">
                               <Repeat className="h-2.5 w-2.5" />
                               Lặp lại
                             </span>
@@ -154,16 +154,16 @@ export const ListView: React.FC<ListViewProps> = ({
                         </div>
 
                         {occ.notes && (
-                          <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
                             {occ.notes}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 text-xs text-slate-400 shrink-0">
+                    <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 shrink-0">
                       <div className="flex items-center gap-1.5 font-mono">
-                        <Clock className="h-3.5 w-3.5 text-slate-500" />
+                        <Clock className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                         <span>
                           {occ.allDay
                             ? 'Cả ngày'
@@ -172,8 +172,8 @@ export const ListView: React.FC<ListViewProps> = ({
                       </div>
 
                       {occ.location && (
-                        <div className="flex items-center gap-1 text-slate-400 max-w-[150px] truncate">
-                          <MapPin className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                        <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 max-w-[150px] truncate">
+                          <MapPin className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
                           <span className="truncate">{occ.location}</span>
                         </div>
                       )}

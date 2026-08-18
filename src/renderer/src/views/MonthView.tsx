@@ -68,14 +68,14 @@ export const MonthView: React.FC<MonthViewProps> = ({
   const weekdayHeaders = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 
   return (
-    <div className="h-full w-full flex flex-col bg-slate-950/60 rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl select-none">
+    <div className="h-full w-full flex flex-col bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shadow-xl select-none">
       {/* Weekday Header Row */}
-      <div className={`grid ${showWeekNumbers ? 'grid-cols-[40px_repeat(7,1fr)]' : 'grid-cols-7'} border-b border-slate-800 bg-slate-900/70 text-xs font-semibold py-2.5 text-center`}>
-        {showWeekNumbers && <div className="text-[10px] text-slate-500 flex items-center justify-center">#</div>}
+      <div className={`grid ${showWeekNumbers ? 'grid-cols-[40px_repeat(7,1fr)]' : 'grid-cols-7'} border-b border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/70 text-xs font-semibold py-2.5 text-center`}>
+        {showWeekNumbers && <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center justify-center">#</div>}
         {weekdayHeaders.map((h, idx) => (
           <div
             key={h}
-            className={`${idx === 5 ? 'text-indigo-400' : idx === 6 ? 'text-rose-400' : 'text-slate-300'}`}
+            className={`${idx === 5 ? 'text-indigo-600 dark:text-indigo-400' : idx === 6 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-300'}`}
           >
             {h}
           </div>
@@ -83,7 +83,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
       </div>
 
       {/* 6-Week Calendar Grid */}
-      <div className="flex-1 grid grid-rows-6 divide-y divide-slate-800/60 overflow-hidden">
+      <div className="flex-1 grid grid-rows-6 divide-y divide-slate-200 dark:divide-slate-800/60 overflow-hidden">
         {Array.from({ length: 6 }).map((_, weekIdx) => {
           const weekDays = days.slice(weekIdx * 7, weekIdx * 7 + 7)
           const firstDayOfWeek = weekDays[0]
@@ -91,11 +91,11 @@ export const MonthView: React.FC<MonthViewProps> = ({
           return (
             <div
               key={weekIdx}
-              className={`grid ${showWeekNumbers ? 'grid-cols-[40px_repeat(7,1fr)]' : 'grid-cols-7'} divide-x divide-slate-800/60 min-h-0`}
+              className={`grid ${showWeekNumbers ? 'grid-cols-[40px_repeat(7,1fr)]' : 'grid-cols-7'} divide-x divide-slate-200 dark:divide-slate-800/60 min-h-0`}
             >
               {/* Week Number Column */}
               {showWeekNumbers && (
-                <div className="bg-slate-950/40 flex items-center justify-center border-r border-slate-800/60">
+                <div className="bg-slate-50 dark:bg-slate-950/40 flex items-center justify-center border-r border-slate-200 dark:border-slate-800/60">
                   <WeekNumber weekNumber={firstDayOfWeek.weekNumber} />
                 </div>
               )}
@@ -114,17 +114,17 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     onClick={() => onSelectDate?.(day)}
                     onDragOver={(e) => {
                       e.preventDefault()
-                      e.currentTarget.classList.add('bg-indigo-900/20')
+                      e.currentTarget.classList.add('bg-indigo-100', 'dark:bg-indigo-900/20')
                     }}
                     onDragLeave={(e) => {
-                      e.currentTarget.classList.remove('bg-indigo-900/20')
+                      e.currentTarget.classList.remove('bg-indigo-100', 'dark:bg-indigo-900/20')
                     }}
                     onDrop={(e) => {
-                      e.currentTarget.classList.remove('bg-indigo-900/20')
+                      e.currentTarget.classList.remove('bg-indigo-100', 'dark:bg-indigo-900/20')
                       onDropOnDate?.(e, day)
                     }}
-                    className={`flex flex-col p-1.5 min-h-0 transition-colors cursor-pointer hover:bg-slate-800/30 ${
-                      !isCurrentMonth ? 'bg-slate-950/40 opacity-40' : 'bg-transparent'
+                    className={`flex flex-col p-1.5 min-h-0 transition-colors cursor-pointer hover:bg-slate-100/70 dark:hover:bg-slate-800/30 ${
+                      !isCurrentMonth ? 'bg-slate-100/50 dark:bg-slate-950/40 opacity-40' : 'bg-transparent'
                     }`}
                   >
                     {/* Date Number + Lunar Label */}
@@ -134,8 +134,8 @@ export const MonthView: React.FC<MonthViewProps> = ({
                           isToday
                             ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/40'
                             : isCurrentMonth
-                              ? 'text-slate-200'
-                              : 'text-slate-500'
+                              ? 'text-slate-800 dark:text-slate-200'
+                              : 'text-slate-400 dark:text-slate-500'
                         }`}
                       >
                         {day.day}
@@ -167,11 +167,11 @@ export const MonthView: React.FC<MonthViewProps> = ({
                             title={`${occ.title} (${occ.allDay ? 'All day' : occTime.toFormat('HH:mm')})`}
                           >
                             {!occ.allDay && (
-                              <span className="text-[9px] text-slate-400 font-mono">
+                              <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">
                                 {occTime.toFormat('HH:mm')}
                               </span>
                             )}
-                            <span className="truncate text-slate-200">{occ.title}</span>
+                            <span className="truncate text-slate-800 dark:text-slate-200">{occ.title}</span>
                           </div>
                         )
                       })}
@@ -180,7 +180,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       {dayTasks.slice(0, 2).map((task) => (
                         <div
                           key={task.id}
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium truncate flex items-center gap-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/30"
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium truncate flex items-center gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
                           title={`Nhiệm vụ: ${task.title}`}
                         >
                           <span className="text-[9px]">✓</span>
@@ -191,7 +191,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       ))}
 
                       {dayOccurrences.length + dayTasks.length > 3 && (
-                        <div className="text-[10px] font-semibold text-indigo-400 px-1 hover:underline">
+                        <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 px-1 hover:underline">
                           +{dayOccurrences.length + dayTasks.length - 3} {showLunar ? 'khác' : 'more'}
                         </div>
                       )}

@@ -39,26 +39,26 @@ export const DayView: React.FC<DayViewProps> = ({
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
   return (
-    <div className="h-full w-full flex flex-col bg-slate-950/60 rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl select-none">
+    <div className="h-full w-full flex flex-col bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shadow-xl select-none">
       {/* Header Banner */}
-      <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between shrink-0">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/80 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <span
             className={`text-2xl font-bold h-11 w-11 rounded-2xl flex items-center justify-center ${
               isToday
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/40'
-                : 'bg-slate-800 text-slate-100'
+                : 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-100'
             }`}
           >
             {anchorDate.day}
           </span>
           <div>
-            <h3 className="text-base font-bold text-slate-100 capitalize">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 capitalize">
               {anchorDate.toFormat('cccc, dd MMMM yyyy')}
             </h3>
             {showLunar && (
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-xs text-slate-400">Âm lịch:</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Âm lịch:</span>
                 <LunarLabel
                   day={anchorDate.day}
                   month={anchorDate.month}
@@ -94,14 +94,14 @@ export const DayView: React.FC<DayViewProps> = ({
 
       {/* Hourly Timeline */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto relative">
-        <div className="grid grid-cols-[70px_1fr] divide-x divide-slate-800/60 relative min-h-[1440px]">
+        <div className="grid grid-cols-[70px_1fr] divide-x divide-slate-200 dark:divide-slate-800/60 relative min-h-[1440px]">
           {/* Time Gutter */}
-          <div className="bg-slate-950/30 text-right pr-3 select-none">
+          <div className="bg-slate-50/80 dark:bg-slate-950/30 text-right pr-3 select-none">
             {hours.map((hour) => (
               <div
                 key={hour}
                 style={{ height: `${HOUR_HEIGHT}px` }}
-                className="text-xs font-mono text-slate-500 -translate-y-2"
+                className="text-xs font-mono text-slate-400 dark:text-slate-500 -translate-y-2"
               >
                 {hour.toString().padStart(2, '0')}:00
               </div>
@@ -110,7 +110,7 @@ export const DayView: React.FC<DayViewProps> = ({
 
           {/* Main Day Timeline Area */}
           <div
-            className="relative cursor-pointer hover:bg-slate-900/10"
+            className="relative cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-900/10"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               const rect = e.currentTarget.getBoundingClientRect()
@@ -132,7 +132,7 @@ export const DayView: React.FC<DayViewProps> = ({
               <div
                 key={hour}
                 style={{ height: `${HOUR_HEIGHT}px` }}
-                className="border-b border-slate-800/40"
+                className="border-b border-slate-200/70 dark:border-slate-800/40"
               />
             ))}
 
@@ -170,26 +170,26 @@ export const DayView: React.FC<DayViewProps> = ({
                   style={{
                     top: `${topPos}px`,
                     height: `${height}px`,
-                    backgroundColor: occ.color ? `${occ.color}33` : '#6366f133',
+                    backgroundColor: occ.color ? `${occ.color}26` : '#6366f126',
                     borderLeft: `5px solid ${occ.color || '#6366f1'}`
                   }}
-                  className="absolute inset-x-4 rounded-xl p-3 text-xs text-slate-100 overflow-hidden shadow-lg backdrop-blur-md transition-all hover:z-30 hover:scale-[1.005] cursor-grab active:cursor-grabbing"
+                  className="absolute inset-x-4 rounded-xl p-3 text-xs text-slate-800 dark:text-slate-100 overflow-hidden shadow-lg backdrop-blur-md transition-all hover:z-30 hover:scale-[1.005] cursor-grab active:cursor-grabbing"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-slate-100">{occ.title}</span>
-                    <span className="text-xs text-slate-400 font-mono">
+                    <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{occ.title}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                       {startDt.toFormat('HH:mm')} – {endDt.toFormat('HH:mm')}
                     </span>
                   </div>
 
                   {occ.location && (
-                    <div className="text-xs text-slate-300 mt-1 flex items-center gap-1">
+                    <div className="text-xs text-slate-600 dark:text-slate-300 mt-1 flex items-center gap-1">
                       <span>📍</span> {occ.location}
                     </div>
                   )}
 
                   {occ.notes && (
-                    <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
                       {occ.notes}
                     </p>
                   )}

@@ -216,8 +216,16 @@ export const App: React.FC = () => {
           setShowLunar(settings.showLunar ?? true)
           setShowWeekNumbers(settings.showWeekNumbers ?? true)
 
+          const isDark = settings.theme !== 'light'
+          setIsDarkMode(isDark)
+          if (isDark) {
+            document.documentElement.classList.add('dark')
+          } else {
+            document.documentElement.classList.remove('dark')
+          }
+
           const theme: ThemeConfig = {
-            mode: 'dark',
+            mode: isDark ? 'dark' : 'light',
             accentColor: settings.themeAccent || '#6366f1',
             customBgUrl: settings.themeCustomBg || '',
             bgOverlayOpacity: settings.themeOverlayOpacity !== undefined ? settings.themeOverlayOpacity : 0.8,
@@ -288,16 +296,18 @@ export const App: React.FC = () => {
     }
   }
 
-  const toggleTheme = (): void => {
-    setIsDarkMode((prev) => {
-      const next = !prev
-      if (next) {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
-      return next
-    })
+  const toggleTheme = async (): Promise<void> => {
+    const next = !isDarkMode
+    setIsDarkMode(next)
+    if (next) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+    setThemeConfig((prev) => ({ ...prev, mode: next ? 'dark' : 'light' }))
+    if (window.gone?.settings) {
+      await window.gone.settings.set('theme', next ? 'dark' : 'light')
+    }
   }
 
   const toggleLunar = async (enabled: boolean) => {
@@ -486,7 +496,7 @@ export const App: React.FC = () => {
 
   return (
     <div
-      className={`h-screen w-screen flex flex-col ${isDarkMode ? 'dark' : ''} bg-slate-950 text-slate-100 font-sans select-none relative overflow-hidden`}
+      className={`h-screen w-screen flex flex-col ${isDarkMode ? 'dark' : ''} bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 font-sans select-none relative overflow-hidden`}
       style={{ '--accent-color': themeConfig.accentColor } as any}
     >
       {/* Dynamic Background Wallpaper */}
@@ -501,67 +511,67 @@ export const App: React.FC = () => {
       )}
       {themeConfig.customBgUrl && (
         <div
-          className="fixed inset-0 pointer-events-none z-0 bg-slate-950 transition-opacity duration-300"
+          className="fixed inset-0 pointer-events-none z-0 bg-white/80 dark:bg-slate-950 transition-opacity duration-300"
           style={{ opacity: themeConfig.bgOverlayOpacity }}
         />
       )}
 
       {/* Top Navigation Bar */}
-      <header className="h-14 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md px-4 flex items-center justify-between shrink-0 z-10">
+      <header className="h-14 border-b border-slate-200 bg-white/80 dark:border-slate-800/80 dark:bg-slate-900/60 backdrop-blur-md px-4 flex items-center justify-between shrink-0 z-10">
         {/* Brand & Date Navigation */}
         <div className="flex items-center gap-5">
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
               <CalendarDays className="h-5 w-5 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+            <span className="font-bold text-lg tracking-tight text-slate-800 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r dark:from-white dark:via-slate-100 dark:to-slate-400">
               {t('appName')}
             </span>
           </div>
 
-          <div className="h-5 w-px bg-slate-800" />
+          <div className="h-5 w-px bg-slate-200 dark:bg-slate-800" />
 
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleToday}
-              className="px-3 py-1.5 text-xs font-medium bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 rounded-lg border border-slate-700/60 transition-colors shadow-xs"
+              className="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 dark:text-slate-200 dark:border-slate-700/60 rounded-lg transition-colors shadow-xs cursor-pointer"
             >
               {t('nav.today')}
             </button>
             <div className="flex items-center">
               <button
                 onClick={handlePrev}
-                className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-lg transition-colors"
+                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
                 title={t('nav.prev')}
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 onClick={handleNext}
-                className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-lg transition-colors"
+                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
                 title={t('nav.next')}
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
-            <span className="text-sm font-semibold text-slate-200 ml-2">
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 ml-2">
               {visibleRange.label}
             </span>
           </div>
         </div>
 
         {/* View Switcher Tabs */}
-        <div className="flex items-center bg-slate-950/60 p-1 rounded-xl border border-slate-800/80 shadow-inner">
+        <div className="flex items-center bg-slate-100 dark:bg-slate-950/60 p-1 rounded-xl border border-slate-200 dark:border-slate-800/80 shadow-inner">
           {views.map((view) => {
             const isActive = currentView === view
             return (
               <button
                 key={view}
                 onClick={() => setCurrentView(view)}
-                className={`px-3 py-1 text-xs font-medium rounded-lg transition-all ${
+                className={`px-3 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/40'
                 }`}
               >
                 {t(`views.${view}`)}
@@ -574,10 +584,10 @@ export const App: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsSearchPaletteOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700/60 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800/80 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700/60 rounded-lg transition-colors cursor-pointer"
             title="Tìm kiếm sự kiện (Ctrl+K)"
           >
-            <Search className="h-3.5 w-3.5 text-indigo-400" />
+            <Search className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
             <span>Tìm kiếm (Ctrl+K)</span>
           </button>
 
@@ -589,7 +599,7 @@ export const App: React.FC = () => {
               })
               setIsEditorOpen(true)
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-all shadow-md shadow-indigo-600/25"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-all shadow-md shadow-indigo-600/25 cursor-pointer"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>{t('actions.newEvent')}</span>
@@ -597,18 +607,18 @@ export const App: React.FC = () => {
 
           <button
             onClick={handleImportSampleIcs}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700/60 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800/80 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700/60 rounded-lg transition-colors cursor-pointer"
             title="Import sample recurring ICS meeting"
           >
             <FileUp className="h-3.5 w-3.5" />
             <span>Import ICS</span>
           </button>
 
-          <div className="h-5 w-px bg-slate-800 mx-1" />
+          <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
 
           <button
             onClick={toggleLanguage}
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-lg transition-colors flex items-center gap-1 text-xs"
+            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 rounded-lg transition-colors flex items-center gap-1 text-xs cursor-pointer"
             title="Toggle Language (VI / EN)"
           >
             <Globe className="h-4 w-4" />
@@ -617,7 +627,7 @@ export const App: React.FC = () => {
 
           <button
             onClick={toggleTheme}
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-lg transition-colors"
+            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
             title="Toggle Theme"
           >
             {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -625,7 +635,7 @@ export const App: React.FC = () => {
 
           <button
             onClick={() => setIsThemeModalOpen(true)}
-            className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-800/60 rounded-lg transition-colors"
+            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-indigo-400 dark:hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
             title="Tùy biến Giao diện (Theme)"
           >
             <Palette className="h-4 w-4" />
@@ -633,7 +643,7 @@ export const App: React.FC = () => {
 
           <button
             onClick={() => setIsShortcutsModalOpen(true)}
-            className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-800/60 rounded-lg transition-colors"
+            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-indigo-400 dark:hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
             title="Phím tắt (? / F1)"
           >
             <Keyboard className="h-4 w-4" />
@@ -641,7 +651,7 @@ export const App: React.FC = () => {
 
           <button
             onClick={() => setIsSettingsOpen(true)}
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-lg transition-colors"
+            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
             title={t('actions.settings')}
           >
             <SettingsIcon className="h-4 w-4" />
@@ -652,15 +662,15 @@ export const App: React.FC = () => {
       {/* Main Workspace Layout */}
       <div className="flex-1 flex overflow-hidden z-10">
         {/* Left Sidebar */}
-        <aside className="w-64 border-r border-slate-800/80 bg-slate-900/40 backdrop-blur-md flex flex-col p-4 gap-4 shrink-0">
+        <aside className="w-64 border-r border-slate-200 bg-white/80 dark:border-slate-800/80 dark:bg-slate-900/40 backdrop-blur-md flex flex-col p-4 gap-4 shrink-0">
           {/* Sidebar Tab Switcher */}
-          <div className="flex bg-slate-950/60 p-1 rounded-xl border border-slate-800/80 shrink-0">
+          <div className="flex bg-slate-100 dark:bg-slate-950/60 p-1 rounded-xl border border-slate-200 dark:border-slate-800/80 shrink-0">
             <button
               onClick={() => setSidebarTab('calendar')}
               className={`flex-1 py-1 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 sidebarTab === 'calendar'
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               <CalendarDays className="h-3.5 w-3.5" />
@@ -671,7 +681,7 @@ export const App: React.FC = () => {
               className={`flex-1 py-1 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 sidebarTab === 'tasks'
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               <CheckSquare className="h-3.5 w-3.5" />
@@ -686,23 +696,23 @@ export const App: React.FC = () => {
           ) : (
             <>
               {/* Mini Calendar Card */}
-              <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-xs">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-3">
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3">
                   <span>{anchorDate.toFormat('MMMM yyyy')}</span>
                   <div className="flex gap-1 text-slate-400">
                     <ChevronLeft
-                      className="h-3.5 w-3.5 cursor-pointer hover:text-slate-200"
+                      className="h-3.5 w-3.5 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200"
                       onClick={() => setAnchorDate((d) => d.minus({ months: 1 }))}
                     />
                     <ChevronRight
-                      className="h-3.5 w-3.5 cursor-pointer hover:text-slate-200"
+                      className="h-3.5 w-3.5 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200"
                       onClick={() => setAnchorDate((d) => d.plus({ months: 1 }))}
                     />
                   </div>
                 </div>
                 {/* Weekday headers */}
-                <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-slate-500 mb-2">
-                  <span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span className="text-indigo-400">T7</span><span className="text-rose-400">CN</span>
+                <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-slate-400 dark:text-slate-500 mb-2">
+                  <span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span className="text-indigo-500">T7</span><span className="text-rose-500">CN</span>
                 </div>
                 {/* Mini Grid Days */}
                 <div className="grid grid-cols-7 gap-1 text-center text-xs">
@@ -715,7 +725,7 @@ export const App: React.FC = () => {
                         className={`h-6 w-6 mx-auto rounded-md flex items-center justify-center transition-colors cursor-pointer text-[11px] ${
                           isSelected
                             ? 'bg-indigo-600 text-white font-bold shadow-xs'
-                            : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                            : 'text-slate-600 hover:bg-slate-200/80 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-slate-200'
                         }`}
                       >
                         {day}
@@ -727,9 +737,9 @@ export const App: React.FC = () => {
 
               {/* Calendars Group */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <span>{t('sidebar.myCalendars')}</span>
-                  <Folder className="h-3.5 w-3.5 text-slate-500" />
+                  <Folder className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                 </div>
 
                 <div className="space-y-1.5">
@@ -737,13 +747,13 @@ export const App: React.FC = () => {
                     calendars.map((cal) => (
                       <label
                         key={cal.id}
-                        className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors"
+                        className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/70 border border-slate-200 text-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800/70 dark:border-slate-800 text-xs font-medium dark:text-slate-200 cursor-pointer transition-colors"
                       >
                         <input
                           type="checkbox"
                           checked={cal.isVisible}
                           onChange={() => toggleCalendarVisibility(cal)}
-                          className="rounded accent-indigo-500 h-3.5 w-3.5"
+                          className="rounded accent-indigo-500 h-3.5 w-3.5 cursor-pointer"
                         />
                         <span
                           className="h-2.5 w-2.5 rounded-full shadow-xs shrink-0"
@@ -751,14 +761,14 @@ export const App: React.FC = () => {
                         />
                         <span className="flex-1 truncate">{cal.name}</span>
                         {cal.isReadOnly && (
-                          <span className="text-[10px] text-amber-400 font-mono px-1 py-0.5 bg-amber-500/10 rounded">
+                          <span className="text-[10px] text-amber-500 dark:text-amber-400 font-mono px-1 py-0.5 bg-amber-500/10 rounded">
                             RO
                           </span>
                         )}
                       </label>
                     ))
                   ) : (
-                    <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer">
+                    <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer">
                       <input type="checkbox" defaultChecked className="rounded accent-indigo-500 h-3.5 w-3.5" />
                       <span className="h-2.5 w-2.5 rounded-full bg-indigo-500 shadow-xs" />
                       <span className="flex-1 truncate">{t('sidebar.localCalendar')}</span>
@@ -766,26 +776,26 @@ export const App: React.FC = () => {
                   )}
 
                   {/* Lunar Toggle */}
-                  <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors">
+                  <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/70 border border-slate-200 text-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800/70 dark:border-slate-800 text-xs font-medium dark:text-slate-200 cursor-pointer transition-colors">
                     <input
                       type="checkbox"
                       checked={showLunar}
                       onChange={(e) => toggleLunar(e.target.checked)}
-                      className="rounded accent-indigo-500 h-3.5 w-3.5"
+                      className="rounded accent-indigo-500 h-3.5 w-3.5 cursor-pointer"
                     />
-                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                    <Sparkles className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" />
                     <span className="flex-1 truncate">{t('sidebar.lunarEnabled')}</span>
                   </label>
 
                   {/* Week Numbers Toggle */}
-                  <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer transition-colors">
+                  <label className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/70 border border-slate-200 text-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800/70 dark:border-slate-800 text-xs font-medium dark:text-slate-200 cursor-pointer transition-colors">
                     <input
                       type="checkbox"
                       checked={showWeekNumbers}
                       onChange={(e) => toggleWeekNumbers(e.target.checked)}
-                      className="rounded accent-indigo-500 h-3.5 w-3.5"
+                      className="rounded accent-indigo-500 h-3.5 w-3.5 cursor-pointer"
                     />
-                    <Layers className="h-3.5 w-3.5 text-sky-400" />
+                    <Layers className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400" />
                     <span className="flex-1 truncate">{t('sidebar.weekNumbers')}</span>
                   </label>
                 </div>
@@ -800,23 +810,23 @@ export const App: React.FC = () => {
           )}
 
           {/* Sync Status footer */}
-          <div className="mt-auto pt-3 border-t border-slate-800/80 space-y-2">
+          <div className="mt-auto pt-3 border-t border-slate-200 dark:border-slate-800/80 space-y-2">
             <button
               onClick={() => setIsAccountModalOpen(true)}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-800/60 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700/60 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800/60 dark:hover:bg-slate-800 dark:text-slate-200 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700/60 transition-colors cursor-pointer"
             >
-              <Users className="h-3.5 w-3.5 text-indigo-400" />
+              <Users className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
               <span>Quản lý Tài khoản (Sync)</span>
             </button>
 
             <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Local DB ready</span>
               </div>
               <button
                 onClick={() => loadCalendarsAndEvents()}
-                className="p-1 hover:bg-slate-800 rounded transition-colors"
+                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
                 title={t('actions.refresh')}
               >
                 <RotateCw className="h-3 w-3" />
@@ -830,7 +840,7 @@ export const App: React.FC = () => {
           {importStatus && (
             <div className="absolute top-6 left-6 right-6 z-40 p-3 bg-indigo-600/90 backdrop-blur-md border border-indigo-500 rounded-xl text-xs text-white flex items-center justify-between shadow-2xl animate-in fade-in">
               <span>{importStatus}</span>
-              <button onClick={() => setImportStatus(null)}>
+              <button onClick={() => setImportStatus(null)} className="cursor-pointer">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -838,7 +848,7 @@ export const App: React.FC = () => {
 
           {/* Color Filter Pill Row */}
           <div className="mb-3 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs shrink-0">
-            <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1 mr-1">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1 mr-1">
               <Filter className="h-3 w-3" />
               Lọc màu:
             </span>
@@ -846,8 +856,8 @@ export const App: React.FC = () => {
               onClick={() => setSelectedColorFilter(null)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
                 selectedColorFilter === null
-                  ? 'bg-slate-700 text-white font-semibold shadow-xs'
-                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                  ? 'bg-slate-800 text-white dark:bg-slate-700 font-semibold shadow-xs'
+                  : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800/80'
               }`}
             >
               Tất cả
@@ -866,8 +876,8 @@ export const App: React.FC = () => {
                 onClick={() => setSelectedColorFilter(selectedColorFilter === c.hex ? null : c.hex)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
                   selectedColorFilter === c.hex
-                    ? 'bg-slate-800 text-white font-semibold border border-slate-600 shadow-xs'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                    ? 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold border border-slate-300 dark:border-slate-600 shadow-xs'
+                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:text-slate-200 dark:border-slate-800/80'
                 }`}
               >
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.hex }} />
@@ -1035,80 +1045,80 @@ export const App: React.FC = () => {
       {/* Settings Modal */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 relative">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 relative">
             <button
               onClick={() => setIsSettingsOpen(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors"
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <X className="h-4 w-4" />
             </button>
 
-            <h3 className="text-lg font-bold text-slate-100 mb-5 flex items-center gap-2">
-              <SettingsIcon className="h-5 w-5 text-indigo-400" />
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-5 flex items-center gap-2">
+              <SettingsIcon className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
               {t('settings.title')}
             </h3>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between py-2 border-b border-slate-800">
-                <span className="text-sm font-medium text-slate-300">{t('settings.language')}</span>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('settings.language')}</span>
                 <button
                   onClick={toggleLanguage}
-                  className="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-colors"
+                  className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 rounded-lg transition-colors cursor-pointer"
                 >
                   {i18n.language === 'vi' ? 'Tiếng Việt (VI)' : 'English (EN)'}
                 </button>
               </div>
 
-              <div className="flex items-center justify-between py-2 border-b border-slate-800">
-                <span className="text-sm font-medium text-slate-300">{t('settings.theme')}</span>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('settings.theme')}</span>
                 <button
                   onClick={toggleTheme}
-                  className="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-colors"
+                  className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 rounded-lg transition-colors cursor-pointer"
                 >
                   {isDarkMode ? t('settings.themeDark') : t('settings.themeLight')}
                 </button>
               </div>
 
-              <div className="flex items-center justify-between py-2 border-b border-slate-800">
-                <span className="text-sm font-medium text-slate-300">{t('sidebar.lunarEnabled')}</span>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('sidebar.lunarEnabled')}</span>
                 <button
                   onClick={() => toggleLunar(!showLunar)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
                     showLunar
                       ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-400'
+                      : 'bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
                   }`}
                 >
                   {showLunar ? 'ON' : 'OFF'}
                 </button>
               </div>
 
-              <div className="flex items-center justify-between py-2 border-b border-slate-800">
-                <span className="text-sm font-medium text-slate-300">{t('sidebar.weekNumbers')}</span>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('sidebar.weekNumbers')}</span>
                 <button
                   onClick={() => toggleWeekNumbers(!showWeekNumbers)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
                     showWeekNumbers
                       ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-400'
+                      : 'bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
                   }`}
                 >
                   {showWeekNumbers ? 'ON' : 'OFF'}
                 </button>
               </div>
 
-              <div className="flex items-center justify-between py-2 border-b border-slate-800">
-                <span className="text-sm font-medium text-slate-300">{t('settings.version')}</span>
-                <span className="text-xs text-slate-400 font-mono">v{appVersion} ({platform})</span>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('settings.version')}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">v{appVersion} ({platform})</span>
               </div>
             </div>
 
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setIsSettingsOpen(false)}
-                className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+                className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors cursor-pointer"
               >
-                {t('settings.close')}
+                {t('actions.close')}
               </button>
             </div>
           </div>

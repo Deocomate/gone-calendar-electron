@@ -9,30 +9,29 @@ interface WeekViewProps {
   occurrences: ExpandedOccurrence[]
   showLunar: boolean
   showWeekNumbers: boolean
-  onSelectOccurrence?: (occ: ExpandedOccurrence) => void
   onSelectSlot?: (start: DateTime, end: DateTime) => void
+  onSelectOccurrence?: (occ: ExpandedOccurrence) => void
   onDragStart?: (e: React.DragEvent, occ: ExpandedOccurrence) => void
-  onDropOnDate?: (e: React.DragEvent, targetDate: DateTime, targetHour?: number) => void
+  onDropOnDate?: (e: React.DragEvent, targetDate: DateTime, hour?: number) => void
 }
 
-const HOUR_HEIGHT = 54 // pixels per hour
+const HOUR_HEIGHT = 54 // px per hour
 
 export const WeekView: React.FC<WeekViewProps> = ({
   anchorDate,
   occurrences,
   showLunar,
   showWeekNumbers,
-  onSelectOccurrence,
   onSelectSlot,
+  onSelectOccurrence,
   onDragStart,
   onDropOnDate
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null)
   const today = DateTime.local()
+  const weekStart = anchorDate.startOf('week') // Monday
 
-  // Find Monday of the current week
-  const startOfWeek = anchorDate.minus({ days: anchorDate.weekday - 1 }).startOf('day')
-  const weekDays: DateTime[] = Array.from({ length: 7 }, (_, i) => startOfWeek.plus({ days: i }))
+  const weekDays = Array.from({ length: 7 }, (_, i) => weekStart.plus({ days: i }))
 
   // Scroll to 08:00 on mount
   useEffect(() => {
@@ -48,12 +47,12 @@ export const WeekView: React.FC<WeekViewProps> = ({
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
   return (
-    <div className="h-full w-full flex flex-col bg-slate-950/60 rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl select-none">
+    <div className="h-full w-full flex flex-col bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shadow-xl select-none">
       {/* Header Row: Weekdays + All-day Events */}
-      <div className="border-b border-slate-800 bg-slate-900/80 shrink-0">
-        <div className="grid grid-cols-[60px_repeat(7,1fr)] divide-x divide-slate-800">
+      <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/80 shrink-0">
+        <div className="grid grid-cols-[60px_repeat(7,1fr)] divide-x divide-slate-200 dark:divide-slate-800">
           {/* Week number / Corner */}
-          <div className="flex flex-col items-center justify-center p-2 bg-slate-950/40">
+          <div className="flex flex-col items-center justify-center p-2 bg-slate-50 dark:bg-slate-950/40">
             {showWeekNumbers && <WeekNumber weekNumber={anchorDate.weekNumber} />}
           </div>
 
@@ -62,7 +61,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
             const isToday = day.hasSame(today, 'day')
             return (
               <div key={day.toISO()} className="p-2 text-center flex flex-col items-center">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   {day.toFormat('ccc')}
                 </span>
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -70,7 +69,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                     className={`text-sm font-bold h-7 w-7 rounded-full flex items-center justify-center ${
                       isToday
                         ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/40'
-                        : 'text-slate-200'
+                        : 'text-slate-800 dark:text-slate-200'
                     }`}
                   >
                     {day.day}
@@ -86,8 +85,8 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
         {/* All-Day Events Strip */}
         {allDayOccurrences.length > 0 && (
-          <div className="grid grid-cols-[60px_repeat(7,1fr)] divide-x divide-slate-800 border-t border-slate-800/80 bg-slate-950/30 min-h-[32px] text-xs">
-            <div className="text-[10px] text-slate-500 font-semibold p-1.5 text-center flex items-center justify-center">
+          <div className="grid grid-cols-[60px_repeat(7,1fr)] divide-x divide-slate-200 dark:divide-slate-800 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-950/30 min-h-[32px] text-xs">
+            <div className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold p-1.5 text-center flex items-center justify-center">
               All Day
             </div>
             {weekDays.map((day) => {
@@ -125,14 +124,14 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
       {/* Hourly Scroll Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto relative">
-        <div className="grid grid-cols-[60px_repeat(7,1fr)] divide-x divide-slate-800/60 relative min-h-[1296px]">
+        <div className="grid grid-cols-[60px_repeat(7,1fr)] divide-x divide-slate-200 dark:divide-slate-800/60 relative min-h-[1296px]">
           {/* Time Gutter (Left) */}
-          <div className="bg-slate-950/30 text-right pr-2 select-none">
+          <div className="bg-slate-50/80 dark:bg-slate-950/30 text-right pr-2 select-none">
             {hours.map((hour) => (
               <div
                 key={hour}
                 style={{ height: `${HOUR_HEIGHT}px` }}
-                className="text-[11px] font-mono text-slate-500 -translate-y-2"
+                className="text-[11px] font-mono text-slate-400 dark:text-slate-500 -translate-y-2"
               >
                 {hour.toString().padStart(2, '0')}:00
               </div>
@@ -152,7 +151,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
             return (
               <div
                 key={dayKey}
-                className="relative cursor-pointer hover:bg-slate-900/20"
+                className="relative cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-900/20"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect()
@@ -174,7 +173,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   <div
                     key={hour}
                     style={{ height: `${HOUR_HEIGHT}px` }}
-                    className="border-b border-slate-800/40"
+                    className="border-b border-slate-200/70 dark:border-slate-800/40"
                   />
                 ))}
 
@@ -212,19 +211,19 @@ export const WeekView: React.FC<WeekViewProps> = ({
                       style={{
                         top: `${topPos}px`,
                         height: `${height}px`,
-                        backgroundColor: occ.color ? `${occ.color}33` : '#6366f133',
+                        backgroundColor: occ.color ? `${occ.color}26` : '#6366f126',
                         borderLeft: `4px solid ${occ.color || '#6366f1'}`
                       }}
-                      className="absolute inset-x-1 rounded-lg p-1.5 text-xs text-slate-100 overflow-hidden shadow-md backdrop-blur-xs transition-all hover:z-30 hover:scale-[1.01] cursor-grab active:cursor-grabbing"
+                      className="absolute inset-x-1 rounded-lg p-1.5 text-xs text-slate-800 dark:text-slate-100 overflow-hidden shadow-md backdrop-blur-xs transition-all hover:z-30 hover:scale-[1.01] cursor-grab active:cursor-grabbing"
                     >
                       <div className="font-semibold text-[11px] truncate leading-tight">
                         {occ.title}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                         {startDt.toFormat('HH:mm')} – {endDt.toFormat('HH:mm')}
                       </div>
                       {occ.location && (
-                        <div className="text-[9px] text-slate-400 truncate mt-0.5">
+                        <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                           📍 {occ.location}
                         </div>
                       )}

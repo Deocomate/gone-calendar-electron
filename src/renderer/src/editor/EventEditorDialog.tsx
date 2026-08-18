@@ -316,22 +316,22 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50 shrink-0">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/50 shrink-0">
           <div className="flex items-center gap-3">
             <div
               className="h-4 w-4 rounded-full shadow-md"
               style={{ backgroundColor: color || selectedCalendar?.color || '#6366f1' }}
             />
-            <h3 className="text-base font-bold text-slate-100">
+            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
               {isEditing ? 'Chỉnh sửa sự kiện' : 'Tạo sự kiện mới'}
             </h3>
           </div>
 
           <button
             onClick={handleCloseAttempt}
-            className="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
@@ -341,7 +341,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
           {/* Title & Color Picker */}
           <div>
-            <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+            <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
               Tiêu đề sự kiện (Title) *
             </label>
             <div className="flex items-center gap-3">
@@ -350,19 +350,19 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                 placeholder="VD: Họp định kỳ tuần, Thiết kế UI..."
                 value={title}
                 onChange={(e) => handleFieldChange(setTitle, e.target.value)}
-                className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 font-medium"
+                className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 font-medium"
                 autoFocus
               />
 
               {/* Color Circles */}
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shrink-0">
                 {COLOR_PALETTE.map((c) => (
                   <button
                     key={c}
                     type="button"
                     onClick={() => handleFieldChange(setColor, color === c ? '' : c)}
-                    className={`h-5 w-5 rounded-full transition-transform ${
-                      color === c ? 'scale-125 ring-2 ring-white shadow-md' : 'hover:scale-110 opacity-70'
+                    className={`h-5 w-5 rounded-full transition-transform cursor-pointer ${
+                      color === c ? 'scale-125 ring-2 ring-indigo-500 shadow-md' : 'hover:scale-110 opacity-70'
                     }`}
                     style={{ backgroundColor: c }}
                     title={`Color ${c}`}
@@ -375,14 +375,14 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
           {/* Calendar Selector */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
                 Lịch (Calendar) *
               </label>
               <div className="relative">
                 <select
                   value={calendarId}
                   onChange={(e) => handleFieldChange(setCalendarId, e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-hidden focus:border-indigo-500 cursor-pointer"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 cursor-pointer"
                 >
                   {calendars.map((cal) => (
                     <option key={cal.id} value={cal.id} disabled={cal.isReadOnly}>
@@ -394,13 +394,13 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
                 Múi giờ (Timezone)
               </label>
               <select
                 value={tzid}
                 onChange={(e) => handleFieldChange(setTzid, e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-hidden focus:border-indigo-500 cursor-pointer"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 cursor-pointer"
               >
                 {TIMEZONE_OPTIONS.map((tz) => (
                   <option key={tz} value={tz}>
@@ -418,19 +418,19 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
               id="allDayCheck"
               checked={allDay}
               onChange={(e) => handleFieldChange(setAllDay, e.target.checked)}
-              className="rounded accent-indigo-500 h-4 w-4"
+              className="rounded accent-indigo-500 h-4 w-4 cursor-pointer"
             />
-            <label htmlFor="allDayCheck" className="text-slate-300 font-medium cursor-pointer">
+            <label htmlFor="allDayCheck" className="text-slate-700 dark:text-slate-300 font-medium cursor-pointer">
               Sự kiện cả ngày (All-day)
             </label>
           </div>
 
           {/* Date & Time Range */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
             {/* Start */}
             <div className="space-y-1.5">
-              <label className="text-slate-400 font-semibold flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
-                <Clock className="h-3.5 w-3.5 text-indigo-400" />
+              <label className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
+                <Clock className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
                 Bắt đầu (Start)
               </label>
               <div className="flex gap-2">
@@ -438,14 +438,14 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                   type="date"
                   value={startDateStr}
                   onChange={(e) => handleFieldChange(setStartDateStr, e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-hidden focus:border-indigo-500"
+                  className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
                 />
                 {!allDay && (
                   <input
                     type="time"
                     value={startTimeStr}
                     onChange={(e) => handleFieldChange(setStartTimeStr, e.target.value)}
-                    className="w-24 px-2 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono"
+                    className="w-24 px-2 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono"
                   />
                 )}
               </div>
@@ -453,8 +453,8 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
             {/* End */}
             <div className="space-y-1.5">
-              <label className="text-slate-400 font-semibold flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
-                <Clock className="h-3.5 w-3.5 text-indigo-400" />
+              <label className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
+                <Clock className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
                 Kết thúc (End)
               </label>
               <div className="flex gap-2">
@@ -462,14 +462,14 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                   type="date"
                   value={endDateStr}
                   onChange={(e) => handleFieldChange(setEndDateStr, e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-hidden focus:border-indigo-500"
+                  className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
                 />
                 {!allDay && (
                   <input
                     type="time"
                     value={endTimeStr}
                     onChange={(e) => handleFieldChange(setEndTimeStr, e.target.value)}
-                    className="w-24 px-2 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono"
+                    className="w-24 px-2 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono"
                   />
                 )}
               </div>
@@ -478,8 +478,8 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
           {/* Recurrence Selector */}
           <div>
-            <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-              <Repeat className="h-3.5 w-3.5 text-indigo-400" />
+            <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <Repeat className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
               Lặp lại (Recurrence)
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mb-2">
@@ -495,10 +495,10 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                   key={preset.id}
                   type="button"
                   onClick={() => handleFieldChange(setRecurrencePreset, preset.id)}
-                  className={`px-3 py-2 rounded-lg border text-center transition-all ${
+                  className={`px-3 py-2 rounded-lg border text-center transition-all cursor-pointer ${
                     recurrencePreset === preset.id
                       ? 'bg-indigo-600 border-indigo-500 text-white font-semibold shadow-xs'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                      : 'bg-slate-100 hover:bg-slate-200/70 border-slate-200 text-slate-700 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50'
                   }`}
                 >
                   {preset.label}
@@ -512,7 +512,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                 placeholder="RFC 5545 RRULE (VD: FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=10)"
                 value={customRrule}
                 onChange={(e) => handleFieldChange(setCustomRrule, e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs focus:outline-hidden focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 font-mono text-xs focus:outline-hidden focus:border-indigo-500"
               />
             )}
           </div>
@@ -520,8 +520,8 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
           {/* Location & Meeting URL */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-slate-500" />
+              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                 Địa điểm (Location)
               </label>
               <input
@@ -529,13 +529,13 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                 placeholder="VD: Phòng họp A, Tầng 3"
                 value={location}
                 onChange={(e) => handleFieldChange(setLocation, e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-hidden focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                <Video className="h-3.5 w-3.5 text-slate-500" />
+              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                <Video className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                 Link họp trực tuyến (Meeting URL)
               </label>
               <input
@@ -543,15 +543,15 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                 placeholder="https://meet.google.com/..."
                 value={meetingUrl}
                 onChange={(e) => handleFieldChange(setMeetingUrl, e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono text-xs"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 font-mono text-xs"
               />
             </div>
           </div>
 
           {/* Attendees */}
           <div>
-            <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5 text-slate-500" />
+            <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
               Người tham gia (Attendees)
             </label>
             <AttendeeInput
@@ -562,8 +562,8 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
           {/* Notes / Description */}
           <div>
-            <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-slate-500" />
+            <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
               Ghi chú (Notes & Description)
             </label>
             <textarea
@@ -571,23 +571,23 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
               placeholder="Thêm mô tả chi tiết, nội dung cuộc họp..."
               value={notes}
               onChange={(e) => handleFieldChange(setNotes, e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-hidden focus:border-indigo-500 resize-none leading-relaxed"
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 resize-none leading-relaxed"
             />
           </div>
         </form>
 
         {/* Modal Footer Controls */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             {isEditing && (
               <>
                 <button
                   type="button"
                   onClick={handleShare}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors font-medium text-xs border border-slate-700"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors font-medium text-xs border border-slate-200 dark:border-slate-700 cursor-pointer"
                   title="Xuất file .ics và mở trong thư mục"
                 >
-                  <Share2 className="h-3.5 w-3.5 text-indigo-400" />
+                  <Share2 className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
                   <span>{shareSuccess ? '✓ Đã tạo file' : 'Chia sẻ (.ics)'}</span>
                 </button>
 
@@ -599,7 +599,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                       onDelete(eventId, data?.occurrence?.originalStartUtc, isRecurringOccurrence)
                     }
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors font-medium text-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-300 transition-colors font-medium text-xs cursor-pointer"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   <span>Xóa sự kiện</span>
@@ -612,14 +612,14 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
             <button
               type="button"
               onClick={handleCloseAttempt}
-              className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors"
+              className="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Hủy bỏ (Cancel)
             </button>
             <button
               type="button"
               onClick={handleSubmit}
-              className="px-5 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow-md shadow-indigo-600/30 transition-all"
+              className="px-5 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
             >
               {isEditing ? 'Lưu thay đổi' : 'Tạo sự kiện'}
             </button>
@@ -629,18 +629,18 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
         {/* Unsaved Changes Confirmation */}
         {showDiscardConfirm && (
           <div className="absolute inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-6 z-60 animate-in fade-in duration-100">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
-              <div className="h-12 w-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
+              <div className="h-12 w-12 rounded-2xl bg-amber-500/20 text-amber-500 dark:text-amber-400 flex items-center justify-center mx-auto mb-3">
                 <AlertTriangle className="h-6 w-6" />
               </div>
-              <h4 className="text-base font-bold text-slate-100 mb-2">Hủy bỏ các thay đổi?</h4>
-              <p className="text-xs text-slate-400 mb-5">
+              <h4 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-2">Hủy bỏ các thay đổi?</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
                 Các nội dung vừa nhập chưa được lưu sẽ bị mất. Bạn có chắc muốn đóng?
               </p>
               <div className="flex justify-center gap-3">
                 <button
                   onClick={() => setShowDiscardConfirm(false)}
-                  className="px-4 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg transition-colors cursor-pointer"
                 >
                   Tiếp tục sửa
                 </button>
@@ -649,7 +649,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                     setShowDiscardConfirm(false)
                     onClose()
                   }}
-                  className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors cursor-pointer"
                 >
                   Hủy thay đổi
                 </button>

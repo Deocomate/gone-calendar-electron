@@ -31,7 +31,7 @@ export const YearView: React.FC<YearViewProps> = ({
   const weekdayHeaders = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 
   return (
-    <div className="h-full w-full bg-slate-950/60 rounded-2xl border border-slate-800/80 p-6 overflow-y-auto shadow-xl select-none">
+    <div className="h-full w-full bg-white dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800/80 p-6 overflow-y-auto shadow-xl select-none">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {Array.from({ length: 12 }, (_, i) => i + 1).map((monthNum) => {
           const firstDayOfMonth = DateTime.local(year, monthNum, 1)
@@ -51,24 +51,24 @@ export const YearView: React.FC<YearViewProps> = ({
             <div
               key={monthNum}
               onClick={() => onSelectMonth(monthNum)}
-              className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-indigo-500/50 hover:bg-slate-900/90 transition-all cursor-pointer shadow-sm group"
+              className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 hover:border-indigo-500/50 hover:bg-slate-100 dark:hover:bg-slate-900/90 transition-all cursor-pointer shadow-sm group"
             >
               {/* Month Title */}
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold text-slate-200 group-hover:text-indigo-400 transition-colors">
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {firstDayOfMonth.toFormat('MMMM')}
                 </h4>
-                <span className="text-[11px] font-mono text-slate-500">
+                <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
                   {monthNum.toString().padStart(2, '0')}
                 </span>
               </div>
 
               {/* Mini Weekday Headers */}
-              <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-slate-500 mb-1.5">
+              <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-slate-400 dark:text-slate-500 mb-1.5">
                 {weekdayHeaders.map((h, idx) => (
                   <span
                     key={h}
-                    className={`${idx === 5 ? 'text-indigo-400' : idx === 6 ? 'text-rose-400' : ''}`}
+                    className={`${idx === 5 ? 'text-indigo-600 dark:text-indigo-400' : idx === 6 ? 'text-rose-600 dark:text-rose-400' : ''}`}
                   >
                     {h}
                   </span>
@@ -95,12 +95,12 @@ export const YearView: React.FC<YearViewProps> = ({
                       className={`h-6 w-6 mx-auto rounded-md flex flex-col items-center justify-center relative transition-colors ${
                         isToday
                           ? 'bg-indigo-600 text-white font-bold shadow-xs'
-                          : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <span className="text-[11px]">{day.day}</span>
                       {hasEvents && !isToday && (
-                        <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-indigo-400" />
+                        <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-indigo-500 dark:bg-indigo-400" />
                       )}
                     </div>
                   )

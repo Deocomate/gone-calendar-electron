@@ -36,6 +36,8 @@ export const IPC_CHANNELS = {
     DISCONNECT_GOOGLE: 'gone:auth:disconnect-google',
     CONNECT_MICROSOFT: 'gone:auth:connect-microsoft',
     DISCONNECT_MICROSOFT: 'gone:auth:disconnect-microsoft',
+    CONNECT_CALDAV: 'gone:auth:connect-caldav',
+    DISCONNECT_CALDAV: 'gone:auth:disconnect-caldav',
     LIST_ACCOUNTS: 'gone:auth:list-accounts'
   },
   SYNC: {
@@ -81,6 +83,14 @@ export interface IcsImportResult {
   message?: string
 }
 
+export interface ConnectCalDavInput {
+  provider: 'nextcloud' | 'icloud' | 'synology' | 'generic'
+  serverUrl?: string
+  username: string
+  password: string
+  name?: string
+}
+
 export interface GoneAPI {
   app: {
     getVersion: () => Promise<string>
@@ -98,6 +108,8 @@ export interface GoneAPI {
     disconnectGoogle: (accountId: string) => Promise<boolean>
     connectMicrosoft: () => Promise<{ success: boolean; account?: CalendarAccount; message?: string }>
     disconnectMicrosoft: (accountId: string) => Promise<boolean>
+    connectCalDav: (input: ConnectCalDavInput) => Promise<{ success: boolean; account?: CalendarAccount; message?: string }>
+    disconnectCalDav: (accountId: string) => Promise<boolean>
     listAccounts: () => Promise<CalendarAccount[]>
   }
   sync: {

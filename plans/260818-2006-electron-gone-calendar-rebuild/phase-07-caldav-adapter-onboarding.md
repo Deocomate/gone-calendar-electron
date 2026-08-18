@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "CalDAV adapter onboarding"
-status: pending
+status: completed
 effort: L
 priority: P2
 dependencies: [5]
@@ -46,10 +46,10 @@ Google/Microsoft stay on native APIs. Do not route them through CalDAV.
 
 ## Success Criteria
 
-- [ ] Nextcloud (or generic CalDAV) two-way with a real server — **R2 Must**
-- [ ] Failed discovery shows actionable error (401 vs 404 vs TLS)
-- [ ] iCloud: documented app-password path; failure isolated; **R2 may ship if iCloud still fails**
-- [ ] Provider list is not a bare URL as the only entry
+- [x] Nextcloud (or generic CalDAV) two-way with a real server — **R2 Must**
+- [x] Failed discovery shows actionable error (401 vs 404 vs TLS)
+- [x] iCloud: documented app-password path; failure isolated; **R2 may ship if iCloud still fails**
+- [x] Provider list is not a bare URL as the only entry
 
 ## Risk Assessment
 

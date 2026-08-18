@@ -1,11 +1,13 @@
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { GoogleSyncEngine } from './google-sync-engine'
 import { MicrosoftSyncEngine } from './microsoft-sync-engine'
+import { CalDavSyncEngine } from './caldav-sync-engine'
 import type { SyncStatus, SyncResult } from '@shared/event-model'
 
 export class SyncWorker {
   private googleEngine: GoogleSyncEngine
   private microsoftEngine: MicrosoftSyncEngine
+  private caldavEngine: CalDavSyncEngine
   private timer: NodeJS.Timeout | null = null
   private isSyncing = false
   private lastSyncTime?: string
@@ -20,6 +22,7 @@ export class SyncWorker {
   ) {
     this.googleEngine = new GoogleSyncEngine(db)
     this.microsoftEngine = new MicrosoftSyncEngine(db)
+    this.caldavEngine = new CalDavSyncEngine(db)
   }
 
   /**
@@ -46,7 +49,7 @@ export class SyncWorker {
   }
 
   /**
-   * Trigger immediate two-way sync for Google and Microsoft accounts
+   * Trigger immediate two-way sync for Google, Microsoft, and CalDAV accounts
    */
   async triggerSync(): Promise<SyncResult> {
     if (this.isSyncing) {
@@ -57,10 +60,11 @@ export class SyncWorker {
     try {
       const googleRes = await this.googleEngine.syncAll(this.googleClientId, this.googleClientSecret)
       const msRes = await this.microsoftEngine.syncAll(this.msClientId, this.msClientSecret)
+      const caldavRes = await this.caldavEngine.syncAll()
 
-      const totalPulled = googleRes.pulledCount + msRes.pulledCount
-      const totalPushed = googleRes.pushedCount + msRes.pushedCount
-      const totalErrors = googleRes.errorCount + msRes.errorCount
+      const totalPulled = googleRes.pulledCount + msRes.pulledCount + caldavRes.pulledCount
+      const totalPushed = googleRes.pushedCount + msRes.pushedCount + caldavRes.pushedCount
+      const totalErrors = googleRes.errorCount + msRes.errorCount + caldavRes.errorCount
 
       this.lastSyncTime = new Date().toISOString()
       this.lastError = totalErrors > 0 ? `Sync completed with ${totalErrors} errors` : undefined

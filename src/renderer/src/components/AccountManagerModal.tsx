@@ -6,9 +6,11 @@ import {
   Trash2,
   X,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Server
 } from 'lucide-react'
 import type { CalendarAccount, SyncStatus } from '@shared/event-model'
+import CalDavConnectModal from './CalDavConnectModal'
 
 interface AccountManagerModalProps {
   isOpen: boolean
@@ -25,6 +27,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [isCalDavModalOpen, setIsCalDavModalOpen] = useState<boolean>(false)
 
   const loadData = async () => {
     if (!window.gone?.auth || !window.gone?.sync) return
@@ -97,6 +100,8 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
         await window.gone.auth.disconnectGoogle(acc.id)
       } else if (acc.type === 'graph') {
         await window.gone.auth.disconnectMicrosoft(acc.id)
+      } else if (acc.type === 'caldav') {
+        await window.gone.auth.disconnectCalDav(acc.id)
       }
       await loadData()
       onAccountsChanged()
@@ -263,6 +268,15 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
               <Plus className="h-4 w-4" />
               <span>Kết nối Microsoft 365 / Outlook (OAuth 2.0)</span>
             </button>
+
+            <button
+              onClick={() => setIsCalDavModalOpen(true)}
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold shadow-lg shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Server className="h-4 w-4" />
+              <span>Kết nối CalDAV (Nextcloud / iCloud / Synology)</span>
+            </button>
           </div>
         </div>
 
@@ -276,6 +290,16 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* CalDAV Connect Modal */}
+      <CalDavConnectModal
+        isOpen={isCalDavModalOpen}
+        onClose={() => setIsCalDavModalOpen(false)}
+        onConnected={() => {
+          loadData()
+          onAccountsChanged()
+        }}
+      />
     </div>
   )
 }

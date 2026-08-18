@@ -19,6 +19,8 @@ const goneApi: GoneAPI = {
     disconnectGoogle: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_GOOGLE, accountId),
     connectMicrosoft: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.CONNECT_MICROSOFT),
     disconnectMicrosoft: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_MICROSOFT, accountId),
+    connectCalDav: (input) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.CONNECT_CALDAV, input),
+    disconnectCalDav: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_CALDAV, accountId),
     listAccounts: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.LIST_ACCOUNTS)
   },
   sync: {

@@ -52,6 +52,8 @@ describe('IPC Channels and Contracts', () => {
         disconnectGoogle: async () => true,
         connectMicrosoft: async () => ({ success: true }),
         disconnectMicrosoft: async () => true,
+        connectCalDav: async () => ({ success: true }),
+        disconnectCalDav: async () => true,
         listAccounts: async () => []
       },
       sync: {

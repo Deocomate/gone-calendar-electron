@@ -4,13 +4,10 @@ import {
   MapPin,
   Video,
   FileText,
-  Repeat,
   Trash2,
   X,
-  AlertTriangle,
   Share2,
-  Users,
-  Calendar as CalendarIcon
+  Check
 } from 'lucide-react'
 import type {
   Calendar,
@@ -27,7 +24,10 @@ import {
   CustomSelect,
   TextInput,
   TextArea,
-  ToggleSwitch
+  ToggleSwitch,
+  FormRow,
+  toast,
+  showFriendlyError
 } from '../components/ui'
 
 export interface EventEditorInitialData {
@@ -54,13 +54,14 @@ interface EventEditorDialogProps {
 }
 
 const COLOR_PALETTE = [
-  '#34C77B',
-  '#4A90E2',
-  '#F3722C',
-  '#1A73E8',
-  '#E63946',
-  '#10b981',
-  '#64748b'
+  '#529cca',
+  '#52b788',
+  '#ea9a5f',
+  '#9a6dd7',
+  '#eb5757',
+  '#4dab9a',
+  '#e06f9f',
+  '#868e96'
 ]
 
 const TIMEZONE_OPTIONS = [
@@ -74,6 +75,15 @@ const TIMEZONE_OPTIONS = [
   'Europe/London',
   'Europe/Paris',
   'Australia/Sydney'
+]
+
+const RECURRENCE_OPTIONS = [
+  { value: 'none', label: 'Không lặp' },
+  { value: 'daily', label: 'Hàng ngày' },
+  { value: 'weekly', label: 'Hàng tuần' },
+  { value: 'monthly', label: 'Hàng tháng' },
+  { value: 'yearly', label: 'Hàng năm' },
+  { value: 'custom', label: 'Tùy chỉnh (RRULE)' }
 ]
 
 export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
@@ -97,7 +107,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
   const [allDay, setAllDay] = useState<boolean>(false)
   const [tzid, setTzid] = useState<string>('Asia/Ho_Chi_Minh')
 
-  // Date & Time states (Local values for inputs)
+  // Date & Time states
   const [startDateStr, setStartDateStr] = useState<string>('')
   const [startTimeStr, setStartTimeStr] = useState<string>('09:00')
   const [endDateStr, setEndDateStr] = useState<string>('')
@@ -217,7 +227,6 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, isDirty, onClose])
 
-  // Options for custom selects
   const calendarOptions = useMemo(
     () =>
       (calendars || []).map((cal) => ({
@@ -249,7 +258,6 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
   const handleStartDateChange = (newStart: string) => {
     setStartDateStr(newStart)
     setIsDirty(true)
-    // If end date is missing or before start date, auto-sync end date
     if (!endDateStr || endDateStr < newStart) {
       setEndDateStr(newStart)
     }
@@ -258,7 +266,6 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
   const handleStartTimeChange = (newStart: string) => {
     setStartTimeStr(newStart)
     setIsDirty(true)
-    // If start date equals end date, make sure end time is after start time
     if (startDateStr === endDateStr || !endDateStr) {
       const [sh, sm] = newStart.split(':').map(Number)
       const [eh, em] = endTimeStr.split(':').map(Number)
@@ -292,16 +299,15 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) {
-      alert('Vui lòng nhập tiêu đề sự kiện')
+      toast.warning('Vui lòng nhập tiêu đề sự kiện')
       return
     }
 
     if (!calendarId) {
-      alert('Vui lòng chọn lịch')
+      toast.warning('Vui lòng chọn lịch')
       return
     }
 
-    // Build ISO UTC strings
     let startIso: string
     let endIso: string
 
@@ -313,7 +319,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       const endLocal = DateTime.fromISO(`${endDateStr}T${endTimeStr}:00`, { zone: 'local' })
 
       if (endLocal <= startLocal) {
-        alert('Thời gian kết thúc phải sau thời gian bắt đầu')
+        toast.warning('Thời gian kết thúc phải sau thời gian bắt đầu')
         return
       }
 
@@ -358,12 +364,13 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       const res = await window.gone.events.shareIcs(eventId)
       if (res.success) {
         setShareSuccess(true)
+        toast.success('Đã sao chép link / tạo file chia sẻ sự kiện!')
         setTimeout(() => setShareSuccess(false), 4000)
       } else {
-        alert(`Chia sẻ thất bại: ${res.message}`)
+        toast.error('Chia sẻ thất bại', { description: res.message })
       }
     } catch (err: any) {
-      alert(`Lỗi chia sẻ: ${err.message}`)
+      showFriendlyError(err, 'Lỗi chia sẻ sự kiện')
     }
   }
 
@@ -371,141 +378,101 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
   return (
     <div className="gc-overlay select-none">
-      <div className="gc-dialog w-full max-w-2xl">
-        {/* Modal Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-hairline bg-app px-6 py-4">
-          <div className="flex items-center gap-3">
+      <div className="gc-dialog w-full max-w-lg">
+        {/* Modal Header — color dot + title + close */}
+        <div className="flex shrink-0 items-center justify-between border-b border-hairline px-5 py-3">
+          <div className="flex items-center gap-2.5">
             <div
-              className="h-4 w-4 rounded-full shadow-md transition-colors"
+              className="h-3 w-3 rounded-full shrink-0 transition-colors"
               style={{ backgroundColor: color || selectedCalendar?.color || '#4A90E2' }}
             />
-            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+            <h3 className="text-sm font-semibold text-primary">
               {isEditing ? 'Chỉnh sửa sự kiện' : 'Tạo sự kiện mới'}
             </h3>
           </div>
 
-          <button
-            onClick={handleCloseAttempt}
-            className="gc-icon-btn"
-          >
+          <button onClick={handleCloseAttempt} className="gc-icon-btn">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
-          {/* Title & Color Picker */}
-          <div>
-            <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-              Tiêu đề sự kiện (Title) *
-            </label>
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <TextInput
-                  value={title}
-                  onChange={(val) => handleFieldChange(setTitle, val)}
-                  placeholder="VD: Họp định kỳ tuần, Thiết kế UI..."
-                  autoFocus
-                  inputClassName="text-sm font-medium"
-                />
-              </div>
-
-              {/* Color Circles */}
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 shrink-0">
-                {COLOR_PALETTE.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => handleFieldChange(setColor, color === c ? '' : c)}
-                    className={`h-5 w-5 rounded-full transition-transform cursor-pointer ${
-                      color === c ? 'scale-125 ring-2 ring-indigo-500 shadow-md' : 'hover:scale-110 opacity-70'
-                    }`}
-                    style={{ backgroundColor: c }}
-                    title={`Color ${c}`}
-                  />
-                ))}
-              </div>
-            </div>
+        {/* Form Body without vertical scrollbar */}
+        <form
+          onSubmit={handleSubmit}
+          className="px-6 py-3.5 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-1 text-xs space-y-0"
+        >
+          {/* Ghost title — large, borderless, clean Notion style with subtle bottom margin */}
+          <div className="pb-2 mb-1 border-b border-hairline/60">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => handleFieldChange(setTitle, e.target.value)}
+              placeholder="Tiêu đề sự kiện..."
+              autoFocus
+              className="w-full bg-transparent text-[20px] font-semibold text-primary placeholder:text-muted/60 border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none tracking-tight"
+            />
           </div>
 
-          {/* Calendar & Timezone Selectors */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+          {/* Property rows */}
+          <div className="space-y-0">
+            <FormRow label="Lịch" divider>
               <CustomSelect
-                label="Lịch (Calendar) *"
                 value={calendarId}
                 onChange={(val) => handleFieldChange(setCalendarId, val)}
                 options={calendarOptions}
                 placeholder="Chọn lịch..."
               />
-            </div>
+            </FormRow>
 
-            <div>
+            <FormRow label="Múi giờ" divider>
               <CustomSelect
-                label="Múi giờ (Timezone)"
                 value={tzid}
                 onChange={(val) => handleFieldChange(setTzid, val)}
                 options={timezoneOptions}
                 searchable
                 searchPlaceholder="Tìm múi giờ..."
               />
-            </div>
-          </div>
+            </FormRow>
 
-          {/* All Day Toggle */}
-          <div className="py-1">
-            <ToggleSwitch
-              checked={allDay}
-              onChange={(checked) => handleFieldChange(setAllDay, checked)}
-              label="Sự kiện cả ngày (All-day)"
-              description="Không cố định khung giờ bắt đầu và kết thúc"
-            />
-          </div>
+            <FormRow label="Cả ngày" divider>
+              <div className="px-2.5 py-1 flex items-center">
+                <ToggleSwitch
+                  checked={allDay}
+                  onChange={(checked) => handleFieldChange(setAllDay, checked)}
+                  size="sm"
+                />
+              </div>
+            </FormRow>
 
-          {/* Date & Time Range */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-950/40 border border-slate-200/90 dark:border-slate-800/80">
-            {/* Start Date & Time */}
-            <div className="min-w-0 space-y-1.5">
-              <label className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
-                <CalendarIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
-                Bắt đầu (Start)
-              </label>
-              <div className="flex items-center gap-2 min-w-0">
+            <FormRow label="Bắt đầu" divider>
+              <div className="flex items-center gap-1.5 min-w-0 w-full">
                 <div className="flex-1 min-w-0">
                   <DatePicker
                     value={startDateStr}
                     onChange={handleStartDateChange}
-                    placeholder="Chọn ngày bắt đầu"
+                    placeholder="Ngày bắt đầu"
                   />
                 </div>
                 {!allDay && (
-                  <div className="w-24 shrink-0">
-                    <TimePicker
-                      value={startTimeStr}
-                      onChange={handleStartTimeChange}
-                    />
+                  <div className="w-[105px] shrink-0">
+                    <TimePicker value={startTimeStr} onChange={handleStartTimeChange} />
                   </div>
                 )}
               </div>
-            </div>
+            </FormRow>
 
-            {/* End Date & Time */}
-            <div className="min-w-0 space-y-1.5">
-              <label className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
-                <CalendarIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
-                Kết thúc (End)
-              </label>
-              <div className="flex items-center gap-2 min-w-0">
+            <FormRow label="Kết thúc" divider>
+              <div className="flex items-center gap-1.5 min-w-0 w-full">
                 <div className="flex-1 min-w-0">
                   <DatePicker
                     value={endDateStr}
                     onChange={(val) => handleFieldChange(setEndDateStr, val)}
                     minDate={startDateStr}
-                    placeholder="Chọn ngày kết thúc"
+                    placeholder="Ngày kết thúc"
                   />
                 </div>
                 {!allDay && (
-                  <div className="w-24 shrink-0">
+                  <div className="w-[105px] shrink-0">
                     <TimePicker
                       value={endTimeStr}
                       onChange={(val) => handleFieldChange(setEndTimeStr, val)}
@@ -516,64 +483,79 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                   </div>
                 )}
               </div>
-            </div>
-          </div>
+            </FormRow>
 
-          {/* Recurrence Selector */}
-          <div>
-            <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-              <Repeat className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
-              Lặp lại (Recurrence)
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mb-2">
-              {[
-                { id: 'none', label: 'Không lặp' },
-                { id: 'daily', label: 'Hàng ngày' },
-                { id: 'weekly', label: 'Hàng tuần' },
-                { id: 'monthly', label: 'Hàng tháng' },
-                { id: 'yearly', label: 'Hàng năm' },
-                { id: 'custom', label: 'Tùy chỉnh' }
-              ].map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handleFieldChange(setRecurrencePreset, preset.id)}
-                  className={`px-3 py-2 rounded-xl border text-center transition-all cursor-pointer text-xs ${
-                    recurrencePreset === preset.id
-                      ? 'bg-indigo-600 border-indigo-500 text-white font-semibold shadow-xs'
-                      : 'bg-slate-100 hover:bg-slate-200/70 border-slate-200 text-slate-700 dark:bg-slate-950/80 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-            {recurrencePreset === 'custom' && (
-              <TextInput
-                value={customRrule}
-                onChange={(val) => handleFieldChange(setCustomRrule, val)}
-                placeholder="RFC 5545 RRULE (VD: FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=10)"
-                inputClassName="font-mono text-xs"
+            <FormRow label="Lặp lại" divider>
+              <CustomSelect
+                value={recurrencePreset}
+                onChange={(val) => handleFieldChange(setRecurrencePreset, val)}
+                options={RECURRENCE_OPTIONS}
               />
-            )}
-          </div>
+            </FormRow>
 
-          {/* Location & Meeting URL */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+            {/* Custom RRULE input shown inline when 'custom' selected */}
+            {recurrencePreset === 'custom' && (
+              <FormRow label="" divider>
+                <TextInput
+                  value={customRrule}
+                  onChange={(val) => handleFieldChange(setCustomRrule, val)}
+                  placeholder="RFC 5545 RRULE (VD: FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=10)"
+                  inputClassName="font-mono text-xs"
+                  variant="boxed"
+                />
+              </FormRow>
+            )}
+
+            <FormRow label="Màu sắc" divider>
+              <div className="flex items-center gap-2 px-2.5 py-1.5 overflow-x-auto">
+                {/* Default/Calendar color */}
+                <button
+                  type="button"
+                  onClick={() => handleFieldChange(setColor, '')}
+                  className={`relative h-5 w-5 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                    !color
+                      ? 'ring-2 ring-accent ring-offset-2 ring-offset-surface scale-110 shadow-xs'
+                      : 'opacity-75 hover:opacity-100 hover:scale-105'
+                  }`}
+                  style={{ backgroundColor: selectedCalendar?.color || '#529cca' }}
+                  title="Màu mặc định theo lịch"
+                >
+                  {!color && <Check className="h-3 w-3 text-white stroke-[3] drop-shadow-xs" />}
+                </button>
+
+                {COLOR_PALETTE.map((c) => {
+                  const isSelected = color === c
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => handleFieldChange(setColor, isSelected ? '' : c)}
+                      className={`relative h-5 w-5 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                        isSelected
+                          ? 'ring-2 ring-accent ring-offset-2 ring-offset-surface scale-110 shadow-xs'
+                          : 'opacity-75 hover:opacity-100 hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: c }}
+                      title={`Màu ${c}`}
+                    >
+                      {isSelected && <Check className="h-3 w-3 text-white stroke-[3] drop-shadow-xs" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </FormRow>
+
+            <FormRow label="Địa điểm" divider>
               <TextInput
-                label="Địa điểm (Location)"
                 value={location}
                 onChange={(val) => handleFieldChange(setLocation, val)}
-                placeholder="VD: Phòng họp A, Tầng 3"
+                placeholder="Phòng họp, địa chỉ..."
                 prefixIcon={<MapPin className="h-3.5 w-3.5" />}
               />
-            </div>
+            </FormRow>
 
-            <div>
+            <FormRow label="Link họp" divider>
               <TextInput
-                label="Link họp trực tuyến (Meeting URL)"
                 type="url"
                 value={meetingUrl}
                 onChange={(val) => handleFieldChange(setMeetingUrl, val)}
@@ -581,47 +563,40 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                 prefixIcon={<Video className="h-3.5 w-3.5" />}
                 inputClassName="font-mono text-xs"
               />
-            </div>
-          </div>
+            </FormRow>
 
-          {/* Attendees */}
-          <div>
-            <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-              Người tham gia (Attendees)
-            </label>
-            <AttendeeInput
-              attendees={attendees}
-              onChange={(newAtts) => handleFieldChange(setAttendees, newAtts)}
-            />
-          </div>
+            <FormRow label="Người tham gia" divider alignTop>
+              <AttendeeInput
+                attendees={attendees}
+                onChange={(newAtts) => handleFieldChange(setAttendees, newAtts)}
+              />
+            </FormRow>
 
-          {/* Notes / Description */}
-          <div>
-            <TextArea
-              label="Ghi chú (Notes & Description)"
-              value={notes}
-              onChange={(val) => handleFieldChange(setNotes, val)}
-              placeholder="Thêm mô tả chi tiết, nội dung cuộc họp..."
-              rows={3}
-              icon={<FileText className="h-3.5 w-3.5 text-slate-400" />}
-            />
+            <FormRow label="Ghi chú" alignTop>
+              <TextArea
+                value={notes}
+                onChange={(val) => handleFieldChange(setNotes, val)}
+                placeholder="Mô tả, nội dung cuộc họp..."
+                rows={2}
+                icon={<FileText className="h-3.5 w-3.5 text-muted" />}
+              />
+            </FormRow>
           </div>
         </form>
 
-        {/* Modal Footer Controls */}
-        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
+        {/* Modal Footer */}
+        <div className="px-5 py-3 border-t border-hairline flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-1">
             {isEditing && (
               <>
                 <button
                   type="button"
                   onClick={handleShare}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors font-medium text-xs border border-slate-200 dark:border-slate-700 cursor-pointer"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-muted hover:text-primary transition-colors text-xs cursor-pointer"
                   title="Xuất file .ics và mở trong thư mục"
                 >
-                  <Share2 className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
-                  <span>{shareSuccess ? '✓ Đã tạo file' : 'Chia sẻ (.ics)'}</span>
+                  <Share2 className="h-3.5 w-3.5" />
+                  <span>{shareSuccess ? '✓ Đã tạo file' : 'Chia sẻ'}</span>
                 </button>
 
                 <button
@@ -632,48 +607,49 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                       onDelete(eventId, data?.occurrence?.originalStartUtc, isRecurringOccurrence)
                     }
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-300 transition-colors font-medium text-xs cursor-pointer"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-today hover:opacity-80 transition-opacity text-xs cursor-pointer"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  <span>Xóa sự kiện</span>
+                  <span>Xóa</span>
                 </button>
               </>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCloseAttempt}
-              className="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="px-3 py-1.5 text-xs text-muted hover:text-primary transition-colors cursor-pointer"
             >
-              Hủy bỏ (Cancel)
+              Hủy
             </button>
             <button
               type="button"
               onClick={handleSubmit}
-              className="px-5 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
+              className="gc-btn-primary px-4 py-1.5 text-xs"
+              style={{ borderRadius: 'var(--radius-control)' }}
             >
               {isEditing ? 'Lưu thay đổi' : 'Tạo sự kiện'}
             </button>
           </div>
         </div>
 
-        {/* Unsaved Changes Confirmation */}
+        {/* Unsaved Changes Confirmation — quiet overlay */}
         {showDiscardConfirm && (
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-6 z-60 animate-in fade-in duration-100">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
-              <div className="h-12 w-12 rounded-2xl bg-amber-500/20 text-amber-500 dark:text-amber-400 flex items-center justify-center mx-auto mb-3">
-                <AlertTriangle className="h-6 w-6" />
-              </div>
-              <h4 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-2">Hủy bỏ các thay đổi?</h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
-                Các nội dung vừa nhập chưa được lưu sẽ bị mất. Bạn có chắc muốn đóng?
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-6 z-60">
+            <div
+              className="bg-surface border border-hairline p-5 max-w-xs w-full"
+              style={{ borderRadius: 'var(--radius-dialog)' }}
+            >
+              <h4 className="text-sm font-semibold text-primary mb-1.5">Hủy các thay đổi?</h4>
+              <p className="text-xs text-muted mb-4">
+                Nội dung vừa nhập chưa được lưu sẽ bị mất.
               </p>
-              <div className="flex justify-center gap-3">
+              <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setShowDiscardConfirm(false)}
-                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl transition-colors cursor-pointer"
+                  className="gc-btn text-xs"
                 >
                   Tiếp tục sửa
                 </button>
@@ -682,7 +658,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                     setShowDiscardConfirm(false)
                     onClose()
                   }}
-                  className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-xl transition-colors cursor-pointer"
+                  className="px-3 py-1.5 text-xs text-today hover:opacity-80 transition-opacity cursor-pointer font-medium"
                 >
                   Hủy thay đổi
                 </button>

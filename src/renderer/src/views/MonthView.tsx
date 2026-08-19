@@ -112,7 +112,7 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
         <div className="flex items-center gap-1">
           {totalItems >= 2 && (
             <span
-              className="flex items-center gap-0.5 px-1 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-mono text-[9px] font-bold border border-indigo-200/50 dark:border-indigo-800/50"
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded-[3px] bg-hover text-muted border border-hairline font-mono text-[9px] font-medium"
               title={`${totalItems} sự kiện`}
             >
               <Layers className="w-2.5 h-2.5" />

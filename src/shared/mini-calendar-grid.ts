@@ -31,6 +31,19 @@ export function buildMiniCalendarDays(
   return Array.from({ length: 42 }, (_, i) => gridStart.plus({ days: i }))
 }
 
-export const DEFAULT_EVENT_COLOR = '#4A90E2'
-export const DEFAULT_ACCENT_COLOR = '#1A73E8'
-export const TODAY_COLOR = '#E63946'
+export const DEFAULT_EVENT_COLOR = '#529cca'
+export const DEFAULT_ACCENT_COLOR = '#2383e2'
+export const TODAY_COLOR = '#eb5757'
+
+export const NOTION_PASTEL_PALETTE = [
+  '#529cca', // Soft Blue
+  '#52b788', // Soft Sage Green
+  '#ea9a5f', // Soft Peach / Amber
+  '#9a6dd7', // Soft Lavender
+  '#eb5757', // Soft Coral / Red
+  '#4dab9a', // Soft Teal
+  '#e06f9f', // Soft Rose Pink
+  '#868e96', // Soft Slate Gray
+  '#e3b341'  // Soft Honey Gold
+]
+

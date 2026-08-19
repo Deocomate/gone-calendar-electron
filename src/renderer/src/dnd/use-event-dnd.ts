@@ -1,8 +1,15 @@
 import { useCallback, useState, useRef, type DragEvent } from 'react'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
+import type { TimedSegment } from '@shared/timed-event-segments'
 import type { PendingDropAction } from './DropActionPopover'
-import { clampHour, sameDropTarget, type CalendarDropTarget } from './drop-target'
+import {
+  grabOffsetMinutes,
+  sameDropTarget,
+  shiftOccurrenceByDrop,
+  type CalendarDropTarget
+} from './drop-target'
+import { RESIZE_SNAP_MINUTES, snapMinutes } from './resize-math'
 
 export function useEventDnD(
   onDirectMove?: (
@@ -17,17 +24,43 @@ export function useEventDnD(
   const [pendingDrop, setPendingDrop] = useState<PendingDropAction | null>(null)
   const isDraggingRef = useRef<boolean>(false)
   const lastDragEndRef = useRef<number>(0)
+  const grabOffsetRef = useRef(0)
+  const segmentStartRef = useRef<DateTime | null>(null)
 
-  const handleDragStart = useCallback((e: DragEvent, occ: ExpandedOccurrence) => {
-    isDraggingRef.current = true
-    setDraggedOccurrence(occ)
-    document.body.classList.add('is-dnd-active')
-    e.dataTransfer.setData('application/json', JSON.stringify(occ))
-    e.dataTransfer.effectAllowed = 'copyMove'
-  }, [])
+  const handleDragStart = useCallback(
+    (e: DragEvent, occ: ExpandedOccurrence, segment?: TimedSegment) => {
+      isDraggingRef.current = true
+      setDraggedOccurrence(occ)
+      document.body.classList.add('is-dnd-active')
+      e.dataTransfer.setData('application/json', JSON.stringify(occ))
+      e.dataTransfer.effectAllowed = 'copyMove'
+
+      const origStart = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
+      const origEnd = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local')
+      const visualDuration = segment
+        ? Math.max(RESIZE_SNAP_MINUTES, segment.endLocal.diff(segment.startLocal, 'minutes').minutes)
+        : Math.max(RESIZE_SNAP_MINUTES, origEnd.diff(origStart, 'minutes').minutes)
+      segmentStartRef.current = segment?.startLocal ?? origStart
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      grabOffsetRef.current = grabOffsetMinutes(e.clientY, rect.top, rect.height, visualDuration)
+    },
+    []
+  )
 
   const handleDragOverTarget = useCallback((target: CalendarDropTarget) => {
-    setDropTarget((current) => (sameDropTarget(current, target) ? current : target))
+    let next = target
+    if (target.minutes !== undefined) {
+      const startMinutes = Math.max(
+        0,
+        snapMinutes(target.minutes - grabOffsetRef.current, RESIZE_SNAP_MINUTES)
+      )
+      next = {
+        ...target,
+        minutes: startMinutes,
+        hour: Math.floor(startMinutes / 60)
+      }
+    }
+    setDropTarget((current) => (sameDropTarget(current, next) ? current : next))
   }, [])
 
   const clearDragState = useCallback(() => {
@@ -42,12 +75,17 @@ export function useEventDnD(
     clearDragState()
   }, [clearDragState])
 
+  const markPointerBusyEnd = useCallback(() => {
+    lastDragEndRef.current = Date.now()
+    isDraggingRef.current = false
+  }, [])
+
   const wasJustDragging = useCallback(() => {
     return isDraggingRef.current || Date.now() - lastDragEndRef.current < 300
   }, [])
 
   const handleDropOnDate = useCallback(
-    (e: DragEvent, targetDate: DateTime, targetHour?: number) => {
+    (e: DragEvent, targetDate: DateTime, targetMinutes?: number) => {
       e.preventDefault()
       e.stopPropagation()
 
@@ -61,20 +99,34 @@ export function useEventDnD(
         }
       }
 
+      const grabOffsetMinutesValue = grabOffsetRef.current
+      const segmentStart = segmentStartRef.current
+      grabOffsetRef.current = 0
+      segmentStartRef.current = null
       clearDragState()
       if (!occ) return
 
       const origStart = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
       const origEnd = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local')
-      const durationMinutes = Math.max(15, origEnd.diff(origStart, 'minutes').minutes)
+      const durationMinutes = Math.max(
+        RESIZE_SNAP_MINUTES,
+        origEnd.diff(origStart, 'minutes').minutes
+      )
 
       let newStart: DateTime
       let newEnd: DateTime
 
-      if (targetHour !== undefined) {
-        const hour = clampHour(targetHour)
-        newStart = targetDate.set({ hour, minute: 0, second: 0, millisecond: 0 })
-        newEnd = newStart.plus({ minutes: durationMinutes })
+      if (targetMinutes !== undefined) {
+        const shifted = shiftOccurrenceByDrop({
+          origStart,
+          origEnd,
+          segmentStart: segmentStart ?? origStart,
+          targetDate,
+          pointerMinutes: targetMinutes,
+          grabOffsetMinutes: grabOffsetMinutesValue
+        })
+        newStart = shifted.start
+        newEnd = shifted.end
       } else {
         newStart = targetDate.set({
           hour: origStart.hour,
@@ -116,7 +168,8 @@ export function useEventDnD(
     handleDragStart,
     handleDragEnd,
     handleDragOverTarget,
-    handleDropOnDate
+    handleDropOnDate,
+    markPointerBusyEnd
   }
 }
 

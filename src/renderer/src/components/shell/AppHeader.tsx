@@ -97,13 +97,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         {onOpenTasks && (
           <button
             type="button"
-            className="gc-icon-btn relative text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50"
+            className="gc-icon-btn relative"
             onClick={onOpenTasks}
             title="Nhiệm vụ & Việc cần làm"
           >
             <CheckSquare className="h-4 w-4" />
             {pendingTasksCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-bold text-white shadow-xs">
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-[3px] bg-accent px-1 text-[8px] font-bold text-white shadow-2xs">
                 {pendingTasksCount}
               </span>
             )}

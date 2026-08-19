@@ -159,7 +159,7 @@ Entry: `main.tsx` detects `#mini` URL hash to route to `MiniApp` (companion widg
 
 **Views:** All five calendar layouts are custom React components with no third-party calendar shell.
 
-**DnD:** `use-event-dnd.ts` + `drop-target.ts` implement pointer-based drag. On drop: `DropActionPopover` renders Move / Copy (full series) / Copy (this instance only) / Cancel.
+**DnD:** `use-event-dnd.ts` + `drop-target.ts` implement pointer-based drag. Timed Week/Day drops snap to 15 minutes (not whole hours), keep the grab point under the cursor, and shift multi-day timed events as a whole so a resized 2-day slice does not collapse to one hour. On drop: `DropActionPopover` renders Move / Copy (full series) / Copy (this instance only) / Cancel. Timed blocks on Week/Day also support edge resize (`use-event-resize.ts`): N/S changes time (15-min snap), E/W on Week stretches across days. Multi-day timed occurrences are split in `timed-event-segments.ts`.
 
 ### `src/shared`
 

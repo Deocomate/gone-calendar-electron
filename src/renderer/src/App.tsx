@@ -30,6 +30,7 @@ import TaskModal from './components/TaskModal'
 import AppHeader from './components/shell/AppHeader'
 import AppSidebar from './components/shell/AppSidebar'
 import { useEventDnD } from './dnd/use-event-dnd'
+import { NotionToaster, toast, showFriendlyError } from './components/ui'
 
 export type { CalendarViewType }
 
@@ -97,9 +98,20 @@ export const App: React.FC = () => {
       occ: ExpandedOccurrence,
       targetStart: DateTime,
       targetEnd: DateTime,
-      isCopy: boolean
+      isCopy: boolean,
+      kind: 'move' | 'resize' = 'move'
     ) => {
       if (!window.gone?.events) return
+
+      // Check if calendar is read-only
+      const sourceCal = calendars.find((c) => c.id === occ.calendarId)
+      if (sourceCal?.isReadOnly && !isCopy) {
+        toast.error('Lịch chỉ đọc (Read-only)', {
+          description: 'Sự kiện thuộc lịch chỉ đọc (như Lịch ngày lễ), không thể di chuyển hoặc chỉnh sửa.'
+        })
+        return
+      }
+
       try {
         if (isCopy) {
           await window.gone.events.copy({
@@ -108,6 +120,9 @@ export const App: React.FC = () => {
             dtEndUtc: targetEnd.toUTC().toISO()!,
             targetCalendarId: occ.calendarId,
             copyInstanceOnly: true
+          })
+          toast.success('Đã sao chép sự kiện', {
+            description: `"${occ.title}" đã được sao chép sang ${targetStart.toFormat('dd/MM/yyyy')}`
           })
         } else if (occ.isRecurring) {
           // Move this specific occurrence directly as an exception
@@ -126,6 +141,9 @@ export const App: React.FC = () => {
               meetingUrl: occ.meetingUrl
             }
           })
+          toast.success(kind === 'resize' ? 'Đã đổi thời gian sự kiện' : 'Đã di chuyển sự kiện', {
+            description: `"${occ.title}" · ${targetStart.toFormat('dd/MM HH:mm')} – ${targetEnd.toFormat('HH:mm')}`
+          })
         } else {
           await window.gone.events.move({
             eventId: occ.eventId,
@@ -133,13 +151,16 @@ export const App: React.FC = () => {
             dtEndUtc: targetEnd.toUTC().toISO()!,
             targetCalendarId: occ.calendarId
           })
+          toast.success(kind === 'resize' ? 'Đã đổi thời gian sự kiện' : 'Đã di chuyển sự kiện', {
+            description: `"${occ.title}" · ${targetStart.toFormat('dd/MM HH:mm')} – ${targetEnd.toFormat('HH:mm')}`
+          })
         }
         await loadCalendarsAndEvents()
       } catch (err: any) {
-        alert(`Lỗi di chuyển: ${err.message}`)
+        showFriendlyError(err, 'Lỗi di chuyển sự kiện')
       }
     },
-    [loadCalendarsAndEvents]
+    [calendars, loadCalendarsAndEvents]
   )
 
   const {
@@ -151,8 +172,16 @@ export const App: React.FC = () => {
     handleDragStart,
     handleDragEnd,
     handleDragOverTarget,
-    handleDropOnDate
+    handleDropOnDate,
+    markPointerBusyEnd
   } = useEventDnD(handleDirectMove)
+
+  const handleResizeCommit = useCallback(
+    (occ: ExpandedOccurrence, start: DateTime, end: DateTime) => {
+      void handleDirectMove(occ, start, end, false, 'resize')
+    },
+    [handleDirectMove]
+  )
 
   const openEditorForDate = useCallback(
     (date: DateTime) => {
@@ -341,6 +370,7 @@ export const App: React.FC = () => {
         await window.gone.events.create(payload.input as CreateEventInput)
         setIsEditorOpen(false)
         await loadCalendarsAndEvents()
+        toast.success('Đã tạo sự kiện mới')
       } else if (payload.eventId) {
         if (payload.isRecurringOccurrence && payload.occurrenceStartUtc) {
           setIsEditorOpen(false)
@@ -355,10 +385,11 @@ export const App: React.FC = () => {
           await window.gone.events.update(payload.eventId, payload.input as UpdateEventInput)
           setIsEditorOpen(false)
           await loadCalendarsAndEvents()
+          toast.success('Đã lưu thay đổi sự kiện')
         }
       }
     } catch (err: any) {
-      alert(`Save error: ${err.message}`)
+      showFriendlyError(err, 'Lỗi lưu sự kiện')
     }
   }
 
@@ -382,8 +413,9 @@ export const App: React.FC = () => {
         await window.gone.events.delete(eventId)
         setIsEditorOpen(false)
         await loadCalendarsAndEvents()
+        toast.success('Đã xóa sự kiện')
       } catch (err: any) {
-        alert(`Delete error: ${err.message}`)
+        showFriendlyError(err, 'Lỗi xóa sự kiện')
       }
     }
   }
@@ -399,17 +431,19 @@ export const App: React.FC = () => {
           scope,
           updateInput: pendingRecurringScope.input
         })
+        toast.success('Đã cập nhật sự kiện lặp')
       } else if (pendingRecurringScope.action === 'delete') {
         await window.gone.events.deleteScope({
           masterEventId: pendingRecurringScope.eventId,
           originalStartUtc: pendingRecurringScope.occurrenceStartUtc,
           scope
         })
+        toast.success('Đã xóa sự kiện lặp')
       }
       setPendingRecurringScope(null)
       await loadCalendarsAndEvents()
     } catch (err: any) {
-      alert(`Scope update error: ${err.message}`)
+      showFriendlyError(err, 'Lỗi cập nhật sự kiện lặp')
     }
   }
 
@@ -424,6 +458,19 @@ export const App: React.FC = () => {
 
   const handleDropMove = async (drop: PendingDropAction) => {
     if (!window.gone?.events) return
+
+    // Check read-only calendar
+    const targetCalId = drop.targetCalendarId || drop.occurrence.calendarId
+    const targetCal = calendars.find((c) => c.id === targetCalId)
+    const sourceCal = calendars.find((c) => c.id === drop.occurrence.calendarId)
+    if (sourceCal?.isReadOnly || targetCal?.isReadOnly) {
+      toast.error('Lịch chỉ đọc (Read-only)', {
+        description: 'Sự kiện thuộc lịch chỉ đọc (như Lịch ngày lễ), không thể di chuyển hoặc thay đổi.'
+      })
+      setPendingDrop(null)
+      return
+    }
+
     try {
       if (drop.occurrence.isRecurring) {
         setPendingDrop(null)
@@ -445,12 +492,13 @@ export const App: React.FC = () => {
         eventId: drop.occurrence.eventId,
         dtStartUtc: drop.targetStart.toUTC().toISO()!,
         dtEndUtc: drop.targetEnd.toUTC().toISO()!,
-        targetCalendarId: drop.targetCalendarId || drop.occurrence.calendarId
+        targetCalendarId: targetCalId
       })
       setPendingDrop(null)
       await loadCalendarsAndEvents()
+      toast.success('Đã di chuyển sự kiện')
     } catch (err: any) {
-      alert(`Lỗi di chuyển: ${err.message}`)
+      showFriendlyError(err, 'Lỗi di chuyển sự kiện')
     }
   }
 
@@ -466,8 +514,9 @@ export const App: React.FC = () => {
       })
       setPendingDrop(null)
       await loadCalendarsAndEvents()
+      toast.success('Đã sao chép sự kiện')
     } catch (err: any) {
-      alert(`Copy error: ${err.message}`)
+      showFriendlyError(err, 'Lỗi sao chép sự kiện')
     }
   }
 
@@ -622,6 +671,8 @@ export const App: React.FC = () => {
               onDragEnd={handleDragEnd}
               onDragOverTarget={handleDragOverTarget}
               onDropOnDate={handleDropOnDate}
+              onResizeCommit={handleResizeCommit}
+              onResizeBusyEnd={markPointerBusyEnd}
             />
           )}
 
@@ -642,6 +693,8 @@ export const App: React.FC = () => {
               onDragEnd={handleDragEnd}
               onDragOverTarget={handleDragOverTarget}
               onDropOnDate={handleDropOnDate}
+              onResizeCommit={handleResizeCommit}
+              onResizeBusyEnd={markPointerBusyEnd}
             />
           )}
 
@@ -796,6 +849,9 @@ export const App: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Notion-style Toast Notifications */}
+      <NotionToaster />
     </div>
   )
 }

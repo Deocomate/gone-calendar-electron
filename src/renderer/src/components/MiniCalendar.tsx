@@ -81,12 +81,12 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = ({
               type="button"
               key={key}
               onClick={() => onSelectDate(day)}
-              className={`flex h-8 flex-col items-center justify-center rounded-md text-[11px] transition-colors duration-150 ${
+              className={`flex h-8 flex-col items-center justify-center rounded-[3px] text-[11px] transition-colors duration-150 ${
                 isSelected && !isToday ? 'bg-hover' : 'hover:bg-hover'
               } ${isCurrentMonth ? 'text-primary' : 'text-muted/60'}`}
             >
               <span
-                className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                className={`flex h-5 w-5 items-center justify-center rounded-[3px] ${
                   isToday ? 'font-semibold text-white' : ''
                 }`}
                 style={isToday ? { backgroundColor: TODAY_COLOR } : undefined}
@@ -97,7 +97,7 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = ({
                 {bars.map((color) => (
                   <span
                     key={color}
-                    className="h-0.5 w-2 rounded-full"
+                    className="h-0.5 w-2 rounded-[1px]"
                     style={{ backgroundColor: color }}
                   />
                 ))}

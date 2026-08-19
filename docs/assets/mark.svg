@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Gone Calendar">
+  <rect width="64" height="64" rx="14" fill="#1A73E8"/>
+  <rect x="10" y="12" width="44" height="42" rx="8" fill="#FFFFFF"/>
+  <rect x="10" y="12" width="44" height="12" rx="8" fill="#E63946"/>
+  <rect x="10" y="18" width="44" height="6" fill="#E63946"/>
+  <circle cx="22" cy="15" r="2" fill="#FFFFFF"/>
+  <circle cx="42" cy="15" r="2" fill="#FFFFFF"/>
+  <circle cx="32" cy="38" r="9" fill="#E63946"/>
+  <text x="32" y="42" text-anchor="middle" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="11" font-weight="700" fill="#FFFFFF">19</text>
+  <path d="M48.5 44.5c-2.4 2.8-6.2 3.6-9.2 1.8 2.8-.4 5-2.6 5.4-5.5 2.8.8 4.6 2.2 3.8 3.7z" fill="#1A73E8"/>
+</svg>

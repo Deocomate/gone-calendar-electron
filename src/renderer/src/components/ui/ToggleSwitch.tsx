@@ -27,6 +27,7 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
         disabled ? 'opacity-50 cursor-not-allowed' : ''
       } ${className}`}
     >
+      {/* Track — pill shape kept as the single rounded-full exception */}
       <div
         role="switch"
         aria-checked={checked}
@@ -38,13 +39,13 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
             onChange(!checked)
           }
         }}
-        className={`relative inline-flex shrink-0 transition-colors duration-200 ease-in-out rounded-full border-2 border-transparent focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+        className={`relative inline-flex shrink-0 transition-colors duration-200 ease-in-out rounded-full border-2 border-transparent focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent ${
           isSm ? 'h-5 w-9' : 'h-6 w-11'
-        } ${checked ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+        } ${checked ? 'bg-accent' : 'border-hairline! bg-hover'}`}
       >
         <span
           aria-hidden="true"
-          className={`pointer-events-none inline-block rounded-full bg-white shadow-md transform ring-0 transition duration-200 ease-in-out ${
+          className={`pointer-events-none inline-block rounded-full bg-white shadow-sm transform ring-0 transition duration-200 ease-in-out ${
             isSm ? 'h-4 w-4' : 'h-5 w-5'
           } ${
             checked
@@ -59,12 +60,12 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
       {(label || description) && (
         <div className="flex flex-col">
           {label && (
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+            <span className="text-xs font-medium text-primary">
               {label}
             </span>
           )}
           {description && (
-            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+            <span className="text-[11px] text-muted">
               {description}
             </span>
           )}

@@ -23,7 +23,7 @@ export const LunarLabel: React.FC<LunarLabelProps> = ({ day, month, year, classN
 
   return (
     <span
-      className={`text-[10px] tracking-tight ${badgeStyle} ${className}`}
+      className={`text-[10px] tabular-nums tracking-tight ${badgeStyle} ${className}`}
       title={`Âm lịch: Ngày ${lunar.day} tháng ${lunar.month}${lunar.leap ? ' (Nhuận)' : ''} năm ${lunar.canChiYear}`}
     >
       {info.label}

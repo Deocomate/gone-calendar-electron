@@ -16,13 +16,13 @@ import {
 import type { ThemeMode } from '@shared/theme-mode'
 
 export const COLOR_FILTERS: { hex: string; label: string }[] = [
-  { hex: '#34C77B', label: 'Green' },
-  { hex: '#4A90E2', label: 'Blue' },
-  { hex: '#F3722C', label: 'Orange' },
-  { hex: '#1A73E8', label: 'Accent' },
-  { hex: '#6366f1', label: 'Indigo' },
-  { hex: '#10b981', label: 'Emerald' },
-  { hex: '#f43f5e', label: 'Rose' }
+  { hex: '#529cca', label: 'Blue' },
+  { hex: '#52b788', label: 'Green' },
+  { hex: '#ea9a5f', label: 'Orange' },
+  { hex: '#9a6dd7', label: 'Lavender' },
+  { hex: '#eb5757', label: 'Coral' },
+  { hex: '#4dab9a', label: 'Teal' },
+  { hex: '#e06f9f', label: 'Rose' }
 ]
 
 interface OverflowMenuProps {

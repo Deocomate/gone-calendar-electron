@@ -44,16 +44,16 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+        className="w-full flex items-center justify-between text-[11px] font-medium text-muted hover:text-primary transition-colors"
       >
         <span className="flex items-center gap-1.5">
-          <CalendarHeart className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400" />
+          <CalendarHeart className="h-3.5 w-3.5 text-muted" />
           Lịch Ngày Lễ
         </span>
         {isExpanded ? (
-          <ChevronDown className="h-3 w-3 text-slate-400" />
+          <ChevronDown className="h-3 w-3 text-muted" />
         ) : (
-          <ChevronRight className="h-3 w-3 text-slate-400" />
+          <ChevronRight className="h-3 w-3 text-muted" />
         )}
       </button>
 
@@ -62,10 +62,10 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
           {/* Vietnam Holidays */}
           <div
             onClick={() => handleToggle('vietnam')}
-            className={`flex items-center justify-between px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+            className={`flex items-center justify-between px-2 py-1.5 rounded-[4px] border text-xs cursor-pointer transition-colors ${
               isVietnamSubscribed
-                ? 'bg-rose-500/10 border-rose-500/30 text-slate-800 dark:text-slate-200'
-                : 'bg-hover border-hairline text-muted hover:text-primary'
+                ? 'bg-accent/10 border-accent/30 text-primary'
+                : 'bg-surface border-hairline text-muted hover:bg-hover hover:text-primary'
             }`}
           >
             <div className="flex items-center gap-2 min-w-0">
@@ -75,9 +75,9 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
 
             <div className="shrink-0 flex items-center">
               {loadingType === 'vietnam' ? (
-                <Loader2 className="h-3 w-3 text-rose-500 animate-spin" />
+                <Loader2 className="h-3 w-3 text-accent animate-spin" />
               ) : isVietnamSubscribed ? (
-                <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-600 dark:text-rose-300 text-[10px] font-semibold flex items-center gap-0.5">
+                <span className="px-1.5 py-0.5 rounded-[3px] bg-accent/20 text-accent text-[10px] font-medium flex items-center gap-0.5">
                   <Check className="h-2.5 w-2.5" /> Đã bật
                 </span>
               ) : (
@@ -89,10 +89,10 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
           {/* International Holidays */}
           <div
             onClick={() => handleToggle('international')}
-            className={`flex items-center justify-between px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+            className={`flex items-center justify-between px-2 py-1.5 rounded-[4px] border text-xs cursor-pointer transition-colors ${
               isInternationalSubscribed
-                ? 'bg-sky-500/10 border-sky-500/30 text-slate-800 dark:text-slate-200'
-                : 'bg-hover border-hairline text-muted hover:text-primary'
+                ? 'bg-accent/10 border-accent/30 text-primary'
+                : 'bg-surface border-hairline text-muted hover:bg-hover hover:text-primary'
             }`}
           >
             <div className="flex items-center gap-2 min-w-0">
@@ -102,9 +102,9 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
 
             <div className="shrink-0 flex items-center">
               {loadingType === 'international' ? (
-                <Loader2 className="h-3 w-3 text-sky-500 animate-spin" />
+                <Loader2 className="h-3 w-3 text-accent animate-spin" />
               ) : isInternationalSubscribed ? (
-                <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-600 dark:text-sky-300 text-[10px] font-semibold flex items-center gap-0.5">
+                <span className="px-1.5 py-0.5 rounded-[3px] bg-accent/20 text-accent text-[10px] font-medium flex items-center gap-0.5">
                   <Check className="h-2.5 w-2.5" /> Đã bật
                 </span>
               ) : (

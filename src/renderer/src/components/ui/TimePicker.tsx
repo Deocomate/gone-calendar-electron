@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { Clock } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Clock, ChevronDown } from 'lucide-react'
 
 export interface TimePickerProps {
   value: string // Format: HH:mm (e.g. "09:00", "14:30")
@@ -7,7 +8,7 @@ export interface TimePickerProps {
   placeholder?: string
   label?: string
   stepMinutes?: 15 | 30 | 60
-  startTime?: string // Optional reference start time to display duration hints (e.g. "09:00")
+  startTime?: string // Optional reference start time to display duration hints
   showQuickDurations?: boolean
   disabled?: boolean
   className?: string
@@ -36,7 +37,6 @@ function formatDuration(startStr: string, endStr: string): string | null {
   const startMins = sh * 60 + sm
   let endMins = eh * 60 + em
 
-  // If end is next day
   if (endMins < startMins) {
     endMins += 24 * 60
   }
@@ -57,7 +57,6 @@ function parseSmartTime(raw: string): string | null {
   const clean = raw.trim().toLowerCase().replace(/\s+/g, '')
   if (!clean) return null
 
-  // Check pm/am
   const isPm = clean.endsWith('pm') || clean.endsWith('ch')
   const isAm = clean.endsWith('am') || clean.endsWith('sa')
   const textWithoutMeridiem = clean.replace(/pm|am|ch|sa/g, '')
@@ -70,7 +69,6 @@ function parseSmartTime(raw: string): string | null {
     hours = parseInt(parts[0], 10) || 0
     mins = parseInt(parts[1], 10) || 0
   } else if (/^\d{3,4}$/.test(textWithoutMeridiem)) {
-    // 3 or 4 digits like "930" or "1430"
     if (textWithoutMeridiem.length === 3) {
       hours = parseInt(textWithoutMeridiem.slice(0, 1), 10)
       mins = parseInt(textWithoutMeridiem.slice(1), 10)
@@ -109,7 +107,9 @@ export const TimePicker: React.FC<TimePickerProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [inputValue, setInputValue] = useState(value || '')
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const activeItemRef = useRef<HTMLButtonElement>(null)
 
@@ -119,9 +119,32 @@ export const TimePicker: React.FC<TimePickerProps> = ({
     setInputValue(value || '')
   }, [value])
 
-  // Scroll active item into view when opening
+  const updateCoords = () => {
+    if (!containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const popoverWidth = 200
+    const popoverHeight = 250
+
+    let left = align === 'right' ? rect.right - popoverWidth : rect.left
+    if (left + popoverWidth > window.innerWidth - 8) {
+      left = window.innerWidth - popoverWidth - 8
+    }
+    if (left < 8) {
+      left = 8
+    }
+
+    let top = rect.bottom + 4
+    if (top + popoverHeight > window.innerHeight - 8 && rect.top - popoverHeight - 4 > 8) {
+      top = rect.top - popoverHeight - 4
+    }
+
+    setCoords({ top, left })
+  }
+
+  // Scroll active item into view and update coordinates when opening
   useEffect(() => {
     if (isOpen) {
+      updateCoords()
       setTimeout(() => {
         if (activeItemRef.current && listRef.current) {
           const list = listRef.current
@@ -129,15 +152,31 @@ export const TimePicker: React.FC<TimePickerProps> = ({
           list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.clientHeight / 2
         }
       }, 50)
+
+      const handleScrollOrResize = () => {
+        updateCoords()
+      }
+      window.addEventListener('resize', handleScrollOrResize)
+      window.addEventListener('scroll', handleScrollOrResize, true)
+      return () => {
+        window.removeEventListener('resize', handleScrollOrResize)
+        window.removeEventListener('scroll', handleScrollOrResize, true)
+      }
     }
-  }, [isOpen])
+  }, [isOpen, align])
 
   // Click outside & Escape listener
   useEffect(() => {
     if (!isOpen) return
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        popoverRef.current &&
+        !popoverRef.current.contains(target)
+      ) {
         commitInput()
         setIsOpen(false)
       }
@@ -210,26 +249,95 @@ export const TimePicker: React.FC<TimePickerProps> = ({
     setIsOpen(false)
   }
 
+  const popover =
+    isOpen && coords && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={popoverRef}
+            className="fixed z-[99999] border border-hairline bg-surface p-1.5 text-primary shadow-xl animate-popover select-none"
+            style={{
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              width: '200px',
+              borderRadius: 'var(--radius-dialog)',
+              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.18), 0 0 0 1px var(--color-border)'
+            }}
+          >
+            {/* Quick Duration Chips (if enabled and startTime given) */}
+            {showQuickDurations && startTime && (
+              <div className="mb-1.5 flex flex-wrap gap-1 border-b border-hairline pb-1.5 px-0.5">
+                {quickDurations.map((d) => (
+                  <button
+                    key={d.label}
+                    type="button"
+                    onClick={() => handleQuickDuration(d.mins)}
+                    className="px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-hover hover:text-primary transition-colors cursor-pointer bg-hover/60"
+                    style={{ borderRadius: 'var(--radius-control)' }}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Time Slot List */}
+            <div ref={listRef} className="max-h-52 overflow-y-auto space-y-0.5 pr-0.5">
+              {timeSlots.map((slot) => {
+                const isSelected = slot === value
+                const duration = startTime ? formatDuration(startTime, slot) : null
+
+                return (
+                  <button
+                    key={slot}
+                    type="button"
+                    ref={isSelected ? activeItemRef : undefined}
+                    onClick={() => handleSelectSlot(slot)}
+                    className={`flex w-full items-center justify-between px-2.5 py-1.5 text-xs font-mono tabular-nums transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-accent text-white font-bold'
+                        : 'text-primary hover:bg-hover'
+                    }`}
+                    style={{ borderRadius: 'var(--radius-control)' }}
+                  >
+                    <span>{slot}</span>
+                    {duration && (
+                      <span
+                        className={`text-[10px] font-sans ${
+                          isSelected ? 'text-white/80' : 'text-muted'
+                        }`}
+                      >
+                        {duration}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>,
+          document.body
+        )
+      : null
+
   return (
     <div className={`relative inline-block w-full ${className}`} ref={containerRef}>
       {label && (
-        <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+        <label className="block text-[12px] font-normal text-muted mb-1.5">
           {label}
         </label>
       )}
 
-      {/* Input / Trigger */}
+      {/* Input / Trigger — matching DatePicker ghost styling */}
       <div
-        className={`group flex items-center justify-between rounded-xl border transition-all overflow-hidden ${
-          isOpen
-            ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-surface'
-            : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 hover:border-slate-300 dark:hover:border-slate-700'
-        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        onClick={() => !disabled && setIsOpen(true)}
+        className={`flex items-center justify-between gap-1 w-full text-left select-none cursor-pointer overflow-hidden transition-colors duration-100 bg-transparent border ${
+          isOpen ? 'border-accent bg-hover/50' : 'border-transparent hover:border-hairline hover:bg-hover/30'
+        } px-2.5 py-1.5 text-xs ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        style={{ borderRadius: 'var(--radius-control)' }}
       >
-        <div className="flex items-center gap-1 px-2.5 py-2 flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
           <Clock
             className={`h-3.5 w-3.5 shrink-0 transition-colors ${
-              isOpen ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400'
+              isOpen ? 'text-accent' : 'text-muted'
             }`}
           />
           <input
@@ -241,81 +349,18 @@ export const TimePicker: React.FC<TimePickerProps> = ({
             onChange={(e) => setInputValue(e.target.value)}
             onBlur={commitInput}
             onKeyDown={handleInputKeyDown}
-            className="w-full bg-transparent text-xs font-mono font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden min-w-0"
+            className="w-full bg-transparent text-xs font-mono font-medium text-primary placeholder:text-muted border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none min-w-0 tabular-nums p-0"
           />
         </div>
 
-        {/* Small Toggle Arrow Button */}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => !disabled && setIsOpen((prev) => !prev)}
-          className="pr-2 pl-0.5 py-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer shrink-0"
-          tabIndex={-1}
-        >
-          <span className="text-[8px] opacity-70">▼</span>
-        </button>
+        <ChevronDown
+          className={`h-3 w-3 text-muted/60 shrink-0 transition-transform duration-150 ${
+            isOpen ? 'rotate-180 text-accent' : ''
+          }`}
+        />
       </div>
 
-      {/* Dropdown Popover */}
-      {isOpen && (
-        <div
-          className={`absolute top-full z-50 mt-1.5 w-60 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-2xl shadow-black/20 animate-popover ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
-        >
-          {/* Quick Duration Chips (if enabled and startTime given) */}
-          {showQuickDurations && startTime && (
-            <div className="mb-2 flex flex-wrap gap-1 border-b border-slate-100 dark:border-slate-800/80 pb-2">
-              {quickDurations.map((d) => (
-                <button
-                  key={d.label}
-                  type="button"
-                  onClick={() => handleQuickDuration(d.mins)}
-                  className="rounded-md bg-indigo-50 dark:bg-indigo-950/50 px-2 py-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors cursor-pointer"
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Time Slot List */}
-          <div ref={listRef} className="max-h-52 overflow-y-auto space-y-0.5 pr-1">
-            {timeSlots.map((slot) => {
-              const isSelected = slot === value
-              const duration = startTime ? formatDuration(startTime, slot) : null
-
-              return (
-                <button
-                  key={slot}
-                  type="button"
-                  ref={isSelected ? activeItemRef : undefined}
-                  onClick={() => handleSelectSlot(slot)}
-                  className={`flex w-full items-center justify-between px-3 py-1.5 rounded-lg text-xs font-mono transition-colors cursor-pointer ${
-                    isSelected
-                      ? 'bg-indigo-600 text-white font-bold shadow-xs'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70'
-                  }`}
-                >
-                  <span>{slot}</span>
-                  {duration && (
-                    <span
-                      className={`text-[10px] font-sans ${
-                        isSelected
-                          ? 'text-indigo-100'
-                          : 'text-slate-400 dark:text-slate-500'
-                      }`}
-                    >
-                      {duration}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      {popover}
     </div>
   )
 }

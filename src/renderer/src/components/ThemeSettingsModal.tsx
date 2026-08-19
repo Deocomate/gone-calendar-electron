@@ -5,8 +5,7 @@ import {
   Sliders,
   Check,
   RotateCcw,
-  X,
-  Sparkles
+  X
 } from 'lucide-react'
 import type { ThemeConfig } from '@shared/task-model'
 import { TextInput } from './ui'
@@ -18,14 +17,14 @@ interface ThemeSettingsModalProps {
 }
 
 const ACCENT_COLORS = [
-  { hex: '#1A73E8', name: 'Google Blue' },
-  { hex: '#34C77B', name: 'Green' },
-  { hex: '#4A90E2', name: 'Blue' },
-  { hex: '#F3722C', name: 'Orange' },
-  { hex: '#E63946', name: 'Red' },
-  { hex: '#10b981', name: 'Emerald' },
-  { hex: '#8b5cf6', name: 'Violet' },
-  { hex: '#06b6d4', name: 'Cyan' }
+  { hex: '#2383E2', name: 'Notion Blue' },
+  { hex: '#52B788', name: 'Sage Green' },
+  { hex: '#EA9A5F', name: 'Peach Orange' },
+  { hex: '#9A6DD7', name: 'Lavender' },
+  { hex: '#EB5757', name: 'Coral Red' },
+  { hex: '#4DAB9A', name: 'Teal' },
+  { hex: '#E06F9F', name: 'Rose Pink' },
+  { hex: '#868E96', name: 'Slate Gray' }
 ]
 
 const PRESET_WALLPAPERS = [
@@ -56,7 +55,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
   onClose,
   onThemeChanged
 }) => {
-  const [accentColor, setAccentColor] = useState('#1A73E8')
+  const [accentColor, setAccentColor] = useState('#2383E2')
   const [customBgUrl, setCustomBgUrl] = useState('')
   const [bgOverlayOpacity, setBgOverlayOpacity] = useState(0.8)
   const [bgBlur, setBgBlur] = useState(8)
@@ -64,7 +63,6 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
   useEffect(() => {
     if (!isOpen) return
 
-    // Load current theme from settings
     if (window.gone?.settings) {
       window.gone.settings.getAll().then((st: any) => {
         if (st.themeAccent) setAccentColor(st.themeAccent)
@@ -86,7 +84,6 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
     setBgOverlayOpacity(config.opacity)
     setBgBlur(config.blur)
 
-    // Save to settings
     if (window.gone?.settings) {
       await window.gone.settings.set('themeAccent', config.accent)
       await window.gone.settings.set('themeCustomBg', config.bgUrl)
@@ -106,7 +103,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
 
   const handleReset = () => {
     applyTheme({
-      accent: '#1A73E8',
+      accent: '#2383E2',
       bgUrl: '',
       opacity: 0.8,
       blur: 8
@@ -118,10 +115,10 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
   return (
     <div className="gc-overlay select-none">
       <div className="gc-dialog w-full max-w-lg">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-hairline bg-app px-6 py-4">
+        {/* Header — plain icon, no tinted section icons */}
+        <div className="flex items-center justify-between border-b border-hairline px-5 py-3">
           <div className="flex items-center gap-2">
-            <Palette className="h-5 w-5 text-accent" />
+            <Palette className="h-4 w-4 text-muted" />
             <h3 className="text-sm font-semibold text-primary">Tùy biến giao diện</h3>
           </div>
           <button type="button" onClick={onClose} className="gc-icon-btn">
@@ -130,13 +127,13 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
+        <div className="p-5 space-y-5 overflow-y-auto max-h-[75vh]">
           {/* Accent Color Section */}
-          <div className="space-y-2.5">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+          <div className="space-y-2">
+            {/* Section label — sentence case, muted, no uppercase tracking */}
+            <span className="block text-xs text-muted flex items-center gap-1.5">
               Màu chủ đạo (Accent Color)
-            </label>
+            </span>
             <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
               {ACCENT_COLORS.map((c) => {
                 const isSelected = accentColor === c.hex
@@ -152,11 +149,16 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                         blur: bgBlur
                       })
                     }
-                    className="h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer relative shadow-xs hover:scale-105"
-                    style={{ backgroundColor: c.hex }}
+                    className="h-9 flex items-center justify-center transition-all cursor-pointer relative hover:scale-105"
+                    style={{
+                      backgroundColor: c.hex,
+                      borderRadius: 'var(--radius-control)',
+                      outline: isSelected ? '2px solid var(--color-border)' : 'none',
+                      outlineOffset: '2px'
+                    }}
                     title={c.name}
                   >
-                    {isSelected && <Check className="h-4 w-4 text-white drop-shadow-md" />}
+                    {isSelected && <Check className="h-4 w-4 text-white drop-shadow-sm" />}
                   </button>
                 )
               })}
@@ -164,13 +166,13 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
           </div>
 
           {/* Background Wallpaper Section */}
-          <div className="space-y-3">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <ImageIcon className="h-3.5 w-3.5 text-indigo-400" />
+          <div className="space-y-2">
+            <span className="block text-xs text-muted flex items-center gap-1.5">
+              <ImageIcon className="h-3.5 w-3.5" />
               Hình nền ứng dụng (Background Wallpaper)
-            </label>
+            </span>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
               {PRESET_WALLPAPERS.map((wp) => {
                 const isSelected = customBgUrl === wp.url
                 return (
@@ -185,14 +187,15 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                         blur: bgBlur
                       })
                     }
-                    className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border p-2.5 text-left text-xs transition-all ${
+                    className={`flex cursor-pointer items-center justify-between gap-2 border p-2.5 text-left text-xs transition-colors ${
                       isSelected
                         ? 'border-accent bg-hover font-semibold text-primary'
                         : 'border-hairline bg-surface text-muted hover:bg-hover hover:text-primary'
                     }`}
+                    style={{ borderRadius: 'var(--radius-control)' }}
                   >
                     <span className="truncate">{wp.name}</span>
-                    {isSelected && <Check className="h-3.5 w-3.5 text-indigo-400 shrink-0" />}
+                    {isSelected && <Check className="h-3.5 w-3.5 text-accent shrink-0" />}
                   </button>
                 )
               })}
@@ -205,6 +208,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                 placeholder="Hoặc dán URL ảnh nền tùy chỉnh (https://...)"
                 value={customBgUrl}
                 clearable
+                variant="boxed"
                 onChange={(val) =>
                   applyTheme({
                     accent: accentColor,
@@ -220,14 +224,17 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
 
           {/* Overlay Opacity & Blur Sliders */}
           {customBgUrl && (
-            <div className="space-y-4 rounded-lg border border-hairline bg-app p-4">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-                <Sliders className="h-3.5 w-3.5 text-indigo-400" />
+            <div
+              className="space-y-4 border border-hairline bg-app p-4"
+              style={{ borderRadius: 'var(--radius-control)' }}
+            >
+              <div className="flex items-center gap-1.5 text-xs text-muted">
+                <Sliders className="h-3.5 w-3.5" />
                 <span>Độ tương phản & Làm mờ nền</span>
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between text-xs text-slate-400">
+                <div className="flex justify-between text-xs text-muted">
                   <span>Lớp phủ bóng tối (Overlay Darkness)</span>
                   <span className="font-mono">{Math.round(bgOverlayOpacity * 100)}%</span>
                 </div>
@@ -245,12 +252,12 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                       blur: bgBlur
                     })
                   }
-                  className="w-full accent-indigo-500 cursor-pointer"
+                  className="w-full accent-accent cursor-pointer"
                 />
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between text-xs text-slate-400">
+                <div className="flex justify-between text-xs text-muted">
                   <span>Làm mờ ảnh nền (Blur Effect)</span>
                   <span className="font-mono">{bgBlur}px</span>
                 </div>
@@ -268,7 +275,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                       blur: parseInt(e.target.value, 10)
                     })
                   }
-                  className="w-full accent-indigo-500 cursor-pointer"
+                  className="w-full accent-accent cursor-pointer"
                 />
               </div>
             </div>
@@ -276,7 +283,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between border-t border-hairline bg-app px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-t border-hairline px-5 py-3">
           <button type="button" onClick={handleReset} className="gc-btn">
             <RotateCcw className="h-3.5 w-3.5" />
             <span>Mặc định</span>

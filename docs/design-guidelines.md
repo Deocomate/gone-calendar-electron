@@ -1,65 +1,92 @@
 # Gone Calendar Design Guidelines
 
-Visual language for the desktop renderer. Hybrid: Google Calendar chrome (compact top bar, collapsible left sidebar, light default) with One Calendar canvas density (solid event pills, week numbers, mini-calendar color bars).
+Visual language for the desktop renderer. Minimalist Notion + Notion Calendar aesthetic: warm, clean off-white / deep charcoal canvas, soft pastel event palette, quiet hairline borders, and disciplined corner radius (<5px on controls and sidebar).
 
 ## Principles
 
-- Clarity: flat event colors, high-contrast text, today marked in red.
-- Space efficiency: persistent chrome is small; secondary actions live in overflow.
-- Glanceability: mini-calendar color bars and month overflow `+N` show load without opening a day.
-- One theme family: sidebar and canvas share light or dark. No mixed dark rail.
+- **Clarity & Calm:** Soft pastel event colors, high-contrast typography, quiet today indicator in Notion coral `#eb5757`.
+- **Minimalist Chrome:** Compact top bar (~48px), collapsible left sidebar (~256px), secondary actions tucked cleanly into overflow menus.
+- **Unified Notion Tones:** Shared canvas and card language between sidebar, header, dialogs, and calendar views. No loud saturated gradients or AI-purple slop.
+- **Restrained Corner Radii:** Strictly `<5px` (`3px` for controls/chips/sidebar items, `4px` for dialogs/popovers). The only pill allowed is the `ToggleSwitch` track.
 
-## Color tokens
+## Color Tokens
 
-Defined in `src/renderer/src/styles/index.css` and mapped as Tailwind colors `app`, `surface`, `sidebar`, `hairline`, `primary`, `muted`, `today`, `accent`, `hover`.
+Defined in `src/renderer/src/styles/index.css` and mapped as Tailwind theme tokens `app`, `surface`, `sidebar`, `hairline`, `primary`, `muted`, `today`, `accent`, `hover`.
 
-Light (default):
+### Light Mode (Default Notion Theme)
+- Canvas / App: `#f7f6f3` (Warm off-white paper)
+- Surface / Cards: `#ffffff`
+- Sidebar: `#fbfbfa`
+- Hairline Border: `#e9e9e7`
+- Primary Text: `#37352f` (Notion signature charcoal)
+- Muted Text: `#787774`
+- Hover Fill: `#efefee`
+- Today Mark: `#eb5757` (Notion soft coral red)
+- Accent Mark: `#2383e2` (Notion blue)
 
-- App `#F4F5F7`, surface `#FFFFFF`, text `#333333`, muted `#757575`, hairline `#E0E0E0`
-- Today `#E63946`, accent `#1A73E8`
+### Dark Mode (Notion Dark Theme)
+- Canvas / App: `#191919` (Notion dark canvas)
+- Surface / Cards: `#202020` (Notion dark surface)
+- Sidebar: `#191919`
+- Hairline Border: `#2e2e2e`
+- Primary Text: `#ebebeb`
+- Muted Text: `#9b9a97`
+- Hover Fill: `#282828`
+- Today Mark: `#eb5757`
+- Accent Mark: `#529cca` (Soft pastel blue)
 
-Dark:
-
-- App `#252525`, surface `#1E1E1E`, text `#FFFFFF`, muted `#A0A0A0`, hairline `#3E3E3E`
-
-Event defaults (calendar/event color still wins): green `#34C77B`, blue `#4A90E2`, orange `#F3722C`.
+### Soft Pastel Event Palette
+Replaced saturated Google primaries with gentle pastel tones:
+- Soft Blue: `#529cca`
+- Soft Sage Green: `#52b788`
+- Soft Peach / Amber: `#ea9a5f`
+- Soft Lavender: `#9a6dd7`
+- Soft Coral / Red: `#eb5757`
+- Soft Teal: `#4dab9a`
+- Soft Rose Pink: `#e06f9f`
+- Soft Slate Gray: `#868e96`
+- Soft Honey Gold: `#e3b341`
 
 ## Typography
 
 Font: Inter. Hierarchy:
-
 - H1 period title: ~28px, weight 400
 - H2 day groups: 14–16px, weight 600
 - Body event titles: 13–14px, weight 400–500
-- Caption time/week numbers: 11–12px
+- Caption time/week numbers: 10–12px
 
-## Chrome
+## Chrome & Sidebar Specifications
 
-Top bar (~48px), at most seven standing controls: sidebar toggle, Today, prev/next, title, search, view dropdown, Create, overflow.
+### Radius Tokens
+| Token | Value | Usage |
+|---|---|---|
+| `--radius-control` | `3px` | Inputs, checkboxes, buttons, chips, sidebar cards & cells |
+| `--radius-dialog` | `4px` | `.gc-dialog`, dropdown popovers, hover flyouts |
 
-Left sidebar (~256px) collapses to zero width. Contains a real mini-calendar (weekday-aligned grid), calendar list, holiday subscriptions, and tasks as a section (not a tab that hides the calendar).
+### Sidebar Rules (< 5px Radius)
+- **Tasks Launcher Card:** `rounded-[4px]`, `border-hairline`, `bg-surface`, `hover:bg-hover`, `text-primary`.
+- **Tasks Icon Box:** `rounded-[3px]`, `bg-hover`, `text-muted`.
+- **Tasks Counter Badge:** `rounded-[3px]`, `bg-accent/15 text-accent text-[10px]`.
+- **Mini Calendar Cells:** `rounded-[3px]`, today indicator `rounded-[3px]` with `TODAY_COLOR` (`#eb5757`). Event bars `rounded-[1px]`.
+- **Calendar Items:** `rounded-[3px]`, checkboxes `rounded-[3px]`, RO tag `rounded-[3px]`.
+- **Holiday Toggle Cards:** `rounded-[4px]`, `border-hairline`, active state `bg-accent/10 border-accent/30 text-primary`, badge `rounded-[3px] bg-accent/20 text-accent`.
+- **Footer Status:** `rounded-[3px]` refresh button, soft pastel emerald `#52b788` dot.
 
-Lunar labels and week-number toggles live in Settings, not the sidebar.
+### Header Rules
+- **Task Launcher Button:** `gc-icon-btn` with `text-muted hover:text-primary`, counter badge `rounded-[3px] bg-accent text-[8px] font-bold text-white`.
+- **Controls & Buttons:** `gc-btn`, `gc-btn-primary`, `ViewSwitcher`, `OverflowMenu` all follow `var(--radius-control)`.
 
-Print is not a chrome action.
+## Motion & Interaction
 
-## Motion
-
-Keep calendar interactions on a 140–180ms ease-out curve (`--ease-out` in `index.css`). Hover and drop highlights use opacity overlays so they do not fight cell background classes.
-
-- Month cells (`.gc-cell`): hover wash from text color at ~5% opacity; drop target uses accent wash plus an inset ring.
-- Week/Day hour rows (`.gc-hour-slot`): hover only the hovered hour, not the whole day column. Drop target follows the pointer hour.
-- Event chips (`.gc-event`): brightness and light lift on hover; source fades while dragging.
-- Overlays and dialogs fade/scale in. Full-screen drop chrome does not use backdrop blur.
+- Keep calendar interactions on a 140–180ms ease-out curve (`--ease-out` in `index.css`).
+- Month cells (`.gc-cell`): subtle hover wash at ~5% opacity.
+- Week/Day hour rows (`.gc-hour-slot`): hover only the hovered hour. Timed drag uses a 15-minute drop line, not a full-hour highlight.
+- Event chips (`.gc-event`): slight lift and brightness increase on hover.
+- Overlays and dialogs fade/scale in smoothly.
 - Honor `prefers-reduced-motion`.
 
-## Components
+## Forms & Dialogs
 
-- Event pills: 4–6px radius, solid fill, white text, ellipsis, slight brightness and lift on hover; faded while the chip is being dragged.
-- Today: filled red circle on the date numeral.
-- List date headers: pill shape, sticky, red text for today and weekends.
-- Year view: color wash behind dates that have events.
-
-## Theme
-
-`settings.theme` is `light` | `dark` | `system`. Default is `light`. Wallpaper (R3) stays optional and off by default.
+- **Page-like Dialogs:** (Event editor, Task pane, Theme settings) use `FormRow` property rows with ghost inputs.
+- **Settings-like Dialogs:** (CalDAV connect, Account manager) use boxed inputs (`variant="boxed"`).
+- **Focus state:** 1px `accent` outline, zero glow rings or saturated shadows.

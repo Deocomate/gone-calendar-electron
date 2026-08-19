@@ -38,7 +38,7 @@ describe('Mini calendar weekday offset', () => {
 describe('Theme defaults', () => {
   it('defaults application theme to light', () => {
     expect(DEFAULT_APP_SETTINGS.theme).toBe('light')
-    expect(DEFAULT_APP_SETTINGS.themeAccent).toBe('#1A73E8')
+    expect(DEFAULT_APP_SETTINGS.themeAccent).toBe('#2383e2')
   })
 
   it('resolves dark class from explicit and system modes', () => {

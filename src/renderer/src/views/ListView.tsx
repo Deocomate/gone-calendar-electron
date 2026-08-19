@@ -92,8 +92,8 @@ export const ListView: React.FC<ListViewProps> = ({
                   {date.toFormat('d cccc')}
                 </span>
                 {totalDayCount >= 2 && (
-                  <span className="flex items-center gap-1 text-[11px] font-bold text-muted bg-hover px-2 py-0.5 rounded-full">
-                    <Layers className="w-3 h-3 text-indigo-500" />
+                  <span className="flex items-center gap-1 text-[10px] font-medium text-muted bg-hover px-1.5 py-0.5 rounded-[3px] border border-hairline font-mono">
+                    <Layers className="w-3 h-3 text-muted" />
                     {totalDayCount}
                   </span>
                 )}
@@ -107,7 +107,7 @@ export const ListView: React.FC<ListViewProps> = ({
               {dayTasks.map((task) => (
                 <div
                   key={task.id}
-                  className="gc-stack-card-3d flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm text-white shadow-xs"
+                  className="gc-stack-card-3d flex items-center justify-between gap-3 rounded-[3px] px-3 py-2.5 text-sm text-white shadow-xs"
                   style={{ backgroundColor: DEFAULT_EVENT_COLOR }}
                 >
                   <div className="flex items-center gap-2">
@@ -127,7 +127,7 @@ export const ListView: React.FC<ListViewProps> = ({
                     type="button"
                     key={occ.id}
                     onClick={() => onSelectOccurrence?.(occ)}
-                    className="gc-event gc-stack-card-3d flex w-full cursor-pointer flex-col gap-1 rounded-lg px-3.5 py-3 text-left text-white shadow-xs sm:flex-row sm:items-center sm:justify-between"
+                    className="gc-event gc-stack-card-3d flex w-full cursor-pointer flex-col gap-1 rounded-[3px] px-3.5 py-3 text-left text-white shadow-xs sm:flex-row sm:items-center sm:justify-between"
                     style={{
                       backgroundColor: bg,
                       animationDelay: `${idx * 20}ms`

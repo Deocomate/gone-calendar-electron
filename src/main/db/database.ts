@@ -148,6 +148,25 @@ CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed);
 `
 
+const MIGRATION_004_SQL = `
+ALTER TABLE events ADD COLUMN lunar_rule TEXT;
+ALTER TABLE events ADD COLUMN lunar_source_event_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_events_lunar_source ON events (lunar_source_event_id);
+`
+
+const MIGRATION_005_SQL = `
+DROP INDEX IF EXISTS idx_tasks_due_date;
+DROP INDEX IF EXISTS idx_tasks_completed;
+DROP TABLE IF EXISTS tasks;
+`
+
+const MIGRATION_006_SQL = `
+ALTER TABLE events ADD COLUMN has_conflict INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_events_has_conflict ON events (has_conflict) WHERE has_conflict = 1;
+`
+
 /**
  * Execute all schema migrations in order
  */
@@ -183,6 +202,30 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_003_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       3,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 4) {
+    db.exec(MIGRATION_004_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      4,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 5) {
+    db.exec(MIGRATION_005_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      5,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 6) {
+    db.exec(MIGRATION_006_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      6,
       new Date().toISOString()
     )
   }

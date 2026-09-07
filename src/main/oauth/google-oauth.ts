@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { shell } from 'electron'
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { SecureStore } from '../secure-store'
+import { mt } from '../i18n-main'
 
 export interface GoogleTokens {
   accessToken: string
@@ -80,7 +81,7 @@ export class GoogleOAuthManager {
 
       timeoutId = setTimeout(() => {
         cleanup()
-        reject(new Error('Quá thời gian xác thực Google (5 phút). Vui lòng thử lại.'))
+        reject(new Error(mt('oauth.timeout.google')))
       }, 5 * 60 * 1000)
 
       // Create loopback HTTP server on 127.0.0.1
@@ -100,7 +101,7 @@ export class GoogleOAuthManager {
 
           if (queryError) {
             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-            res.end('<h3>Đăng nhập Google thất bại: ' + queryError + '</h3><p>Bạn có thể đóng tab này.</p>')
+            res.end('<h3>' + mt('oauth.google.failed', { error: queryError }) + '</h3><p>' + mt('oauth.canCloseShort') + '</p>')
             cleanup()
             reject(new Error(`Google OAuth error: ${queryError}`))
             return
@@ -108,7 +109,7 @@ export class GoogleOAuthManager {
 
           if (queryState !== state || !queryCode) {
             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-            res.end('<h3>Lỗi xác thực: State hoặc Code không hợp lệ</h3>')
+            res.end('<h3>' + mt('oauth.stateError') + '</h3>')
             cleanup()
             reject(new Error('Invalid OAuth state or code'))
             return
@@ -165,10 +166,10 @@ export class GoogleOAuthManager {
             <!DOCTYPE html>
             <html>
               <head><meta charset="utf-8"><title>Gone Calendar Auth</title></head>
-              <body style="font-family:system-ui,sans-serif;text-align:center;padding:40px;background:#090d16;color:#f8fafc;">
-                <h2 style="color:#6366f1;">✓ Kết nối Google Calendar thành công!</h2>
-                <p style="color:#94a3b8;">Tài khoản: <b>${userInfo.email}</b> (${userInfo.name})</p>
-                <p style="color:#64748b;">Bạn có thể đóng tab trình duyệt này và quay lại ứng dụng Gone Calendar.</p>
+              <body style="font-family:system-ui,sans-serif;text-align:center;padding:40px;background:#2b2d31;color:#dbdee1;">
+                <h2 style="color:#6366f1;">${mt('oauth.google.success')}</h2>
+                <p style="color:#94a3b8;">${mt('oauth.account', { detail: `${userInfo.email} (${userInfo.name})` })}</p>
+                <p style="color:#64748b;">${mt('oauth.canClose')}</p>
               </body>
             </html>
           `)

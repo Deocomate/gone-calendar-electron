@@ -160,6 +160,66 @@ describe('Database Repositories & Read-Only Protections', () => {
     expect(calendarsRepo.getCalendarById(first.calendarId)).toBeNull()
   })
 
+  it('should expand, materialize, and detach a lunar-recurring anniversary', () => {
+    const calId = calendarsRepo.listCalendars()[0].id
+    const syncCal = calendarsRepo.createCalendar({ name: 'Google', color: '#4285f4' })
+
+    const master = eventsRepo.createEvent({
+      calendarId: calId,
+      title: 'Giỗ bà ngoại',
+      dtStartUtc: '2024-04-18T00:00:00.000Z',
+      dtEndUtc: '2024-04-18T23:59:59.999Z',
+      allDay: true,
+      lunarRule: { day: 10, month: 3, leap: false }
+    })
+    expect(master.lunarRule).toEqual({ day: 10, month: 3, leap: false })
+
+    // Synthetic expansion: one all-day occurrence per year, no rrule needed.
+    const occ2026 = eventsRepo.queryEventsByRange(
+      [calId],
+      '2026-01-01T00:00:00.000Z',
+      '2026-12-31T23:59:59.999Z'
+    )
+    expect(occ2026).toHaveLength(1)
+    expect(occ2026[0].startUtc).toBe('2026-04-26T00:00:00.000Z')
+    expect(occ2026[0].allDay).toBe(true)
+
+    // Materialize into the syncable calendar through 2028.
+    const res = eventsRepo.materializeLunarEvent({
+      masterEventId: master.id,
+      targetCalendarId: syncCal.id,
+      throughYear: 2028
+    })
+    const thisYear = new Date().getUTCFullYear()
+    expect(res.count).toBe(2028 - thisYear + 1)
+
+    const children = eventsRepo.queryEventsByCalendar(syncCal.id)
+    expect(children.length).toBe(res.count)
+    expect(children.every((c) => c.dirty && !c.rrule && !c.lunarRule)).toBe(true)
+    expect(children.every((c) => c.lunarSourceEventId === master.id)).toBe(true)
+
+    // Re-running only fills gaps (idempotent per year).
+    const rerun = eventsRepo.materializeLunarEvent({
+      masterEventId: master.id,
+      targetCalendarId: syncCal.id,
+      throughYear: 2028
+    })
+    expect(rerun.count).toBe(0)
+
+    // The master no longer double-draws for materialized years.
+    const combined = eventsRepo.queryEventsByRange(
+      [calId, syncCal.id],
+      `${thisYear}-01-01T00:00:00.000Z`,
+      `${thisYear}-12-31T23:59:59.999Z`
+    )
+    expect(combined).toHaveLength(1)
+
+    // Detach removes the never-synced children.
+    const detached = eventsRepo.detachLunarMaterialized({ masterEventId: master.id })
+    expect(detached.count).toBe(res.count)
+    expect(eventsRepo.queryEventsByCalendar(syncCal.id)).toHaveLength(0)
+  })
+
   it('should support nested transactions using savepoints without errors', () => {
     db.transaction(() => {
       calendarsRepo.createCalendar({ name: 'Outer Cal', color: '#111111' })

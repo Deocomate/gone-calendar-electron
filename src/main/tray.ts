@@ -1,5 +1,6 @@
 import { app, Tray, Menu, nativeImage, BrowserWindow } from 'electron'
 import { toggleMiniWindow } from './mini-window'
+import { mt, loadMainLocaleFromDb } from './i18n-main'
 
 let trayInstance: Tray | null = null
 
@@ -20,13 +21,14 @@ export function setupTray(mainWindow: BrowserWindow): Tray {
     return trayInstance
   }
 
+  loadMainLocaleFromDb()
   const icon = createCalendarTrayIcon()
   trayInstance = new Tray(icon)
   trayInstance.setToolTip('Gone Calendar')
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Mở Lịch chính (Gone Calendar)',
+      label: mt('tray.openMain'),
       click: () => {
         if (!mainWindow.isDestroyed()) {
           if (mainWindow.isMinimized()) mainWindow.restore()
@@ -36,14 +38,14 @@ export function setupTray(mainWindow: BrowserWindow): Tray {
       }
     },
     {
-      label: 'Cửa sổ Mini (Upcoming & Tasks)',
+      label: mt('tray.miniWindow'),
       click: () => {
         toggleMiniWindow()
       }
     },
     { type: 'separator' },
     {
-      label: 'Thoát (Quit)',
+      label: mt('tray.quit'),
       click: () => {
         app.quit()
       }

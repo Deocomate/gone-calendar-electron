@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Users,
   Plus,
@@ -24,6 +25,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
   onClose,
   onAccountsChanged
 }) => {
+  const { t } = useTranslation()
   const [accounts, setAccounts] = useState<CalendarAccount[]>([])
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -53,18 +55,18 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
   const handleConnectGoogle = async () => {
     if (!window.gone?.auth) return
     setIsLoading(true)
-    setActionMessage('Đang mở trình duyệt để xác thực với Google...')
+    setActionMessage(t('accounts.openingGoogle'))
     try {
       const res = await window.gone.auth.connectGoogle()
       if (res.success) {
-        setActionMessage('✓ Kết nối Google Calendar thành công!')
+        setActionMessage(t('accounts.googleConnected'))
         await loadData()
         onAccountsChanged()
       } else {
-        setActionMessage(`Kết nối thất bại: ${res.message}`)
+        setActionMessage(t('accounts.connectFailed', { msg: res.message }))
       }
     } catch (err: any) {
-      setActionMessage(`Lỗi: ${err.message}`)
+      setActionMessage(t('accounts.error', { msg: err.message }))
     } finally {
       setIsLoading(false)
       setTimeout(() => setActionMessage(null), 5000)
@@ -74,18 +76,18 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
   const handleConnectMicrosoft = async () => {
     if (!window.gone?.auth) return
     setIsLoading(true)
-    setActionMessage('Đang mở trình duyệt để xác thực với Microsoft...')
+    setActionMessage(t('accounts.openingMicrosoft'))
     try {
       const res = await window.gone.auth.connectMicrosoft()
       if (res.success) {
-        setActionMessage('✓ Kết nối Microsoft 365 / Outlook thành công!')
+        setActionMessage(t('accounts.microsoftConnected'))
         await loadData()
         onAccountsChanged()
       } else {
-        setActionMessage(`Kết nối thất bại: ${res.message}`)
+        setActionMessage(t('accounts.connectFailed', { msg: res.message }))
       }
     } catch (err: any) {
-      setActionMessage(`Lỗi: ${err.message}`)
+      setActionMessage(t('accounts.error', { msg: err.message }))
     } finally {
       setIsLoading(false)
       setTimeout(() => setActionMessage(null), 5000)
@@ -93,7 +95,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
   }
 
   const handleDisconnect = async (acc: CalendarAccount) => {
-    if (!confirm(`Bạn có chắc chắn muốn ngắt kết nối tài khoản "${acc.name}"?`)) return
+    if (!confirm(t('accounts.disconnectConfirm', { name: acc.name }))) return
     if (!window.gone?.auth) return
 
     try {
@@ -106,23 +108,23 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
       }
       await loadData()
       onAccountsChanged()
-      toast.success('Đã ngắt kết nối tài khoản', { description: acc.name })
+      toast.success(t('accounts.disconnected'), { description: acc.name })
     } catch (err: any) {
-      showFriendlyError(err, 'Lỗi ngắt kết nối tài khoản')
+      showFriendlyError(err, t('accounts.disconnectFailed'))
     }
   }
 
   const handleSyncNow = async () => {
     if (!window.gone?.sync) return
     setIsLoading(true)
-    setActionMessage('Đang tiến hành đồng bộ hai chiều...')
+    setActionMessage(t('accounts.syncingNow'))
     try {
       const res = await window.gone.sync.triggerNow()
-      setActionMessage(res.message || 'Đồng bộ hoàn tất')
+      setActionMessage(res.message || t('accounts.syncDone'))
       await loadData()
       onAccountsChanged()
     } catch (err: any) {
-      setActionMessage(`Đồng bộ thất bại: ${err.message}`)
+      setActionMessage(t('accounts.syncFailed', { msg: err.message }))
     } finally {
       setIsLoading(false)
       setTimeout(() => setActionMessage(null), 4000)
@@ -137,7 +139,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted" />
             <div>
-              <h3 className="text-sm font-semibold text-primary">Quản lý Tài khoản & Đồng bộ</h3>
+              <h3 className="text-sm font-semibold text-primary">{t('accounts.title')}</h3>
               <p className="text-[11px] text-muted">Google Calendar, CalDAV, Microsoft 365</p>
             </div>
           </div>
@@ -170,18 +172,18 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5 text-primary font-medium text-xs">
                 <ShieldCheck className="h-3.5 w-3.5 text-accent" />
-                <span>Trạng thái đồng bộ</span>
+                <span>{t('accounts.syncStatus')}</span>
               </div>
               <div className="flex items-center gap-3 text-[11px] text-muted">
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {syncStatus?.lastSyncTime
-                    ? `Lần cuối: ${new Date(syncStatus.lastSyncTime).toLocaleTimeString()}`
-                    : 'Chưa đồng bộ'}
+                    ? t('accounts.lastSync', { time: new Date(syncStatus.lastSyncTime).toLocaleTimeString() })
+                    : t('accounts.neverSynced')}
                 </span>
                 {syncStatus && syncStatus.pendingPushesCount > 0 && (
                   <span className="text-amber-500 dark:text-amber-400 font-mono">
-                    ({syncStatus.pendingPushesCount} thay đổi offline chờ đẩy)
+                    {t('accounts.pendingPushes', { count: syncStatus.pendingPushesCount })}
                   </span>
                 )}
               </div>
@@ -193,14 +195,14 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
               className="gc-btn disabled:opacity-50"
             >
               <RotateCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              <span>Đồng bộ ngay</span>
+              <span>{t('accounts.syncNow')}</span>
             </button>
           </div>
 
           {/* Accounts List — hover rows, no bordered mini-cards */}
           <div>
             <p className="text-xs text-muted mb-2">
-              Tài khoản đã liên kết ({accounts.length})
+              {t('accounts.linked', { count: accounts.length })}
             </p>
 
             <div className="space-y-0.5">
@@ -237,7 +239,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                       <button
                         onClick={() => handleDisconnect(acc)}
                         className="p-1.5 text-muted hover:text-today transition-colors cursor-pointer"
-                        title="Ngắt kết nối tài khoản"
+                        title={t('accounts.disconnect')}
                         style={{ borderRadius: 'var(--radius-control)' }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -246,7 +248,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                     {acc.type === 'local' && (
                       <span className="text-[11px] text-muted font-medium px-2 py-1 bg-hover"
                         style={{ borderRadius: 'var(--radius-control)' }}>
-                        Mặc định
+                        {t('accounts.default')}
                       </span>
                     )}
                   </div>
@@ -263,7 +265,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
               className="gc-btn w-full justify-center disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
-              <span>Kết nối Google Calendar (OAuth 2.0)</span>
+              <span>{t('accounts.connectGoogle')}</span>
             </button>
 
             <button
@@ -272,7 +274,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
               className="gc-btn w-full justify-center disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
-              <span>Kết nối Microsoft 365 / Outlook (OAuth 2.0)</span>
+              <span>{t('accounts.connectMicrosoft')}</span>
             </button>
 
             <button
@@ -281,7 +283,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
               className="gc-btn w-full justify-center disabled:opacity-50"
             >
               <Server className="h-4 w-4" />
-              <span>Kết nối CalDAV (Nextcloud / iCloud / Synology)</span>
+              <span>{t('accounts.connectCaldav')}</span>
             </button>
           </div>
         </div>
@@ -289,7 +291,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
         {/* Footer */}
         <div className="px-5 py-3 border-t border-hairline flex justify-end">
           <button onClick={onClose} className="gc-btn">
-            Đóng
+            {t('common.close')}
           </button>
         </div>
       </div>

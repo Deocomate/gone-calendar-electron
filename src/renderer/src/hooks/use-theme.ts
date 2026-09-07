@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ThemeConfig } from '@shared/task-model'
+import type { ThemeConfig } from '@shared/theme-mode'
 import {
   applyDocumentTheme,
   shouldUseDarkClass,

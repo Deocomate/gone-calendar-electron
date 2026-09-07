@@ -34,15 +34,22 @@ describe('IPC Channels and Contracts', () => {
           }
           return false
         },
-        getPlatform: async () => 'win32'
+        getPlatform: async () => 'win32',
+        pickBackgroundImage: async () => null
       },
       settings: {
         getAll: async () => ({
+          locale: 'en',
           showLunar: true,
           showWeekNumbers: true,
+          showMiniCalendar: false,
           firstDayOfWeek: 1,
           timeFormat: '24h',
-          theme: 'light'
+          theme: 'light',
+          autoHideHeader: true,
+          dayStartHour: 7,
+          hourBlockSize: 'medium',
+          secondaryTimezone: ''
         }),
         get: async () => true as any,
         set: async () => true
@@ -156,46 +163,21 @@ describe('IPC Channels and Contracts', () => {
           createdAt: '',
           updatedAt: ''
         }),
+        materializeLunar: async () => ({ count: 0 }),
+        detachLunar: async () => ({ count: 0 }),
         search: async () => [],
-        shareIcs: async () => ({ success: true })
+        shareIcs: async () => ({ success: true }),
+        listConflicts: async () => [],
+        resolveConflict: async () => true
       },
       ics: {
         importIcs: async () => ({ success: true, importedCount: 0, errorCount: 0 }),
         exportIcs: async () => 'BEGIN:VCALENDAR\r\nEND:VCALENDAR'
       },
-      tasks: {
-        list: async () => [],
-        create: async (input) => ({
-          id: 't1',
-          title: input.title,
-          dueDate: input.dueDate,
-          completed: false,
-          showOnCalendar: input.showOnCalendar ?? true,
-          createdAt: '',
-          updatedAt: ''
-        }),
-        update: async (id, input) => ({
-          id,
-          title: input.title || '',
-          completed: input.completed ?? false,
-          showOnCalendar: input.showOnCalendar ?? true,
-          createdAt: '',
-          updatedAt: ''
-        }),
-        toggle: async (id) => ({
-          id,
-          title: '',
-          completed: true,
-          showOnCalendar: true,
-          createdAt: '',
-          updatedAt: ''
-        }),
-        delete: async () => true
-      },
       mini: {
         openMain: async () => {},
         toggle: async () => {},
-        getUpcoming: async () => ({ occurrences: [], tasks: [] }),
+        getUpcoming: async () => ({ occurrences: [] }),
         setAlwaysOnTop: async () => true
       },
       holidays: {

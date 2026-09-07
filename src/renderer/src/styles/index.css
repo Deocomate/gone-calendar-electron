@@ -40,15 +40,16 @@
 }
 
 .dark {
-  --color-bg-app: #191919;
-  --color-bg-surface: #202020;
-  --color-bg-sidebar: #191919;
-  --color-border: #2e2e2e;
-  --color-text-main: #ebebeb;
-  --color-text-muted: #9b9a97;
-  --color-today-mark: #eb5757;
-  --color-accent-mark: #529cca;
-  --color-hover-fill: #282828;
+  /* Discord-style dark: soft blue-grey, comfortable contrast, never pure black */
+  --color-bg-app: #2b2d31;      /* main calendar canvas */
+  --color-bg-surface: #313338;  /* elevated: dialogs, menus, inputs, event blocks */
+  --color-bg-sidebar: #232428;  /* deepest tone for structural chrome */
+  --color-border: #3a3d44;      /* soft but visible hairlines / grid lines */
+  --color-text-main: #dbdee1;   /* near-white, not #fff — easy on the eyes */
+  --color-text-muted: #9aa0a6;
+  --color-today-mark: #f0616d;  /* red, slightly softened for dark ground */
+  --color-accent-mark: #5865f2; /* blurple: focus, drop targets, primary button */
+  --color-hover-fill: #35373d;
   /* Form & chrome radius tokens */
   --radius-control: 3px;
   --radius-dialog: 4px;
@@ -101,6 +102,14 @@
     @apply relative flex max-h-[90vh] flex-col overflow-hidden border border-hairline bg-surface text-primary shadow-lg;
     border-radius: var(--radius-dialog);
     animation: popoverIn 200ms var(--ease-out) both;
+  }
+
+  .gc-slide-left {
+    animation: slideInLeft 220ms var(--ease-out) both;
+  }
+
+  .gc-slide-right {
+    animation: slideInRight 220ms var(--ease-out) both;
   }
 
   .gc-icon-btn {
@@ -298,6 +307,28 @@
   }
 }
 
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .gc-drag-ghost {
   position: absolute;
   top: -1000px;
@@ -317,6 +348,8 @@
 @media (prefers-reduced-motion: reduce) {
   .gc-overlay,
   .gc-dialog,
+  .gc-slide-left,
+  .gc-slide-right,
   .gc-dnd-overlay,
   .gc-menu,
   .animate-popover,

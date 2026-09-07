@@ -122,7 +122,7 @@ export class CalDavAdapter {
   async pushEvent(
     calendar: Calendar,
     event: CalendarEvent
-  ): Promise<{ success: boolean; etag?: string }> {
+  ): Promise<{ success: boolean; etag?: string; conflict?: boolean }> {
     const icsContent = generateIcs(calendar, [event])
     const eventUrl = `${calendar.id.replace(/\/+$/, '')}/${encodeURIComponent(event.uid || event.id)}.ics`
 
@@ -137,7 +137,7 @@ export class CalDavAdapter {
 
     if (!res.ok && res.status !== 201 && res.status !== 204) {
       if (res.status === 412) {
-        throw new Error('ETag conflict (412 Precondition Failed)')
+        return { success: false, conflict: true }
       }
       throw new Error(`CalDAV PUT failed: HTTP ${res.status}`)
     }

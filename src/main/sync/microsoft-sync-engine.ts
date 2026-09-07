@@ -153,7 +153,8 @@ export class MicrosoftSyncEngine {
                 etag = excluded.etag,
                 dirty = 0,
                 is_deleted = excluded.is_deleted,
-                updated_at = excluded.updated_at`
+                updated_at = excluded.updated_at
+              WHERE events.dirty = 0 AND events.has_conflict = 0`
             )
             .run(
               evt.id,
@@ -259,17 +260,18 @@ export class MicrosoftSyncEngine {
                 .run(resJson.id, row.id)
               this.db
                 .prepare(
-                  'UPDATE events SET id = ?, etag = ?, dirty = 0, updated_at = ? WHERE id = ?'
+                  'UPDATE events SET id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?'
                 )
                 .run(resJson.id, resJson['@odata.etag'], now, row.id)
             } else {
               this.db
-                .prepare('UPDATE events SET etag = ?, dirty = 0, updated_at = ? WHERE id = ?')
+                .prepare('UPDATE events SET etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?')
                 .run(resJson['@odata.etag'] || row.etag, now, row.id)
             }
             pushedCount++
           } else if (res.status === 412) {
             console.warn(`ETag conflict on Microsoft event ${row.id}`)
+            this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
             errorCount++
           } else {
             errorCount++

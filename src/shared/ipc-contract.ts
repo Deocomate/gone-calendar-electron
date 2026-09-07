@@ -14,10 +14,12 @@ import type {
   CopyEventInput,
   UpdateRecurringScopeInput,
   DeleteRecurringScopeInput,
+  MaterializeLunarInput,
+  DetachLunarInput,
   SyncStatus,
-  SyncResult
+  SyncResult,
+  SyncConflict
 } from './event-model'
-import type { TaskItem, CreateTaskInput, UpdateTaskInput } from './task-model'
 import type { AppSettings } from './settings-contract'
 
 export const IPC_CHANNELS = {
@@ -25,7 +27,8 @@ export const IPC_CHANNELS = {
     GET_VERSION: 'gone:app:get-version',
     GET_LOCALE: 'gone:app:get-locale',
     SET_LOCALE: 'gone:app:set-locale',
-    GET_PLATFORM: 'gone:app:get-platform'
+    GET_PLATFORM: 'gone:app:get-platform',
+    PICK_BACKGROUND_IMAGE: 'gone:app:pick-background-image'
   },
   SETTINGS: {
     GET_ALL: 'gone:settings:get-all',
@@ -62,19 +65,16 @@ export const IPC_CHANNELS = {
     UPDATE_SCOPE: 'gone:event:update-scope',
     DELETE_SCOPE: 'gone:event:delete-scope',
     UPSERT_EXCEPTION: 'gone:event:upsert-exception',
+    MATERIALIZE_LUNAR: 'gone:event:materialize-lunar',
+    DETACH_LUNAR: 'gone:event:detach-lunar',
     SEARCH: 'gone:event:search',
-    SHARE_ICS: 'gone:event:share-ics'
+    SHARE_ICS: 'gone:event:share-ics',
+    LIST_CONFLICTS: 'gone:event:list-conflicts',
+    RESOLVE_CONFLICT: 'gone:event:resolve-conflict'
   },
   ICS: {
     IMPORT: 'gone:ics:import',
     EXPORT: 'gone:ics:export'
-  },
-  TASK: {
-    LIST: 'gone:task:list',
-    CREATE: 'gone:task:create',
-    UPDATE: 'gone:task:update',
-    TOGGLE: 'gone:task:toggle',
-    DELETE: 'gone:task:delete'
   },
   MINI: {
     OPEN_MAIN: 'gone:mini:open-main',
@@ -117,6 +117,7 @@ export interface GoneAPI {
     getLocale: () => Promise<AppLocale>
     setLocale: (locale: AppLocale) => Promise<boolean>
     getPlatform: () => Promise<string>
+    pickBackgroundImage: () => Promise<{ dataUrl: string } | null>
   }
   settings: {
     getAll: () => Promise<AppSettings>
@@ -153,24 +154,21 @@ export interface GoneAPI {
     updateScope: (input: UpdateRecurringScopeInput) => Promise<boolean>
     deleteScope: (input: DeleteRecurringScopeInput) => Promise<boolean>
     upsertException: (exception: Omit<EventException, 'id' | 'createdAt' | 'updatedAt'>) => Promise<EventException>
+    materializeLunar: (input: MaterializeLunarInput) => Promise<{ count: number }>
+    detachLunar: (input: DetachLunarInput) => Promise<{ count: number }>
     search: (query: string, limit?: number) => Promise<CalendarEvent[]>
     shareIcs: (eventId: string) => Promise<{ success: boolean; filePath?: string; icsContent?: string; message?: string }>
+    listConflicts: () => Promise<SyncConflict[]>
+    resolveConflict: (eventId: string, resolution: 'keepMine' | 'keepTheirs') => Promise<boolean>
   }
   ics: {
     importIcs: (targetCalendarId: string, icsContent: string) => Promise<IcsImportResult>
     exportIcs: (calendarId: string) => Promise<string>
   },
-  tasks: {
-    list: (includeCompleted?: boolean) => Promise<TaskItem[]>
-    create: (input: CreateTaskInput) => Promise<TaskItem>
-    update: (id: string, input: UpdateTaskInput) => Promise<TaskItem>
-    toggle: (id: string) => Promise<TaskItem>
-    delete: (id: string) => Promise<boolean>
-  },
   mini: {
     openMain: () => Promise<void>
     toggle: () => Promise<void>
-    getUpcoming: (limit?: number) => Promise<{ occurrences: ExpandedOccurrence[]; tasks: TaskItem[] }>
+    getUpcoming: (limit?: number) => Promise<{ occurrences: ExpandedOccurrence[] }>
     setAlwaysOnTop: (flag: boolean) => Promise<boolean>
   },
   holidays: {

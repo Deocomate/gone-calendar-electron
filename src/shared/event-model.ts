@@ -36,6 +36,18 @@ export interface Attendee {
   isOrganizer?: boolean
 }
 
+/**
+ * Compact spec for an anniversary that repeats on the same Vietnamese lunar
+ * (âm lịch) date every year — e.g. a death anniversary (giỗ). Stored as JSON in
+ * the `lunar_rule` column. An event carrying this never has an `rrule`; the
+ * occurrence expander resolves one all-day instance per Gregorian year.
+ */
+export interface LunarRecurrenceSpec {
+  day: number   // lunar day of month, 1-30
+  month: number // lunar month, 1-12
+  leap: boolean // true if the anniversary falls in a leap month
+}
+
 export interface CalendarEvent {
   id: string
   calendarId: string
@@ -50,13 +62,26 @@ export interface CalendarEvent {
   rrule?: string     // RFC 5545 RRULE string e.g. "FREQ=WEEKLY;BYDAY=MO,WE,FR"
   rdate?: string     // Comma-separated ISO strings
   exdate?: string    // Comma-separated ISO strings
+  lunarRule?: LunarRecurrenceSpec       // Yearly lunar-date recurrence (mutually exclusive with rrule)
+  lunarSourceEventId?: string           // Set on a materialized instance: the lunar master it came from
   color?: string     // Hex or theme color override
   meetingUrl?: string
   attendees?: Attendee[]
   etag?: string
   dirty: boolean
+  /** A push to the provider hit a 412 (someone else changed it first) - unresolved until the user picks a side. */
+  hasConflict?: boolean
   isDeleted: boolean
   createdAt: string
+  updatedAt: string
+}
+
+/** One unresolved sync conflict, ready to show in a resolution list. */
+export interface SyncConflict {
+  eventId: string
+  calendarId: string
+  calendarName: string
+  title: string
   updatedAt: string
 }
 
@@ -91,6 +116,7 @@ export interface ExpandedOccurrence {
   meetingUrl?: string
   isRecurring: boolean
   isException: boolean
+  isLunar?: boolean        // True when produced by a yearly lunar-date master
   originalStartUtc: string // Original recurrence start in UTC ISO
 }
 
@@ -105,6 +131,8 @@ export interface CreateEventInput {
   allDay?: boolean
   rrule?: string
   exdate?: string
+  lunarRule?: LunarRecurrenceSpec | null
+  lunarSourceEventId?: string
   color?: string
   meetingUrl?: string
   attendees?: Attendee[]
@@ -121,10 +149,21 @@ export interface UpdateEventInput {
   allDay?: boolean
   rrule?: string
   exdate?: string
+  lunarRule?: LunarRecurrenceSpec | null
   color?: string
   meetingUrl?: string
   attendees?: Attendee[]
   isDeleted?: boolean
+}
+
+export interface MaterializeLunarInput {
+  masterEventId: string
+  targetCalendarId: string
+  throughYear: number
+}
+
+export interface DetachLunarInput {
+  masterEventId: string
 }
 
 export type RecurringEditScope = 'this' | 'future' | 'all'

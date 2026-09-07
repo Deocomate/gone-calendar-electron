@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Search,
   MapPin,
@@ -10,6 +11,8 @@ import {
 } from 'lucide-react'
 import { DateTime } from 'luxon'
 import type { CalendarEvent, Calendar } from '@shared/event-model'
+import { formatClockTime } from '@shared/time-format'
+import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 
 interface SearchPaletteModalProps {
   isOpen: boolean
@@ -24,6 +27,8 @@ export const SearchPaletteModal: React.FC<SearchPaletteModalProps> = ({
   calendars,
   onSelectEvent
 }) => {
+  const { t } = useTranslation()
+  const { timeFormat } = useDisplayPreferences()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CalendarEvent[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -98,16 +103,21 @@ export const SearchPaletteModal: React.FC<SearchPaletteModalProps> = ({
   const formatEventTime = (event: CalendarEvent) => {
     const dt = DateTime.fromISO(event.dtStartUtc)
     if (event.allDay) {
-      return dt.toFormat('dd/MM/yyyy (Cả ngày)')
+      return `${dt.toFormat('dd/MM/yyyy')} (${t('search.allDaySuffix')})`
     }
     const endDt = DateTime.fromISO(event.dtEndUtc)
-    return `${dt.toFormat('dd/MM/yyyy HH:mm')} – ${endDt.toFormat('HH:mm')}`
+    return `${dt.toFormat('dd/MM/yyyy')} ${formatClockTime(dt, timeFormat)} – ${formatClockTime(endDt, timeFormat)}`
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="gc-overlay items-start pt-20 select-none">
+    <div
+      className="gc-overlay items-start pt-20 select-none"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
       <div className="gc-dialog w-full max-w-2xl max-h-[80vh]">
         {/* Search Header Input */}
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 bg-slate-50 dark:bg-slate-950/60">
@@ -118,7 +128,7 @@ export const SearchPaletteModal: React.FC<SearchPaletteModalProps> = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Tìm kiếm sự kiện theo tiêu đề, địa điểm, ghi chú... (Ctrl+K)"
+            placeholder={t('search.placeholder')}
             className="w-full bg-transparent border-none text-slate-800 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-hidden"
           />
           {query && (
@@ -134,19 +144,19 @@ export const SearchPaletteModal: React.FC<SearchPaletteModalProps> = ({
         {/* Results List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {isLoading && (
-            <div className="p-8 text-center text-xs text-slate-400">Đang tìm kiếm...</div>
+            <div className="p-8 text-center text-xs text-slate-400">{t('search.searching')}</div>
           )}
 
           {!isLoading && query.trim() && results.length === 0 && (
             <div className="p-8 text-center text-xs text-slate-500">
-              Không tìm thấy sự kiện nào khớp với "{query}".
+              {t('search.noResults', { q: query })}
             </div>
           )}
 
           {!isLoading && !query.trim() && (
             <div className="p-8 text-center text-xs text-slate-400 dark:text-slate-500 flex flex-col items-center gap-2">
               <Sparkles className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
-              <span>Gõ từ khóa để tìm kiếm nhanh trong toàn bộ lịch</span>
+              <span>{t('search.empty')}</span>
             </div>
           )}
 
@@ -174,7 +184,7 @@ export const SearchPaletteModal: React.FC<SearchPaletteModalProps> = ({
                         style={{ backgroundColor: calColor }}
                       />
                       <span className="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate">
-                        {evt.title || '(Không có tiêu đề)'}
+                        {evt.title || t('common.untitled')}
                       </span>
                       {cal && (
                         <span className="text-[10px] text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 font-medium">
@@ -199,7 +209,7 @@ export const SearchPaletteModal: React.FC<SearchPaletteModalProps> = ({
                       {evt.attendees && evt.attendees.length > 0 && (
                         <span className="flex items-center gap-1">
                           <Users className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-                          <span>{evt.attendees.length} người tham gia</span>
+                          <span>{t('search.attendees', { count: evt.attendees.length })}</span>
                         </span>
                       )}
                     </div>
@@ -217,33 +227,6 @@ export const SearchPaletteModal: React.FC<SearchPaletteModalProps> = ({
                 </div>
               )
             })}
-        </div>
-
-        {/* Footer shortcuts */}
-        <div className="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-          <div className="flex items-center gap-3">
-            <span>
-              <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono">
-                ↑
-              </kbd>{' '}
-              <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono">
-                ↓
-              </kbd>{' '}
-              để chuyển
-            </span>
-            <span>
-              <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono">
-                Enter
-              </kbd>{' '}
-              để mở
-            </span>
-          </div>
-          <span>
-            <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono">
-              Esc
-            </kbd>{' '}
-            để đóng
-          </span>
         </div>
       </div>
     </div>

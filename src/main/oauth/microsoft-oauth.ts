@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { shell } from 'electron'
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { SecureStore } from '../secure-store'
+import { mt } from '../i18n-main'
 
 export interface MicrosoftTokens {
   accessToken: string
@@ -74,7 +75,7 @@ export class MicrosoftOAuthManager {
 
       timeoutId = setTimeout(() => {
         cleanup()
-        reject(new Error('Quá thời gian xác thực Microsoft (5 phút). Vui lòng thử lại.'))
+        reject(new Error(mt('oauth.timeout.microsoft')))
       }, 5 * 60 * 1000)
 
       const server = http.createServer(async (req, res) => {
@@ -93,7 +94,7 @@ export class MicrosoftOAuthManager {
 
           if (queryError) {
             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-            res.end('<h3>Đăng nhập Microsoft thất bại: ' + queryError + '</h3><p>Bạn có thể đóng tab này.</p>')
+            res.end('<h3>' + mt('oauth.microsoft.failed', { error: queryError }) + '</h3><p>' + mt('oauth.canCloseShort') + '</p>')
             cleanup()
             reject(new Error(`Microsoft OAuth error: ${queryError}`))
             return
@@ -101,7 +102,7 @@ export class MicrosoftOAuthManager {
 
           if (queryState !== state || !queryCode) {
             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-            res.end('<h3>Lỗi xác thực: State hoặc Code không hợp lệ</h3>')
+            res.end('<h3>' + mt('oauth.stateError') + '</h3>')
             cleanup()
             reject(new Error('Invalid OAuth state or code'))
             return
@@ -161,10 +162,10 @@ export class MicrosoftOAuthManager {
             <!DOCTYPE html>
             <html>
               <head><meta charset="utf-8"><title>Gone Calendar Auth</title></head>
-              <body style="font-family:system-ui,sans-serif;text-align:center;padding:40px;background:#090d16;color:#f8fafc;">
-                <h2 style="color:#0078d4;">✓ Kết nối Microsoft Outlook / 365 thành công!</h2>
-                <p style="color:#94a3b8;">Tài khoản: <b>${email}</b> (${name})</p>
-                <p style="color:#64748b;">Bạn có thể đóng tab trình duyệt này và quay lại ứng dụng Gone Calendar.</p>
+              <body style="font-family:system-ui,sans-serif;text-align:center;padding:40px;background:#2b2d31;color:#dbdee1;">
+                <h2 style="color:#0078d4;">${mt('oauth.microsoft.success')}</h2>
+                <p style="color:#94a3b8;">${mt('oauth.account', { detail: `${email} (${name})` })}</p>
+                <p style="color:#64748b;">${mt('oauth.canClose')}</p>
               </body>
             </html>
           `)

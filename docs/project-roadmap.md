@@ -1,6 +1,6 @@
 # Gone Calendar — Project Roadmap
 
-**Last updated:** 2026-08-18  
+**Last updated:** 2026-08-31  
 **Current version:** 0.1.0
 
 ---

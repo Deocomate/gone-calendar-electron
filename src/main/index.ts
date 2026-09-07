@@ -1,6 +1,7 @@
-import { app, BrowserWindow, shell, nativeTheme } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import { registerIpcHandlers } from './ipc'
+import { loadCredentialsFile } from './load-credentials'
 import { initDatabase, closeDatabase } from './db/database'
 import { setupTray } from './tray'
 import { registerMiniIpcHandlers } from './mini-window'
@@ -15,8 +16,9 @@ if (!gotTheLock) {
   let mainWindow: BrowserWindow | null = null
 
   function createWindow(): void {
-    const isDark = nativeTheme.shouldUseDarkColors
-    const initialBg = isDark ? '#090d16' : '#f8fafc'
+    // Dark is the default theme; paint the window with the dark canvas colour
+    // so there is no light flash before the renderer mounts.
+    const initialBg = '#2b2d31'
 
     mainWindow = new BrowserWindow({
       width: 1240,
@@ -40,9 +42,11 @@ if (!gotTheLock) {
       mainWindow?.show()
     })
 
-    // Adaptive sync polling on focus/blur
+    // Adaptive sync polling on focus/blur; also sync right away when the user comes back
     mainWindow.on('focus', () => {
-      getSyncWorker()?.setFocusState(true)
+      const worker = getSyncWorker()
+      worker?.setFocusState(true)
+      worker?.triggerSync().catch(() => {})
     })
 
     mainWindow.on('blur', () => {
@@ -74,6 +78,8 @@ if (!gotTheLock) {
   })
 
   app.whenReady().then(() => {
+    loadCredentialsFile()
+
     try {
       initDatabase(app.getPath('userData'))
     } catch (dbErr) {

@@ -173,7 +173,8 @@ export class GoogleSyncEngine {
                 etag = excluded.etag,
                 dirty = 0,
                 is_deleted = excluded.is_deleted,
-                updated_at = excluded.updated_at`
+                updated_at = excluded.updated_at
+              WHERE events.dirty = 0 AND events.has_conflict = 0`
             )
             .run(
               evt.id,
@@ -304,18 +305,20 @@ export class GoogleSyncEngine {
                 .run(resJson.id, row.id)
               this.db
                 .prepare(
-                  `UPDATE events SET id = ?, etag = ?, dirty = 0, updated_at = ? WHERE id = ?`
+                  `UPDATE events SET id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?`
                 )
                 .run(resJson.id, resJson.etag, now, row.id)
             } else {
               this.db
-                .prepare(`UPDATE events SET etag = ?, dirty = 0, updated_at = ? WHERE id = ?`)
+                .prepare(`UPDATE events SET etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?`)
                 .run(resJson.etag || row.etag, now, row.id)
             }
             pushedCount++
           } else if (putRes.status === 412) {
-            // Precondition failed (ETag conflict): preserve local dirty row, record conflict
+            // Precondition failed (ETag conflict): preserve local dirty row, surface it
+            // as a resolvable conflict instead of retrying (and failing) forever.
             console.warn(`Conflict on event ${row.id}: ETag precondition failed (412)`)
+            this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
             errorCount++
           } else {
             errorCount++

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { convertSolarToLunar, formatLunarLabel } from '../src/shared/lunar-vietnam'
+import {
+  convertSolarToLunar,
+  formatLunarLabel,
+  resolveLunarOccurrence
+} from '../src/shared/lunar-vietnam'
 
 describe('Vietnamese Lunar Calendar (Âm Lịch Việt Nam)', () => {
   it('should accurately calculate Lunar New Year (Tết Nguyên Đán) across multiple years', () => {
@@ -48,5 +52,52 @@ describe('Vietnamese Lunar Calendar (Âm Lịch Việt Nam)', () => {
     const normalLabel = formatLunarLabel(normalDay)
     expect(normalLabel.label).toBe('6')
     expect(normalLabel.isFirstDay).toBe(false)
+  })
+})
+
+describe('resolveLunarOccurrence (yearly lunar anniversaries / giỗ)', () => {
+  it('places a normal anniversary on the right Gregorian date each year', () => {
+    // 10/3 âm lịch = Giỗ Tổ Hùng Vương, a nationally observed date.
+    const spec = { day: 10, month: 3, leap: false }
+    expect(resolveLunarOccurrence(spec, 2024)).toBe('2024-04-18')
+    expect(resolveLunarOccurrence(spec, 2025)).toBe('2025-04-07')
+    expect(resolveLunarOccurrence(spec, 2026)).toBe('2026-04-26')
+    expect(resolveLunarOccurrence(spec, 2027)).toBe('2027-04-16')
+  })
+
+  it('round-trips: the resolved solar date maps back to the lunar spec', () => {
+    const spec = { day: 5, month: 7, leap: false }
+    for (const year of [2024, 2025, 2026, 2027, 2028]) {
+      const iso = resolveLunarOccurrence(spec, year)
+      expect(iso).not.toBeNull()
+      const [y, m, d] = iso!.split('-').map(Number)
+      const back = convertSolarToLunar(d, m, y)
+      expect(back.day).toBe(5)
+      expect(back.month).toBe(7)
+      expect(back.leap).toBe(false)
+      expect(y).toBe(year)
+    }
+  })
+
+  it('falls back to day 29 when the lunar month has only 29 days', () => {
+    // Lunar month 2 of 2025 has 29 days — a "day 30" anniversary lands on day 29.
+    expect(resolveLunarOccurrence({ day: 30, month: 2, leap: false }, 2025)).toBe('2025-03-28')
+  })
+
+  it('falls back to the ordinary month when the target year has no matching leap month', () => {
+    // 2026 has no leap month 6, so a leap-6 anniversary resolves to ordinary 15/6.
+    const leapSpec = { day: 15, month: 6, leap: true }
+    const ordinary = resolveLunarOccurrence({ day: 15, month: 6, leap: false }, 2026)
+    expect(resolveLunarOccurrence(leapSpec, 2026)).toBe(ordinary)
+  })
+
+  it('resolves to the leap month when the target year actually has one', () => {
+    // 2025 has a leap month 7 — the leap occurrence is distinct from and later
+    // than the ordinary one.
+    const ordinary = resolveLunarOccurrence({ day: 15, month: 7, leap: false }, 2025)
+    const leap = resolveLunarOccurrence({ day: 15, month: 7, leap: true }, 2025)
+    expect(ordinary).toBe('2025-08-08')
+    expect(leap).toBe('2025-09-06')
+    expect(leap! > ordinary!).toBe(true)
   })
 })

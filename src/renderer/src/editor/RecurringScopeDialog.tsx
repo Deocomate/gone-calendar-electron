@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import type { RecurringEditScope } from '@shared/event-model'
 
@@ -17,26 +18,15 @@ export const RecurringScopeDialog: React.FC<RecurringScopeDialogProps> = ({
   onConfirm,
   onCancel
 }) => {
+  const { t } = useTranslation()
   if (!isOpen) return null
 
   const isDelete = action === 'delete'
 
   const options: { scope: RecurringEditScope; label: string; hint: string }[] = [
-    {
-      scope: 'this',
-      label: 'Chỉ sự kiện này',
-      hint: 'Các sự kiện khác trong chuỗi lặp sẽ không bị ảnh hưởng'
-    },
-    {
-      scope: 'future',
-      label: 'Sự kiện này và các sự kiện sau',
-      hint: 'Áp dụng cho lần lặp này và tất cả các lần lặp tiếp theo'
-    },
-    {
-      scope: 'all',
-      label: 'Tất cả sự kiện trong chuỗi',
-      hint: 'Áp dụng cho toàn bộ chuỗi lặp từ trước đến nay'
-    }
+    { scope: 'this', label: t('recurring.thisLabel'), hint: t('recurring.thisHint') },
+    { scope: 'future', label: t('recurring.futureLabel'), hint: t('recurring.futureHint') },
+    { scope: 'all', label: t('recurring.allLabel'), hint: t('recurring.allHint') }
   ]
 
   return (
@@ -46,21 +36,17 @@ export const RecurringScopeDialog: React.FC<RecurringScopeDialogProps> = ({
           <X className="h-4 w-4" />
         </button>
 
-        {/* Header — no icon box, just text */}
         <div className="mb-4 pr-6">
           <h3 className="text-sm font-semibold text-primary mb-0.5">
-            {isDelete ? 'Xóa sự kiện lặp lại' : 'Chỉnh sửa sự kiện lặp lại'}
+            {isDelete ? t('recurring.deleteTitle') : t('recurring.editTitle')}
           </h3>
-          <p className="text-xs text-muted truncate max-w-[280px]">"{title}"</p>
+          {title && <p className="text-xs text-muted truncate max-w-[280px]">"{title}"</p>}
         </div>
 
         <p className="text-xs text-muted mb-4">
-          {isDelete
-            ? 'Bạn muốn xóa chỉ lần lặp này hay tất cả các lần lặp trong chuỗi?'
-            : 'Bạn muốn áp dụng thay đổi cho lần lặp này hay tất cả các lần lặp trong chuỗi?'}
+          {isDelete ? t('recurring.askDelete') : t('recurring.askEdit')}
         </p>
 
-        {/* Three full-width text rows — hover bg-hover, no icon boxes */}
         <div className="space-y-0.5">
           {options.map(({ scope, label, hint }) => (
             <button
@@ -69,23 +55,18 @@ export const RecurringScopeDialog: React.FC<RecurringScopeDialogProps> = ({
               className="w-full flex flex-col px-3 py-2.5 text-left hover:bg-hover transition-colors cursor-pointer group"
               style={{ borderRadius: 'var(--radius-control)' }}
             >
-              <span className="text-xs font-medium text-primary group-hover:text-primary">
-                {label}
-              </span>
-              <span className="text-[11px] text-muted">
-                {hint}
-              </span>
+              <span className="text-xs font-medium text-primary group-hover:text-primary">{label}</span>
+              <span className="text-[11px] text-muted">{hint}</span>
             </button>
           ))}
         </div>
 
-        {/* Cancel — text button only */}
         <div className="mt-4 flex justify-end">
           <button
             onClick={onCancel}
             className="px-3 py-1.5 text-xs text-muted hover:text-primary transition-colors cursor-pointer"
           >
-            Hủy bỏ
+            {t('common.cancel')}
           </button>
         </div>
       </div>

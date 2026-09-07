@@ -1,6 +1,6 @@
 # Gone Calendar — Deployment Guide
 
-**Last updated:** 2026-08-18
+**Last updated:** 2026-08-31
 
 ---
 
@@ -47,10 +47,26 @@ npm run typecheck:web    # Renderer (tsconfig.web.json)
 
 ```bash
 npm run test
-# Runs: vitest run (all 66 tests across 17 files)
+# Runs: vitest run (all 100 tests across 22 files)
 ```
 
 Test files live in `tests/` at the project root and use `:memory:` SQLite for database tests.
+Main-process tests import a stub `electron` module (`tests/stubs/electron.ts`, aliased in
+`vitest.config.ts`), so the Electron binary is not required to run them.
+
+---
+
+## Continuous Integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request:
+
+1. `npm ci` (with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` — CI does not package the app)
+2. `npm run typecheck` — main + renderer
+3. `npm run test` — full Vitest suite
+4. `npm run build` — production bundle
+
+Packaging (`pack:win` / `pack:linux`) is not run in CI; build those on the target OS
+or a dedicated release runner.
 
 ---
 
@@ -115,11 +131,32 @@ See [`electron-builder.yml`](file:///c:/Users/minhlong/Desktop/projects/gone-cal
 | Variable | Description |
 |----------|-------------|
 | `ELECTRON_RENDERER_URL` | Set automatically by electron-vite in dev mode. Points to the Vite dev server. In production, renderer loads `index.html` from disk. |
-| `GONE_GOOGLE_CLIENT_ID` | Google OAuth Desktop client ID (required for live Google sync). Set in OS environment or via a `.env` file in dev. |
-| `GONE_GOOGLE_CLIENT_SECRET` | Google OAuth Desktop client secret. |
-| `GONE_MS_CLIENT_ID` | Microsoft Entra app client ID (required for Microsoft Graph sync). |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth Desktop client ID (required for live Google sync). |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth Desktop client secret. |
+| `MICROSOFT_CLIENT_ID` | Microsoft Entra public-client app ID (required for Microsoft Graph sync). |
+| `MICROSOFT_CLIENT_SECRET` | Microsoft client secret (optional; public-client + loopback works without one). |
 
-> **Note:** `.env` is in `.gitignore`. Never commit OAuth credentials.
+These are read from `process.env` in `src/main/ipc/auth-sync-ipc.ts`. In `npm run dev`,
+electron-vite loads a project-root `.env` into the main process automatically. For a
+**packaged build**, `src/main/load-credentials.ts` reads a plain `KEY=VALUE` file at
+startup and copies any not-already-set variables into `process.env`. It checks, in order:
+
+1. `<userData>/gone-calendar.env` — on Linux, `~/.config/gone-calendar/gone-calendar.env`
+2. `gone-calendar.env` next to the executable / AppImage
+3. `.env` in the current working directory
+
+Example `~/.config/gone-calendar/gone-calendar.env`:
+
+```
+GOOGLE_OAUTH_CLIENT_ID=1234567890-abcdef.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxxxxx
+```
+
+Restart the app after editing. If credentials are missing, the "Connect Google/Microsoft"
+buttons return a message pointing at this file instead of launching a broken OAuth flow.
+
+> **Note:** `.env` is in `.gitignore`. Never commit OAuth credentials. Without these vars
+> the app still runs in local + CalDAV mode; only Google/Microsoft sync is disabled.
 
 See `.env.example` for the full list of environment variables.
 
@@ -132,7 +169,7 @@ See `.env.example` for the full list of environment variables.
 3. Enable the **Google Calendar API**.
 4. Create OAuth credentials: **Desktop app** type.
 5. Download the client ID and client secret.
-6. Set `GONE_GOOGLE_CLIENT_ID` and `GONE_GOOGLE_CLIENT_SECRET` in your environment.
+6. Set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in your environment.
 7. Add test users in the OAuth consent screen (while in testing mode).
 
 The app uses a loopback redirect URI (`http://127.0.0.1:<random-port>/oauth/callback`) — no redirect URI pre-registration is needed for Desktop app type.
@@ -145,9 +182,11 @@ The app uses a loopback redirect URI (`http://127.0.0.1:<random-port>/oauth/call
 2. Register a new application.
 3. Set redirect URI to `http://localhost` (Desktop app).
 4. Add API permissions: `Calendars.ReadWrite`, `offline_access`.
-5. Set `GONE_MS_CLIENT_ID` in your environment.
+5. Set `MICROSOFT_CLIENT_ID` in your environment.
 
-The app uses `@azure/msal-node` with the system browser + loopback flow.
+`src/main/oauth/microsoft-oauth.ts` implements the auth-code + PKCE loopback flow
+directly against `login.microsoftonline.com` (Node `http` + `crypto`, system browser
+via `shell.openExternal`) — no `@azure/msal-node` dependency.
 
 ---
 

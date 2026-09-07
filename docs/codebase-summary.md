@@ -1,8 +1,8 @@
 # Gone Calendar — Codebase Summary
 
-**Last updated:** 2026-08-18  
+**Last updated:** 2026-08-31  
 **Version:** 0.1.0  
-**Build status:** All 10 phases complete, 66/66 tests passing, 0 TypeScript errors, clean production build.
+**Build status:** All 10 phases complete, 100/100 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
 
 ---
 
@@ -90,7 +90,8 @@ gone-calendar/
 │       ├── mini-calendar-grid.ts # Grid computation utilities
 │       ├── visible-range.ts     # Visible date range helpers
 │       └── ipc-contract.ts      # IPC_CHANNELS constants and GoneAPI interface
-├── tests/                       # Vitest unit tests (66 tests / 17 files)
+├── tests/                       # Vitest unit tests (100 tests / 22 files)
+│   └── stubs/electron.ts        # `electron` module stub for main-process tests
 ├── docs/
 │   ├── urd.md                   # User Requirements Document
 │   ├── design-guidelines.md     # Visual language and design tokens
@@ -192,24 +193,36 @@ Key types: `CalendarEvent`, `ExpandedOccurrence`, `Calendar`, `CalendarAccount`,
 
 ```
 tests/
-├── lunar-vietnam.test.ts       # Lunar ↔ solar conversion accuracy
-├── recurrence.test.ts          # RRULE expansion correctness
-├── ics-parse.test.ts           # ical.js import round-trips
-├── ics-write.test.ts           # RFC 5545 export round-trips
-├── events-repo.test.ts         # SQLite event CRUD + range queries
-├── calendars-repo.test.ts      # Calendar + account repo
-├── settings-repo.test.ts       # Settings repo
-├── tasks-repo.test.ts          # Task CRUD, completion toggle, due date sort
-├── google-event-mapper.test.ts # Google → canonical mapping
-├── microsoft-mapper.test.ts    # Graph → canonical mapping
-├── visible-range.test.ts       # Date range utilities
-├── copy-instance.test.ts       # Recurring single-instance copy
-├── holiday-calendars.test.ts   # Holiday generation and lunar-to-solar
-├── ipc-contract.test.ts        # IPC channel and API surface contract
-└── ...
+├── lunar-vietnam.test.ts          # Lunar ↔ solar conversion accuracy
+├── expand-occurrences.test.ts     # RRULE expansion correctness
+├── recurring-scope.test.ts        # this / this-and-future / all scope edits
+├── copy-instance.test.ts          # Recurring single-instance copy
+├── event-copy-uid.test.ts         # UID handling on event copy
+├── ics-roundtrip.test.ts          # ical.js import + RFC 5545 export round-trips
+├── database-repos.test.ts         # SQLite calendars / events / settings repos
+├── tasks-repo.test.ts             # Task CRUD, completion toggle, due date sort
+├── fts-search.test.ts             # FTS5 search over cached events
+├── google-event-mapper.test.ts    # Google → canonical mapping
+├── microsoft-event-mapper.test.ts # Graph → canonical mapping
+├── graph-recurrence-map.test.ts   # Graph recurrence ↔ RRULE
+├── caldav-discover-url.test.ts     # RFC 6764 server discovery
+├── secure-store.test.ts           # safeStorage fail-closed behavior
+├── holiday-calendars.test.ts      # Holiday generation and lunar-to-solar
+├── visible-range.test.ts          # Date range utilities
+├── mini-calendar-grid.test.ts     # Mini-window month grid computation
+├── timed-event-segments.test.ts   # Multi-day timed occurrence splitting
+├── drop-target.test.ts            # DnD drop target math (renderer)
+├── resize-math.test.ts            # Event edge-resize math (renderer)
+├── ui-components.test.ts          # UI primitive + editor SSR smoke (renderer)
+└── ipc-contract.test.ts           # IPC channel and API surface contract
 ```
 
-**Total: 66 tests across 17 files. All passing.**
+**Total: 100 tests across 22 files. All passing.**
+
+Main-process tests run in plain Node; the `electron` module is aliased to
+`tests/stubs/electron.ts` in `vitest.config.ts` so they do not need the Electron
+binary. Renderer-touching tests (`drop-target`, `resize-math`, `ui-components`)
+are typechecked under `tsconfig.web.json`; all others under `tsconfig.node.json`.
 
 ---
 

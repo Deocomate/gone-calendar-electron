@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { formatClockTime, type TimeFormatPref } from '@shared/time-format'
 
 export type ResizeEdge = 'n' | 's' | 'e' | 'w'
 
@@ -76,7 +77,12 @@ export function applyResizeEdge(args: {
   return { start, end }
 }
 
-export function formatResizeTooltip(edge: ResizeEdge, start: DateTime, end: DateTime): string {
+export function formatResizeTooltip(
+  edge: ResizeEdge,
+  start: DateTime,
+  end: DateTime,
+  timeFormat: TimeFormatPref
+): string {
   const moving = edge === 'n' || edge === 'w' ? start : end
   const mins = Math.max(0, Math.round(end.diff(start, 'minutes').minutes))
   const hours = Math.floor(mins / 60)
@@ -87,9 +93,9 @@ export function formatResizeTooltip(edge: ResizeEdge, start: DateTime, end: Date
     const endClock = end.hour * 60 + end.minute
     const dayCount = Math.round(end.startOf('day').diff(start.startOf('day'), 'days').days) + 1
     if (dayCount > 1 && startClock < endClock) {
-      return `${start.toFormat('dd/MM')}–${end.toFormat('dd/MM')} · ${start.toFormat('HH:mm')}–${end.toFormat('HH:mm')}`
+      return `${start.toFormat('dd/MM')}–${end.toFormat('dd/MM')} · ${formatClockTime(start, timeFormat)}–${formatClockTime(end, timeFormat)}`
     }
-    return `${moving.toFormat('dd/MM HH:mm')} · ${duration}`
+    return `${moving.toFormat('dd/MM')} ${formatClockTime(moving, timeFormat)} · ${duration}`
   }
-  return `${moving.toFormat('HH:mm')} · ${duration}`
+  return `${formatClockTime(moving, timeFormat)} · ${duration}`
 }

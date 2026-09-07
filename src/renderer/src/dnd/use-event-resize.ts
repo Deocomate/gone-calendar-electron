@@ -8,6 +8,7 @@ import {
   formatResizeTooltip,
   type ResizeEdge
 } from './resize-math'
+import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 
 export interface ResizeGeometry {
   gridTop: number
@@ -33,6 +34,7 @@ export function useEventResize(options: {
   scrollerRef?: RefObject<HTMLElement | null>
 }) {
   const { getGeometry, onCommit, onBusyEnd, scrollerRef } = options
+  const { timeFormat } = useDisplayPreferences()
   const [preview, setPreview] = useState<ResizePreview | null>(null)
   const sessionRef = useRef<{
     occ: ExpandedOccurrence
@@ -92,7 +94,7 @@ export function useEventResize(options: {
         edge: session.edge,
         clientX: e.clientX,
         clientY: e.clientY,
-        label: formatResizeTooltip(session.edge, next.start, next.end)
+        label: formatResizeTooltip(session.edge, next.start, next.end, timeFormat)
       }
       previewRef.current = nextPreview
       setPreview(nextPreview)
@@ -127,7 +129,7 @@ export function useEventResize(options: {
       window.removeEventListener('pointercancel', onUp)
       window.removeEventListener('keydown', onKey)
     }
-  }, [clearSession, scrollerRef])
+  }, [clearSession, scrollerRef, timeFormat])
 
   const startResize = useCallback((e: ReactPointerEvent, occ: ExpandedOccurrence, edge: ResizeEdge) => {
     e.preventDefault()
@@ -163,13 +165,13 @@ export function useEventResize(options: {
       edge,
       clientX: e.clientX,
       clientY: e.clientY,
-      label: formatResizeTooltip(edge, next.start, next.end)
+      label: formatResizeTooltip(edge, next.start, next.end, timeFormat)
     }
     previewRef.current = nextPreview
     setPreview(nextPreview)
     document.body.classList.add('is-dnd-active')
     document.body.classList.add('is-event-resizing')
-  }, [])
+  }, [timeFormat])
 
   return { preview, startResize, isResizing: Boolean(preview) }
 }

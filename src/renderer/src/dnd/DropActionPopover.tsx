@@ -1,7 +1,10 @@
 import React, { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Move, Copy, X, CalendarCheck } from 'lucide-react'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
+import { formatClockTime } from '@shared/time-format'
+import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 
 export interface PendingDropAction {
   occurrence: ExpandedOccurrence
@@ -24,6 +27,8 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
   onCopy,
   onCancel
 }) => {
+  const { t } = useTranslation()
+  const { timeFormat } = useDisplayPreferences()
   useEffect(() => {
     if (!pendingDrop) return
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -44,7 +49,7 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
   const isRecurring = pendingDrop.occurrence.isRecurring
   const targetTimeStr = pendingDrop.occurrence.allDay
     ? pendingDrop.targetStart.toFormat('dd/MM/yyyy')
-    : `${pendingDrop.targetStart.toFormat('dd/MM HH:mm')} – ${pendingDrop.targetEnd.toFormat('HH:mm')}`
+    : `${pendingDrop.targetStart.toFormat('dd/MM')} ${formatClockTime(pendingDrop.targetStart, timeFormat)} – ${formatClockTime(pendingDrop.targetEnd, timeFormat)}`
 
   return (
     <div className="gc-dnd-overlay pointer-events-auto select-none" onClick={onCancel}>
@@ -76,7 +81,7 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white border border-indigo-200 dark:border-indigo-500/30 transition-all font-semibold cursor-pointer"
           >
             <Move className="h-4 w-4 shrink-0" />
-            <span>Di chuyển (Move here)</span>
+            <span>{t('drop.moveHere')}</span>
           </button>
 
           {isRecurring ? (
@@ -84,12 +89,12 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
               <button
                 onClick={() => onCopy(pendingDrop, true)}
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 border border-emerald-500/30 transition-all font-medium cursor-pointer text-left"
-                title="Tạo một sự kiện đơn lẻ không lặp lại tại thời điểm này"
+                title={t('drop.copyStandaloneHint')}
               >
                 <CalendarCheck className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
                 <div>
-                  <span className="block font-semibold">Chỉ sao chép lần này</span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Tạo sự kiện đơn độc lập</span>
+                  <span className="block font-semibold">{t('drop.copyThisOnly')}</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{t('drop.copyStandalone')}</span>
                 </div>
               </button>
 
@@ -99,8 +104,8 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
               >
                 <Copy className="h-4 w-4 shrink-0 text-slate-400" />
                 <div>
-                  <span className="block font-semibold">Sao chép toàn bộ chuỗi</span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Nhân bản cả chuỗi lặp lại</span>
+                  <span className="block font-semibold">{t('drop.copyWholeSeries')}</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{t('drop.copyWholeSeriesHint')}</span>
                 </div>
               </button>
             </>
@@ -110,7 +115,7 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/60 transition-all font-medium cursor-pointer"
             >
               <Copy className="h-4 w-4 shrink-0 text-slate-400" />
-              <span>Sao chép (Copy here)</span>
+              <span>{t('drop.copyHere')}</span>
             </button>
           )}
 
@@ -118,7 +123,7 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
             onClick={onCancel}
             className="w-full text-center py-1.5 text-[11px] text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-medium cursor-pointer"
           >
-            Hủy bỏ (Cancel)
+            {t('common.cancel')}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertTriangle, RotateCcw } from 'lucide-react'
+import i18n from '../i18n'
 
 interface Props {
   children: ReactNode
@@ -45,8 +46,8 @@ export class ErrorBoundary extends Component<Props, State> {
                 <AlertTriangle className="h-6 w-6" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-rose-300">Đã xảy ra lỗi giao diện</h2>
-                <p className="text-xs text-slate-400">Ứng dụng vừa gặp lỗi xử lý không mong muốn</p>
+                <h2 className="text-base font-bold text-rose-300">{i18n.t('ui.errorTitle')}</h2>
+                <p className="text-xs text-slate-400">{i18n.t('ui.errorBody')}</p>
               </div>
             </div>
 
@@ -65,7 +66,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 onClick={this.handleReset}
                 className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors cursor-pointer"
               >
-                Thử lại
+                {i18n.t('ui.retry')}
               </button>
               <button
                 type="button"
@@ -73,7 +74,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition-colors cursor-pointer"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                <span>Tải lại trang</span>
+                <span>{i18n.t('ui.reload')}</span>
               </button>
             </div>
           </div>

@@ -9,8 +9,13 @@ import type {
   MoveEventInput,
   CopyEventInput,
   UpdateRecurringScopeInput,
-  DeleteRecurringScopeInput
+  DeleteRecurringScopeInput,
+  LunarRecurrenceSpec,
+  MaterializeLunarInput,
+  DetachLunarInput,
+  SyncConflict
 } from '@shared/event-model'
+import { resolveLunarOccurrence } from '@shared/lunar-vietnam'
 import { expandOccurrences } from '@shared/expand-occurrences'
 import { DateTime } from 'luxon'
 
@@ -35,13 +40,34 @@ interface EventRow {
   rrule: string | null
   rdate: string | null
   exdate: string | null
+  lunar_rule: string | null
+  lunar_source_event_id: string | null
   color: string | null
   meeting_url: string | null
   etag: string | null
   dirty: number
+  has_conflict: number
   is_deleted: number
   created_at: string
   updated_at: string
+}
+
+function parseLunarRule(raw: string | null): LunarRecurrenceSpec | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw)
+    if (
+      parsed &&
+      typeof parsed.day === 'number' &&
+      typeof parsed.month === 'number' &&
+      typeof parsed.leap === 'boolean'
+    ) {
+      return { day: parsed.day, month: parsed.month, leap: parsed.leap }
+    }
+  } catch {
+    // Ignore malformed spec
+  }
+  return undefined
 }
 
 interface ExceptionRow {
@@ -75,10 +101,13 @@ function mapRowToEvent(row: EventRow): CalendarEvent {
     rrule: row.rrule || undefined,
     rdate: row.rdate || undefined,
     exdate: row.exdate || undefined,
+    lunarRule: parseLunarRule(row.lunar_rule),
+    lunarSourceEventId: row.lunar_source_event_id || undefined,
     color: row.color || undefined,
     meetingUrl: row.meeting_url || undefined,
     etag: row.etag || undefined,
     dirty: row.dirty === 1,
+    hasConflict: row.has_conflict === 1,
     isDeleted: row.is_deleted === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -198,8 +227,9 @@ export class EventsRepo {
         `INSERT INTO events (
           id, calendar_id, uid, title, notes, location,
           dtstart_utc, dtend_utc, tzid, all_day, rrule, exdate,
+          lunar_rule, lunar_source_event_id,
           color, meeting_url, dirty, is_deleted, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -214,6 +244,8 @@ export class EventsRepo {
         allDay,
         input.rrule || null,
         input.exdate || null,
+        input.lunarRule ? JSON.stringify(input.lunarRule) : null,
+        input.lunarSourceEventId || null,
         input.color || null,
         input.meetingUrl || null,
         dirty,
@@ -251,6 +283,14 @@ export class EventsRepo {
     const allDay = (input.allDay !== undefined ? input.allDay : existing.allDay) ? 1 : 0
     const rrule = input.rrule !== undefined ? input.rrule : (existing.rrule || null)
     const exdate = input.exdate !== undefined ? input.exdate : (existing.exdate || null)
+    const lunarRule =
+      input.lunarRule !== undefined
+        ? input.lunarRule
+          ? JSON.stringify(input.lunarRule)
+          : null
+        : existing.lunarRule
+          ? JSON.stringify(existing.lunarRule)
+          : null
     const color = input.color !== undefined ? input.color : (existing.color || null)
     const meetingUrl = input.meetingUrl !== undefined ? input.meetingUrl : (existing.meetingUrl || null)
     const isDeleted = (input.isDeleted !== undefined ? input.isDeleted : existing.isDeleted) ? 1 : 0
@@ -259,7 +299,7 @@ export class EventsRepo {
       .prepare(
         `UPDATE events SET
           title = ?, notes = ?, location = ?, dtstart_utc = ?, dtend_utc = ?,
-          tzid = ?, all_day = ?, rrule = ?, exdate = ?, color = ?,
+          tzid = ?, all_day = ?, rrule = ?, exdate = ?, lunar_rule = ?, color = ?,
           meeting_url = ?, dirty = 1, is_deleted = ?, updated_at = ?
          WHERE id = ?`
       )
@@ -273,6 +313,7 @@ export class EventsRepo {
         allDay,
         rrule,
         exdate,
+        lunarRule,
         color,
         meetingUrl,
         isDeleted,
@@ -294,6 +335,11 @@ export class EventsRepo {
       return false
     }
     this.checkReadOnlyCalendar(existing.event.calendarId)
+
+    // A lunar master owns its materialized instances — remove them too.
+    if (existing.event.lunarRule) {
+      this.detachLunarMaterialized({ masterEventId: id })
+    }
 
     const now = new Date().toISOString()
     // Soft delete with dirty flag set for cloud synchronization
@@ -382,15 +428,17 @@ export class EventsRepo {
 
     const placeholders = calendarIds.map(() => '?').join(',')
 
-    // 1. Fetch non-recurring events in range
-    // 2. Fetch all recurring events for the specified calendars (rrule is not null)
+    // 1. Non-recurring events overlapping the range (includes materialized lunar instances)
+    // 2. All RRULE masters for the calendars
+    // 3. All lunar-recurring masters for the calendars
     const sql = `
       SELECT * FROM events
       WHERE calendar_id IN (${placeholders})
         AND is_deleted = 0
         AND (
-          (rrule IS NULL AND dtstart_utc <= ? AND dtend_utc >= ?)
+          (rrule IS NULL AND lunar_rule IS NULL AND dtstart_utc <= ? AND dtend_utc >= ?)
           OR (rrule IS NOT NULL)
+          OR (lunar_rule IS NOT NULL)
         )
     `
 
@@ -402,6 +450,14 @@ export class EventsRepo {
 
     for (const row of rows) {
       const event = mapRowToEvent(row)
+      if (event.lunarRule) {
+        const exceptions = this.getExceptionsForEvent(event.id)
+        const coveredYears = this.getMaterializedYears(event.id)
+        occurrences.push(
+          ...expandOccurrences(event, exceptions, startUtc, endUtc, coveredYears)
+        )
+        continue
+      }
       const exceptions = event.rrule ? this.getExceptionsForEvent(event.id) : []
       const expanded = expandOccurrences(event, exceptions, startUtc, endUtc)
       occurrences.push(...expanded)
@@ -409,6 +465,113 @@ export class EventsRepo {
 
     // Sort chronologically by startUtc
     return occurrences.sort((a, b) => a.startUtc.localeCompare(b.startUtc))
+  }
+
+  /** Gregorian years for which a lunar master already has a materialized instance. */
+  private getMaterializedYears(masterEventId: string): Set<number> {
+    const rows = this.db
+      .prepare(
+        'SELECT dtstart_utc FROM events WHERE lunar_source_event_id = ? AND is_deleted = 0'
+      )
+      .all<{ dtstart_utc: string }>(masterEventId)
+    const years = new Set<number>()
+    for (const r of rows) {
+      const year = Number(r.dtstart_utc.slice(0, 4))
+      if (Number.isFinite(year)) years.add(year)
+    }
+    return years
+  }
+
+  /**
+   * Generate concrete, standalone all-day events for a lunar master, one per
+   * Gregorian year from the current year through `throughYear`, into the target
+   * calendar. These carry `dirty = 1` so the normal sync push uploads them to the
+   * provider as ordinary events. Re-running only fills gaps (idempotent per year).
+   */
+  materializeLunarEvent(input: MaterializeLunarInput): { count: number } {
+    const master = this.getEventById(input.masterEventId)
+    if (!master) {
+      throw new Error(`Lunar master not found: ${input.masterEventId}`)
+    }
+    if (!master.event.lunarRule) {
+      throw new Error(`Event ${input.masterEventId} is not a lunar-recurring event`)
+    }
+    this.checkReadOnlyCalendar(input.targetCalendarId)
+
+    const spec = master.event.lunarRule
+    const src = master.event
+    const fromYear = new Date().getUTCFullYear()
+    const alreadyDone = this.getMaterializedYears(input.masterEventId)
+    const now = new Date().toISOString()
+
+    let count = 0
+    const insert = this.db.prepare(
+      `INSERT INTO events (
+        id, calendar_id, uid, title, notes, location,
+        dtstart_utc, dtend_utc, tzid, all_day, rrule, exdate,
+        lunar_rule, lunar_source_event_id,
+        color, meeting_url, dirty, is_deleted, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, ?, ?, ?, 1, 0, ?, ?)`
+    )
+
+    this.db.transaction(() => {
+      for (let year = fromYear; year <= input.throughYear; year++) {
+        if (alreadyDone.has(year)) continue
+        const isoDate = resolveLunarOccurrence(spec, year)
+        if (!isoDate) continue
+
+        const id = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${year}`
+        const uid = `${id}@gone.calendar`
+        insert.run(
+          id,
+          input.targetCalendarId,
+          uid,
+          src.title,
+          src.notes || null,
+          src.location || null,
+          `${isoDate}T00:00:00.000Z`,
+          `${isoDate}T23:59:59.999Z`,
+          src.tzid,
+          input.masterEventId,
+          src.color || null,
+          src.meetingUrl || null,
+          now,
+          now
+        )
+        count++
+      }
+    })()
+
+    return { count }
+  }
+
+  /**
+   * Remove the materialized instances of a lunar master. Instances that were
+   * already pushed to a provider (they have an etag) are soft-deleted with
+   * `dirty = 1` so the deletion propagates; never-synced ones are hard-deleted.
+   */
+  detachLunarMaterialized(input: DetachLunarInput): { count: number } {
+    const children = this.db
+      .prepare(
+        'SELECT id, etag FROM events WHERE lunar_source_event_id = ? AND is_deleted = 0'
+      )
+      .all<{ id: string; etag: string | null }>(input.masterEventId)
+
+    const now = new Date().toISOString()
+    let count = 0
+    this.db.transaction(() => {
+      for (const child of children) {
+        if (child.etag) {
+          this.db
+            .prepare('UPDATE events SET is_deleted = 1, dirty = 1, updated_at = ? WHERE id = ?')
+            .run(now, child.id)
+        } else {
+          this.db.prepare('DELETE FROM events WHERE id = ?').run(child.id)
+        }
+        count++
+      }
+    })()
+    return { count }
   }
 
   moveEvent(input: MoveEventInput): CalendarEvent {
@@ -645,5 +808,54 @@ export class EventsRepo {
       .prepare('DELETE FROM events WHERE calendar_id = ?')
       .run(calendarId)
     return result.changes
+  }
+
+  /** Events where the last push hit a 412 (someone else changed it first) and still need a resolution. */
+  listConflicts(): SyncConflict[] {
+    const rows = this.db
+      .prepare(
+        `SELECT e.id as event_id, e.calendar_id, c.name as calendar_name, e.title, e.updated_at
+         FROM events e
+         JOIN calendars c ON c.id = e.calendar_id
+         WHERE e.has_conflict = 1 AND e.is_deleted = 0`
+      )
+      .all<{ event_id: string; calendar_id: string; calendar_name: string; title: string; updated_at: string }>()
+
+    return rows.map((r) => ({
+      eventId: r.event_id,
+      calendarId: r.calendar_id,
+      calendarName: r.calendar_name,
+      title: r.title,
+      updatedAt: r.updated_at
+    }))
+  }
+
+  /**
+   * Resolve a sync conflict:
+   * - 'keepMine' clears the stored etag so the next push goes through unconditionally,
+   *   overwriting whatever's on the server.
+   * - 'keepTheirs' drops the local edit (dirty=0) and clears the calendar's sync token
+   *   where one exists, forcing a full resync that pulls the server's version back in -
+   *   CalDAV already does a full pull every cycle, so no token to clear there.
+   */
+  resolveConflict(eventId: string, resolution: 'keepMine' | 'keepTheirs'): boolean {
+    const row = this.db
+      .prepare('SELECT calendar_id FROM events WHERE id = ? AND has_conflict = 1')
+      .get<{ calendar_id: string }>(eventId)
+    if (!row) return false
+
+    if (resolution === 'keepMine') {
+      this.db
+        .prepare('UPDATE events SET etag = NULL, has_conflict = 0, dirty = 1 WHERE id = ?')
+        .run(eventId)
+    } else {
+      this.db
+        .prepare('UPDATE events SET dirty = 0, has_conflict = 0 WHERE id = ?')
+        .run(eventId)
+      this.db
+        .prepare('UPDATE sync_state SET sync_token = NULL WHERE calendar_id = ?')
+        .run(row.calendar_id)
+    }
+    return true
   }
 }

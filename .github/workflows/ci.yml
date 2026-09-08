@@ -17,7 +17,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22.5 added node:sqlite behind a flag; it's unflagged from 23.4 on. The DB
+          # tests require() it directly (src/main/db/sqlite-driver.ts), and the repo
+          # doesn't declare better-sqlite3 as a fallback dependency, so CI's Node must
+          # actually have it built in, not just be "recent enough" to build the app.
+          node-version: 24
           cache: npm
 
       - run: npm ci

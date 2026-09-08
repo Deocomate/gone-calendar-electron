@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS, type ConnectCalDavInput } from '@shared/ipc-contract'
 import { getDatabase } from '../db/database'
+import { credentialsFilePath, isConfigured } from '../load-credentials'
 import { GoogleOAuthManager } from '../oauth/google-oauth'
 import { MicrosoftOAuthManager } from '../oauth/microsoft-oauth'
 import { SecureStore } from '../secure-store'
@@ -64,10 +65,19 @@ export function registerAuthSyncIpcHandlers(): void {
   // Google OAuth
   ipcMain.handle(IPC_CHANNELS.AUTH.CONNECT_GOOGLE, async () => {
     try {
-      const activeClientId = process.env.GOOGLE_OAUTH_CLIENT_ID || 'dummy_google_id.apps.googleusercontent.com'
+      const activeClientId = process.env.GOOGLE_OAUTH_CLIENT_ID
       const activeClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+      if (!isConfigured(activeClientId)) {
+        return {
+          success: false,
+          message:
+            `Google sign-in isn't configured. Create a Google OAuth "Desktop app" client at ` +
+            `console.cloud.google.com/apis/credentials, then add GOOGLE_OAUTH_CLIENT_ID and ` +
+            `GOOGLE_OAUTH_CLIENT_SECRET to:\n${credentialsFilePath()}\nand restart the app.`
+        }
+      }
 
-      const result = await googleOAuth.startAuthFlow(activeClientId, activeClientSecret)
+      const result = await googleOAuth.startAuthFlow(activeClientId!, activeClientSecret)
       if (syncWorkerInstance) {
         syncWorkerInstance.triggerSync().catch(() => {})
       }
@@ -89,10 +99,19 @@ export function registerAuthSyncIpcHandlers(): void {
   // Microsoft OAuth
   ipcMain.handle(IPC_CHANNELS.AUTH.CONNECT_MICROSOFT, async () => {
     try {
-      const activeClientId = process.env.MICROSOFT_CLIENT_ID || 'dummy_microsoft_client_id'
+      const activeClientId = process.env.MICROSOFT_CLIENT_ID
       const activeClientSecret = process.env.MICROSOFT_CLIENT_SECRET
+      if (!isConfigured(activeClientId)) {
+        return {
+          success: false,
+          message:
+            `Microsoft sign-in isn't configured. Register an app at ` +
+            `portal.azure.com (Azure AD → App registrations), then add MICROSOFT_CLIENT_ID ` +
+            `(and MICROSOFT_CLIENT_SECRET if required) to:\n${credentialsFilePath()}\nand restart the app.`
+        }
+      }
 
-      const result = await msOAuth.startAuthFlow(activeClientId, activeClientSecret)
+      const result = await msOAuth.startAuthFlow(activeClientId!, activeClientSecret)
       if (syncWorkerInstance) {
         syncWorkerInstance.triggerSync().catch(() => {})
       }

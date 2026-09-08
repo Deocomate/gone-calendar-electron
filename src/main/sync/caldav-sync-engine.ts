@@ -91,7 +91,8 @@ export class CalDavSyncEngine {
                   etag = excluded.etag,
                   dirty = 0,
                   is_deleted = 0,
-                  updated_at = excluded.updated_at`
+                  updated_at = excluded.updated_at
+                WHERE events.dirty = 0 AND events.has_conflict = 0`
               )
               .run(
                 eventId,
@@ -190,9 +191,13 @@ export class CalDavSyncEngine {
           if (pushRes.success) {
             const now = new Date().toISOString()
             this.db
-              .prepare('UPDATE events SET etag = ?, dirty = 0, updated_at = ? WHERE id = ?')
+              .prepare('UPDATE events SET etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?')
               .run(pushRes.etag || row.etag, now, row.id)
             pushedCount++
+          } else if (pushRes.conflict) {
+            console.warn(`ETag conflict on CalDAV event ${row.id}`)
+            this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
+            errorCount++
           } else {
             errorCount++
           }

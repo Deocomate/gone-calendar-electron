@@ -3,6 +3,7 @@ import { DateTime } from 'luxon'
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { EventsRepo } from '../db/repos/events-repo'
 import { CalendarsRepo } from '../db/repos/calendars-repo'
+import { mt } from '../i18n-main'
 
 export class ReminderScheduler {
   private eventsRepo: EventsRepo
@@ -79,10 +80,10 @@ export class ReminderScheduler {
   private showNotification(title: string, startUtc: string, location?: string): void {
     const localStart = DateTime.fromISO(startUtc, { zone: 'utc' }).setZone('local')
     const timeStr = localStart.toFormat('HH:mm')
-    const body = `${timeStr}${location ? ` @ ${location}` : ''} — Bắt đầu trong ít phút`
+    const body = `${timeStr}${location ? ` @ ${location}` : ''} — ${mt('notify.startsSoon')}`
 
     const notif = new Notification({
-      title: `Nhắc nhở: ${title}`,
+      title: mt('notify.reminder', { title }),
       body,
       silent: false
     })

@@ -1,10 +1,9 @@
-import { BrowserWindow, screen, ipcMain, nativeTheme } from 'electron'
+import { BrowserWindow, screen, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-contract'
 import { getDatabase } from './db/database'
 import { EventsRepo } from './db/repos/events-repo'
 import { CalendarsRepo } from './db/repos/calendars-repo'
-import { TasksRepo } from './db/repos/tasks-repo'
 import { DateTime } from 'luxon'
 
 let miniWindow: BrowserWindow | null = null
@@ -20,8 +19,8 @@ export function createMiniWindow(mainWin: BrowserWindow): BrowserWindow {
     return miniWindow
   }
 
-  const isDark = nativeTheme.shouldUseDarkColors
-  const initialBg = isDark ? '#090d16' : '#ffffff'
+  // Dark is the default theme; match the dark canvas colour to avoid a flash.
+  const initialBg = '#2b2d31'
 
   miniWindow = new BrowserWindow({
     width: 380,
@@ -118,7 +117,6 @@ export function registerMiniIpcHandlers(mainWin: BrowserWindow): void {
   const db = getDatabase()
   const eventsRepo = new EventsRepo(db)
   const calendarsRepo = new CalendarsRepo(db)
-  const tasksRepo = new TasksRepo(db)
 
   ipcMain.removeHandler(IPC_CHANNELS.MINI.OPEN_MAIN)
   ipcMain.removeHandler(IPC_CHANNELS.MINI.TOGGLE)
@@ -149,9 +147,7 @@ export function registerMiniIpcHandlers(mainWin: BrowserWindow): void {
       ? eventsRepo.queryEventsByRange(activeCalIds, startUtc, endUtc).slice(0, limit)
       : []
 
-    const tasks = tasksRepo.listTasks({ includeCompleted: false }).slice(0, limit)
-
-    return { occurrences, tasks }
+    return { occurrences }
   })
 
   ipcMain.handle(IPC_CHANNELS.MINI.SET_ALWAYS_ON_TOP, (_event, flag: boolean) => {

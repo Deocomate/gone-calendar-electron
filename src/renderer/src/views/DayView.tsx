@@ -10,6 +10,9 @@ import ResizeTimeTooltip from '../components/ResizeTimeTooltip'
 import { minutesFromPointer, prepareDropEvent, type CalendarDropTarget } from '../dnd/drop-target'
 import { layoutTimedSegments } from '../dnd/layout-timed-events'
 import { useEventResize } from '../dnd/use-event-resize'
+import { useSlotDragSelect } from '../dnd/use-slot-drag-select'
+import { useDisplayPreferences, HOUR_HEIGHT_BY_SIZE } from '../context/DisplayPreferencesContext'
+import type { EventEditorDraftPreview } from '../editor/EventEditorDialog'
 
 interface DayViewProps {
   anchorDate: DateTime
@@ -17,8 +20,11 @@ interface DayViewProps {
   showLunar: boolean
   draggedOccurrenceId?: string
   dropTarget?: CalendarDropTarget | null
+  /** Live slot/color for a new event still being drafted in the open editor - painted
+   *  as an outline on the grid so the dialog isn't the only place the event is visible. */
+  previewSlot?: EventEditorDraftPreview | null
   onSelectOccurrence?: (occ: ExpandedOccurrence) => void
-  onSelectSlot?: (start: DateTime, end: DateTime) => void
+  onSelectSlot?: (start: DateTime, end: DateTime, meta?: { clientX?: number; allDay?: boolean }) => void
   onDragStart?: (e: React.DragEvent, occ: ExpandedOccurrence, segment?: TimedSegment) => void
   onDragEnd?: () => void
   onDragOverTarget?: (target: CalendarDropTarget) => void
@@ -27,14 +33,13 @@ interface DayViewProps {
   onResizeBusyEnd?: () => void
 }
 
-const HOUR_HEIGHT = 60
-
 export const DayView: React.FC<DayViewProps> = ({
   anchorDate,
   occurrences,
   showLunar,
   draggedOccurrenceId,
   dropTarget,
+  previewSlot,
   onSelectOccurrence,
   onSelectSlot,
   onDragStart,
@@ -47,6 +52,12 @@ export const DayView: React.FC<DayViewProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
 
+  const { hourBlockSize, dayStartHour, secondaryTimezone } = useDisplayPreferences()
+  const HOUR_HEIGHT = HOUR_HEIGHT_BY_SIZE[hourBlockSize]
+  const gridColsClass = secondaryTimezone
+    ? 'grid-cols-[56px_68px_minmax(0,1fr)]'
+    : 'grid-cols-[68px_minmax(0,1fr)]'
+
   const today = DateTime.local()
   const isToday = anchorDate.hasSame(today, 'day')
   const dayKey = anchorDate.toFormat('yyyy-MM-dd')
@@ -58,7 +69,7 @@ export const DayView: React.FC<DayViewProps> = ({
       hourHeight: HOUR_HEIGHT,
       columns: rect ? [{ left: rect.left, right: rect.right, day: anchorDate }] : []
     }
-  }, [anchorDate])
+  }, [anchorDate, HOUR_HEIGHT])
 
   const { preview, startResize, isResizing } = useEventResize({
     getGeometry,
@@ -67,11 +78,16 @@ export const DayView: React.FC<DayViewProps> = ({
     scrollerRef: scrollRef
   })
 
+  const { preview: slotPreview, startDrag: startSlotDrag } = useSlotDragSelect({
+    hourHeight: HOUR_HEIGHT,
+    onComplete: (start, end, meta) => onSelectSlot?.(start, end, meta)
+  })
+
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = 7.5 * HOUR_HEIGHT
+      scrollRef.current.scrollTop = dayStartHour * HOUR_HEIGHT
     }
-  }, [anchorDate])
+  }, [anchorDate, dayStartHour, HOUR_HEIGHT])
 
   const displayOccurrences = preview
     ? occurrences.map((occ) => {
@@ -89,6 +105,27 @@ export const DayView: React.FC<DayViewProps> = ({
   const timedLayouts = layoutTimedSegments(daySegments, HOUR_HEIGHT)
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
+  // Draft preview of a new event while its editor is open - outlined in the color
+  // the form currently holds, updating live as it changes.
+  const timedPreviewBox = (() => {
+    if (!previewSlot || previewSlot.allDay) return null
+    const dayStart = anchorDate.startOf('day')
+    const dayEnd = anchorDate.endOf('day')
+    if (previewSlot.end <= dayStart || previewSlot.start >= dayEnd) return null
+    const clampedStart = previewSlot.start < dayStart ? dayStart : previewSlot.start
+    const clampedEnd = previewSlot.end > dayEnd ? dayEnd : previewSlot.end
+    const startMin = clampedStart.diff(dayStart, 'minutes').minutes
+    const endMin = clampedEnd.diff(dayStart, 'minutes').minutes
+    if (endMin <= startMin) return null
+    return { topPos: (startMin / 60) * HOUR_HEIGHT, height: ((endMin - startMin) / 60) * HOUR_HEIGHT }
+  })()
+
+  const showAllDayPreview = Boolean(
+    previewSlot?.allDay &&
+      previewSlot.start.startOf('day') <= anchorDate.startOf('day') &&
+      previewSlot.end.startOf('day') >= anchorDate.startOf('day')
+  )
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-surface select-none relative">
       {/* Header */}
@@ -98,7 +135,16 @@ export const DayView: React.FC<DayViewProps> = ({
             className={`flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold shrink-0 ${
               isToday ? 'text-white' : 'bg-hover text-primary'
             }`}
-            style={isToday ? { backgroundColor: TODAY_COLOR } : undefined}
+            style={
+              isToday
+                ? { backgroundColor: TODAY_COLOR }
+                : // A new all-day event being drafted highlights this date instead of a
+                  // fake pill down in the all-day row - simpler, and it can't be mistaken
+                  // for an already-saved event.
+                  showAllDayPreview
+                  ? { boxShadow: `inset 0 0 0 2px ${previewSlot!.color}` }
+                  : undefined
+            }
           >
             {anchorDate.day}
           </span>
@@ -119,39 +165,66 @@ export const DayView: React.FC<DayViewProps> = ({
           </div>
         </div>
 
-        {allDayOccurrences.length > 0 && (
-          <div
-            onDragOver={(e) => {
-              prepareDropEvent(e)
-              onDragOverTarget?.({ dateKey: dayKey })
-            }}
-            onDrop={(e) => onDropOnDate?.(e, anchorDate)}
-            className={`gc-cell flex max-w-md items-center gap-2 overflow-x-auto rounded-lg p-1 min-w-0 ${
-              dropTarget?.dateKey === dayKey && dropTarget.hour === undefined ? 'is-drop-target' : ''
-            }`}
-          >
-            {allDayOccurrences.map((occ) => (
-              <EventPill
-                key={occ.id}
-                draggable
-                isDragging={draggedOccurrenceId === occ.id}
-                title={occ.title}
-                color={occ.color}
-                onDragStart={(e) => onDragStart?.(e, occ)}
-                onDragEnd={onDragEnd}
-                onClick={() => onSelectOccurrence?.(occ)}
-              />
-            ))}
-          </div>
-        )}
+        <div
+          onDragOver={(e) => {
+            prepareDropEvent(e)
+            onDragOverTarget?.({ dateKey: dayKey })
+          }}
+          onDrop={(e) => onDropOnDate?.(e, anchorDate)}
+          onClick={(e) => {
+            const dayStart = anchorDate.startOf('day')
+            onSelectSlot?.(dayStart, dayStart, { clientX: e.clientX, allDay: true })
+          }}
+          className={`gc-cell flex min-h-[2rem] max-w-md cursor-pointer items-center gap-2 overflow-x-auto rounded-lg p-1 min-w-0 ${
+            dropTarget?.dateKey === dayKey && dropTarget.hour === undefined ? 'is-drop-target' : ''
+          }`}
+        >
+          {allDayOccurrences.map((occ) => (
+            <EventPill
+              key={occ.id}
+              draggable
+              isDragging={draggedOccurrenceId === occ.id}
+              title={occ.title}
+              color={occ.color}
+              onDragStart={(e) => onDragStart?.(e, occ)}
+              onDragEnd={onDragEnd}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelectOccurrence?.(occ)
+              }}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Hourly Scrollable Grid */}
       <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-scroll [scrollbar-gutter:stable]">
         <div
-          className="relative grid grid-cols-[68px_minmax(0,1fr)] divide-x divide-hairline"
+          className={`relative grid ${gridColsClass} divide-x divide-hairline`}
           style={{ minHeight: `${24 * HOUR_HEIGHT}px` }}
         >
+          {secondaryTimezone && (
+            <div className="bg-app pr-1.5 text-right select-none min-w-0">
+              {hours.map((hour) => {
+                const secondaryLabel = anchorDate
+                  .startOf('day')
+                  .plus({ hours: hour })
+                  .setZone(secondaryTimezone)
+                  .toFormat('HH:mm')
+                return (
+                  <div
+                    key={hour}
+                    style={{ height: `${HOUR_HEIGHT}px` }}
+                    className={`font-mono text-[10px] text-muted/70 truncate ${
+                      hour === 0 ? 'pt-1' : '-translate-y-2.5 pt-1'
+                    }`}
+                  >
+                    {secondaryLabel}
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <div className="bg-app pr-3 text-right select-none min-w-0">
               {hours.map((hour) => (
                 <div
@@ -184,17 +257,33 @@ export const DayView: React.FC<DayViewProps> = ({
               const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT)
               onDropOnDate?.(e, anchorDate, minutes)
             }}
-            onClick={(e) => {
+            onMouseDown={(e) => {
               if (isResizing) return
-              const rect = e.currentTarget.getBoundingClientRect()
-              const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT)
-              const startSlot = anchorDate.startOf('day').plus({ minutes })
-              onSelectSlot?.(startSlot, startSlot.plus({ hours: 1 }))
+              startSlotDrag(e, anchorDate, dayKey)
             }}
           >
             {hours.map((hour) => (
               <div key={hour} style={{ height: `${HOUR_HEIGHT}px` }} className="gc-hour-slot border-b border-hairline/60" />
             ))}
+
+            {slotPreview && (
+              <div
+                className="pointer-events-none absolute right-1 left-1 z-20 rounded-md border-2 border-accent bg-accent/25"
+                style={{ top: `${slotPreview.topPos}px`, height: `${slotPreview.height}px` }}
+              />
+            )}
+
+            {timedPreviewBox && (
+              <div
+                className="pointer-events-none absolute right-1 left-1 z-20 rounded-[6px] border-2 border-dashed"
+                style={{
+                  top: `${timedPreviewBox.topPos}px`,
+                  height: `${timedPreviewBox.height}px`,
+                  borderColor: previewSlot!.color,
+                  backgroundColor: `${previewSlot!.color}33`
+                }}
+              />
+            )}
 
             {dropTarget?.dateKey === dayKey && dropTarget.minutes !== undefined && (
               <div
@@ -232,6 +321,9 @@ export const DayView: React.FC<DayViewProps> = ({
         </div>
       </div>
       {preview && <ResizeTimeTooltip label={preview.label} x={preview.clientX} y={preview.clientY} />}
+      {slotPreview && (
+        <ResizeTimeTooltip label={slotPreview.label} x={slotPreview.clientX} y={slotPreview.clientY} />
+      )}
     </div>
   )
 }

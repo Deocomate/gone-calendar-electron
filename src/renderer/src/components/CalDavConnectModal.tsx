@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Server,
   Cloud,
@@ -24,6 +25,7 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
   onClose,
   onConnected
 }) => {
+  const { t } = useTranslation()
   const [provider, setProvider] = useState<ProviderType>('nextcloud')
   const [serverUrl, setServerUrl] = useState<string>('')
   const [username, setUsername] = useState<string>('')
@@ -58,17 +60,17 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!username.trim() || !password.trim()) {
-      setErrorMsg('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.')
+      setErrorMsg(t('caldav.needCredentials'))
       return
     }
 
     if (provider !== 'icloud' && !serverUrl.trim()) {
-      setErrorMsg('Vui lòng nhập địa chỉ máy chủ CalDAV.')
+      setErrorMsg(t('caldav.needServer'))
       return
     }
 
     if (!window.gone?.auth?.connectCalDav) {
-      setErrorMsg('API CalDAV không khả dụng.')
+      setErrorMsg('CalDAV API ' + t('caldav.unavailable'))
       return
     }
 
@@ -88,16 +90,16 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
       const res = await window.gone.auth.connectCalDav(input)
 
       if (res.success) {
-        setSuccessMsg('✓ Kết nối CalDAV thành công!')
+        setSuccessMsg(t('caldav.connected'))
         setTimeout(() => {
           onConnected()
           onClose()
         }, 1200)
       } else {
-        setErrorMsg(`Kết nối thất bại: ${res.message}`)
+        setErrorMsg(t('caldav.failed', { msg: res.message }))
       }
     } catch (err: any) {
-      setErrorMsg(`Lỗi kết nối: ${err.message || String(err)}`)
+      setErrorMsg(t('caldav.errorPrefix', { msg: err.message || String(err) }))
     } finally {
       setIsLoading(false)
     }
@@ -107,7 +109,7 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
     { id: 'nextcloud' as ProviderType, label: 'Nextcloud', icon: <Cloud className="h-4 w-4" /> },
     { id: 'icloud' as ProviderType, label: 'iCloud', icon: <Calendar className="h-4 w-4" /> },
     { id: 'synology' as ProviderType, label: 'Synology', icon: <HardDrive className="h-4 w-4" /> },
-    { id: 'generic' as ProviderType, label: 'Tùy chỉnh', icon: <Globe className="h-4 w-4" /> }
+    { id: 'generic' as ProviderType, label: 'Custom', icon: <Globe className="h-4 w-4" /> }
   ]
 
   return (
@@ -118,7 +120,7 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
           <div className="flex items-center gap-2">
             <Server className="h-4 w-4 text-muted" />
             <div>
-              <h3 className="text-sm font-semibold text-primary">Kết nối CalDAV</h3>
+              <h3 className="text-sm font-semibold text-primary">{t('caldav.title')}</h3>
               <p className="text-[11px] text-muted">Nextcloud, Apple iCloud, Synology & Generic</p>
             </div>
           </div>
@@ -186,10 +188,10 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
             >
               <div className="flex items-center gap-1.5 font-semibold text-xs">
                 <Info className="h-3.5 w-3.5 text-muted" />
-                <span>Yêu cầu Mật khẩu dành riêng cho ứng dụng</span>
+                <span>{t('caldav.appPasswordRequired')}</span>
               </div>
               <p className="text-[11px] text-muted leading-relaxed">
-                Đăng nhập vào <span className="font-mono text-accent">appleid.apple.com</span> &gt; Đăng nhập và Bảo mật &gt; Mật khẩu Dành riêng cho Ứng dụng để tạo mật khẩu.
+                appleid.apple.com &gt; Sign-In and Security &gt; App-Specific Passwords
               </p>
             </div>
           )}
@@ -197,7 +199,7 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
           {/* Boxed fields for settings-like layout */}
           {provider !== 'icloud' && (
             <TextInput
-              label="Địa chỉ máy chủ CalDAV (URL)"
+              label={t('caldav.serverUrl')}
               required
               variant="boxed"
               value={serverUrl}
@@ -208,7 +210,7 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
           )}
 
           <TextInput
-            label={provider === 'icloud' ? 'Tài khoản Apple ID (Email)' : 'Tên đăng nhập (Username)'}
+            label={provider === 'icloud' ? t('caldav.appleId') : t('caldav.username')}
             required
             variant="boxed"
             value={username}
@@ -218,7 +220,7 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
           />
 
           <TextInput
-            label={provider === 'icloud' ? 'Mật khẩu dành riêng (App-Specific Password)' : 'Mật khẩu'}
+            label={provider === 'icloud' ? t('caldav.appPassword') : t('caldav.password')}
             type="password"
             required
             variant="boxed"
@@ -228,11 +230,11 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
           />
 
           <TextInput
-            label="Tên hiển thị tài khoản"
+            label={t('caldav.displayName')}
             variant="boxed"
             value={displayName}
             onChange={setDisplayName}
-            placeholder="Tên tài khoản trong Gone Calendar"
+            placeholder={t('caldav.displayNameHint')}
             prefixIcon={<Calendar className="h-3.5 w-3.5" />}
           />
 
@@ -244,7 +246,7 @@ export const CalDavConnectModal: React.FC<CalDavConnectModalProps> = ({
               className="gc-btn-primary w-full py-2 disabled:opacity-50 cursor-pointer"
               style={{ borderRadius: 'var(--radius-control)' }}
             >
-              {isLoading ? 'Đang kiểm tra kết nối...' : 'Xác thực & Kết nối CalDAV'}
+              {isLoading ? t('caldav.checking') : t('caldav.connect')}
             </button>
           </div>
         </form>

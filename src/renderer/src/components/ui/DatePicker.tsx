@@ -1,3 +1,4 @@
+import i18n from '../../i18n'
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { DateTime } from 'luxon'
@@ -27,7 +28,7 @@ export interface DatePickerProps {
 export const DatePicker: React.FC<DatePickerProps> = ({
   value,
   onChange,
-  placeholder = 'Chọn ngày...',
+  placeholder = i18n.t('ui.selectPlaceholder'),
   label,
   minDate,
   maxDate,
@@ -75,19 +76,19 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   }
 
   useEffect(() => {
-    if (isOpen) {
-      setViewDate(parsedValue || DateTime.local())
-      updateCoords()
+    if (!isOpen) return
 
-      const handleScrollOrResize = () => {
-        updateCoords()
-      }
-      window.addEventListener('resize', handleScrollOrResize)
-      window.addEventListener('scroll', handleScrollOrResize, true)
-      return () => {
-        window.removeEventListener('resize', handleScrollOrResize)
-        window.removeEventListener('scroll', handleScrollOrResize, true)
-      }
+    setViewDate(parsedValue || DateTime.local())
+    updateCoords()
+
+    const handleScrollOrResize = () => {
+      updateCoords()
+    }
+    window.addEventListener('resize', handleScrollOrResize)
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    return () => {
+      window.removeEventListener('resize', handleScrollOrResize)
+      window.removeEventListener('scroll', handleScrollOrResize, true)
     }
   }, [isOpen, parsedValue, align])
 
@@ -161,16 +162,16 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   }, [parsedValue])
 
   const presets = [
-    { label: 'Hôm nay', getDt: () => today },
-    { label: 'Ngày mai', getDt: () => today.plus({ days: 1 }) },
+    { label: i18n.t('ui.today'), getDt: () => today },
+    { label: i18n.t('ui.tomorrow'), getDt: () => today.plus({ days: 1 }) },
     {
-      label: 'Cuối tuần',
+      label: i18n.t('ui.weekend'),
       getDt: () => {
         const sat = today.set({ weekday: 6 })
         return sat < today ? sat.plus({ weeks: 1 }) : sat
       }
     },
-    { label: 'Tuần sau', getDt: () => today.plus({ weeks: 1 }) }
+    { label: i18n.t('ui.nextWeek'), getDt: () => today.plus({ weeks: 1 }) }
   ]
 
   const weekHeaders = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
@@ -222,7 +223,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                   onClick={handlePrevYear}
                   className="p-1 text-muted hover:text-primary hover:bg-hover transition-colors cursor-pointer"
                   style={{ borderRadius: 'var(--radius-control)' }}
-                  title="Năm trước"
+                  title={i18n.t('ui.prevYear')}
                 >
                   <ChevronsLeft className="h-3.5 w-3.5" />
                 </button>
@@ -231,7 +232,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                   onClick={handlePrevMonth}
                   className="p-1 text-muted hover:text-primary hover:bg-hover transition-colors cursor-pointer"
                   style={{ borderRadius: 'var(--radius-control)' }}
-                  title="Tháng trước"
+                  title={i18n.t('ui.prevMonth')}
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </button>
@@ -247,7 +248,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                   onClick={handleNextMonth}
                   className="p-1 text-muted hover:text-primary hover:bg-hover transition-colors cursor-pointer"
                   style={{ borderRadius: 'var(--radius-control)' }}
-                  title="Tháng sau"
+                  title={i18n.t('ui.nextMonth')}
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
@@ -256,7 +257,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                   onClick={handleNextYear}
                   className="p-1 text-muted hover:text-primary hover:bg-hover transition-colors cursor-pointer"
                   style={{ borderRadius: 'var(--radius-control)' }}
-                  title="Năm sau"
+                  title={i18n.t('ui.nextYear')}
                 >
                   <ChevronsRight className="h-3.5 w-3.5" />
                 </button>
@@ -323,14 +324,14 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                 onClick={() => handleSelectDate(today)}
                 className="font-medium text-accent hover:underline cursor-pointer"
               >
-                Hôm nay ({today.toFormat('dd/MM')})
+                {i18n.t('ui.today')} ({today.toFormat('dd/MM')})
               </button>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
                 className="text-muted hover:text-primary cursor-pointer transition-colors"
               >
-                Đóng
+                {i18n.t('ui.close')}
               </button>
             </div>
           </div>,
@@ -377,7 +378,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           <div
             onClick={handleClear}
             className="p-0.5 text-muted hover:text-primary transition-colors shrink-0 cursor-pointer"
-            title="Xóa ngày đã chọn"
+            title={i18n.t('ui.clearDate')}
             style={{ borderRadius: 'var(--radius-control)' }}
           >
             <X className="h-3.5 w-3.5" />

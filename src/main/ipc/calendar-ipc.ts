@@ -8,6 +8,12 @@ import { EventsRepo, ReadOnlyCalendarError } from '../db/repos/events-repo'
 import { getDatabase } from '../db/database'
 import { parseIcsContent } from '../ics/parse-ics'
 import { generateIcs } from '../ics/write-ics'
+import { getSyncWorker } from './auth-sync-ipc'
+
+/** Fire-and-forget an immediate push/pull right after a local write, instead of waiting for the next poll. */
+function nudgeSync(): void {
+  getSyncWorker()?.triggerSync().catch(() => {})
+}
 
 export function registerCalendarIpcHandlers(): void {
   const db = getDatabase()
@@ -30,8 +36,12 @@ export function registerCalendarIpcHandlers(): void {
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.UPDATE_SCOPE)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.DELETE_SCOPE)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.UPSERT_EXCEPTION)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.MATERIALIZE_LUNAR)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.DETACH_LUNAR)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.SEARCH)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.SHARE_ICS)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.LIST_CONFLICTS)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.RESOLVE_CONFLICT)
 
   ipcMain.removeHandler(IPC_CHANNELS.ICS.IMPORT)
   ipcMain.removeHandler(IPC_CHANNELS.ICS.EXPORT)
@@ -76,7 +86,9 @@ export function registerCalendarIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.EVENT.CREATE, (_event, input: CreateEventInput) => {
     try {
-      return eventsRepo.createEvent(input)
+      const created = eventsRepo.createEvent(input)
+      nudgeSync()
+      return created
     } catch (err: any) {
       if (err instanceof ReadOnlyCalendarError) {
         throw new Error(`Write rejected: ${err.message}`)
@@ -87,7 +99,9 @@ export function registerCalendarIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.EVENT.UPDATE, (_event, id: string, input: UpdateEventInput) => {
     try {
-      return eventsRepo.updateEvent(id, input)
+      const updated = eventsRepo.updateEvent(id, input)
+      nudgeSync()
+      return updated
     } catch (err: any) {
       if (err instanceof ReadOnlyCalendarError) {
         throw new Error(`Write rejected: ${err.message}`)
@@ -98,7 +112,9 @@ export function registerCalendarIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.EVENT.DELETE, (_event, id: string) => {
     try {
-      return eventsRepo.deleteEvent(id)
+      const result = eventsRepo.deleteEvent(id)
+      nudgeSync()
+      return result
     } catch (err: any) {
       if (err instanceof ReadOnlyCalendarError) {
         throw new Error(`Delete rejected: ${err.message}`)
@@ -111,7 +127,9 @@ export function registerCalendarIpcHandlers(): void {
     IPC_CHANNELS.EVENT.UPSERT_EXCEPTION,
     (_event, exception: Omit<EventException, 'id' | 'createdAt' | 'updatedAt'>) => {
       try {
-        return eventsRepo.upsertException(exception)
+        const result = eventsRepo.upsertException(exception)
+        nudgeSync()
+        return result
       } catch (err: any) {
         if (err instanceof ReadOnlyCalendarError) {
           throw new Error(`Exception write rejected: ${err.message}`)
@@ -123,7 +141,9 @@ export function registerCalendarIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.EVENT.MOVE, (_event, input: any) => {
     try {
-      return eventsRepo.moveEvent(input)
+      const result = eventsRepo.moveEvent(input)
+      nudgeSync()
+      return result
     } catch (err: any) {
       if (err instanceof ReadOnlyCalendarError) {
         throw new Error(`Move rejected: ${err.message}`)
@@ -134,7 +154,9 @@ export function registerCalendarIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.EVENT.COPY, (_event, input: any) => {
     try {
-      return eventsRepo.copyEvent(input)
+      const result = eventsRepo.copyEvent(input)
+      nudgeSync()
+      return result
     } catch (err: any) {
       if (err instanceof ReadOnlyCalendarError) {
         throw new Error(`Copy rejected: ${err.message}`)
@@ -145,7 +167,9 @@ export function registerCalendarIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.EVENT.UPDATE_SCOPE, (_event, input: any) => {
     try {
-      return eventsRepo.updateRecurringScope(input)
+      const result = eventsRepo.updateRecurringScope(input)
+      nudgeSync()
+      return result
     } catch (err: any) {
       if (err instanceof ReadOnlyCalendarError) {
         throw new Error(`Recurring update rejected: ${err.message}`)
@@ -156,13 +180,30 @@ export function registerCalendarIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.EVENT.DELETE_SCOPE, (_event, input: any) => {
     try {
-      return eventsRepo.deleteRecurringScope(input)
+      const result = eventsRepo.deleteRecurringScope(input)
+      nudgeSync()
+      return result
     } catch (err: any) {
       if (err instanceof ReadOnlyCalendarError) {
         throw new Error(`Recurring delete rejected: ${err.message}`)
       }
       throw err
     }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EVENT.MATERIALIZE_LUNAR, (_event, input: any) => {
+    try {
+      return eventsRepo.materializeLunarEvent(input)
+    } catch (err: any) {
+      if (err instanceof ReadOnlyCalendarError) {
+        throw new Error(`Materialize rejected: ${err.message}`)
+      }
+      throw err
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EVENT.DETACH_LUNAR, (_event, input: any) => {
+    return eventsRepo.detachLunarMaterialized(input)
   })
 
   ipcMain.handle(IPC_CHANNELS.EVENT.SEARCH, (_event, query: string, limit?: number) => {
@@ -194,6 +235,19 @@ export function registerCalendarIpcHandlers(): void {
       return { success: false, message: err.message || String(err) }
     }
   })
+
+  ipcMain.handle(IPC_CHANNELS.EVENT.LIST_CONFLICTS, () => {
+    return eventsRepo.listConflicts()
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.EVENT.RESOLVE_CONFLICT,
+    (_event, eventId: string, resolution: 'keepMine' | 'keepTheirs') => {
+      const resolved = eventsRepo.resolveConflict(eventId, resolution)
+      if (resolved) nudgeSync()
+      return resolved
+    }
+  )
 
   // 3. ICS Import / Export handlers
   ipcMain.handle(
@@ -248,6 +302,8 @@ export function registerCalendarIpcHandlers(): void {
             }
           }
         })()
+
+        if (importedCount > 0) nudgeSync()
 
         return {
           success: true,

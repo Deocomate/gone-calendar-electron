@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DateTime } from 'luxon'
-import { Clock, MapPin, Repeat, CheckCircle2, Layers, Calendar } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Clock, MapPin, Repeat, Layers, Calendar } from 'lucide-react'
 import type { ExpandedOccurrence } from '@shared/event-model'
-import type { TaskItem } from '@shared/task-model'
 import { DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
+import { formatClockTime } from '@shared/time-format'
+import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 
 export interface HoverFlyoutData {
   title: string
   subtitle?: string
   occurrences: ExpandedOccurrence[]
-  tasks?: TaskItem[]
   anchorRect: { top: number; bottom: number; left: number; right: number; width: number; height: number }
 }
 
@@ -33,6 +34,8 @@ export const EventHoverFlyout: React.FC<EventHoverFlyoutProps> = ({
   onDragEnd,
   draggedOccurrenceId
 }) => {
+  const { t } = useTranslation()
+  const { timeFormat } = useDisplayPreferences()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -50,7 +53,7 @@ export const EventHoverFlyout: React.FC<EventHoverFlyoutProps> = ({
   // Immediately hide flyout if currently dragging or invalid state
   if (!data || !mounted || typeof document === 'undefined' || draggedOccurrenceId) return null
 
-  const totalItems = data.occurrences.length + (data.tasks?.length || 0)
+  const totalItems = data.occurrences.length
   if (totalItems === 0) return null
 
   const FLYOUT_WIDTH = 290
@@ -126,8 +129,8 @@ export const EventHoverFlyout: React.FC<EventHoverFlyoutProps> = ({
                 <span className="flex items-center gap-1 bg-black/15 px-1 py-0.2 rounded-[2px]">
                   <Clock className="h-2.5 w-2.5 shrink-0" />
                   {occ.allDay
-                    ? 'Cả ngày'
-                    : `${startDt.toFormat('HH:mm')} – ${endDt.toFormat('HH:mm')}`}
+                    ? t('list.allDay')
+                    : `${formatClockTime(startDt, timeFormat)} – ${formatClockTime(endDt, timeFormat)}`}
                 </span>
                 {occ.location && (
                   <span className="flex items-center gap-1 truncate font-sans max-w-[110px]">
@@ -139,22 +142,6 @@ export const EventHoverFlyout: React.FC<EventHoverFlyoutProps> = ({
             </div>
           )
         })}
-
-        {data.tasks?.map((task) => (
-          <div
-            key={task.id}
-            className="gc-stack-card-3d rounded-[3px] p-2 text-white text-xs font-medium shadow-xs"
-            style={{ backgroundColor: DEFAULT_EVENT_COLOR }}
-            title={`Nhiệm vụ: ${task.title}`}
-          >
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-              <span className={`truncate ${task.completed ? 'line-through opacity-75' : ''}`}>
-                {task.title}
-              </span>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   )

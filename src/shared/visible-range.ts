@@ -57,16 +57,17 @@ export function getVisibleRange(
     case 'year': {
       start = anchorDate.startOf('year')
       end = anchorDate.endOf('year')
-      label = isVi ? `Năm ${anchorDate.year}` : `Year ${anchorDate.year}`
+      label = String(anchorDate.year)
       break
     }
     case 'list': {
-      // 7 days before to 30 days after anchor
-      start = anchorDate.minus({ days: 7 }).startOf('day')
-      end = anchorDate.plus({ days: 30 }).endOf('day')
-      label = isVi
-        ? `Lịch trình (${anchorDate.toFormat('MM/yyyy')})`
-        : `Schedule (${anchorDate.toFormat('MMMM yyyy')})`
+      // Generous window either side of anchor - list view is meant to be freely
+      // scrollable, not just a narrow slice around "today".
+      start = anchorDate.minus({ days: 90 }).startOf('day')
+      end = anchorDate.plus({ days: 180 }).endOf('day')
+      // No header title for list view - each group's own sticky date heading already
+      // says what date it is, so a static "Schedule (Month)" label above it is redundant.
+      label = ''
       break
     }
   }

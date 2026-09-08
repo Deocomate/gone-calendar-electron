@@ -85,7 +85,7 @@ export function useEventDnD(
   }, [])
 
   const handleDropOnDate = useCallback(
-    (e: DragEvent, targetDate: DateTime, targetMinutes?: number) => {
+    (e: DragEvent, targetDate: DateTime, targetMinutes?: number, forceCopy = false) => {
       e.preventDefault()
       e.stopPropagation()
 
@@ -141,7 +141,7 @@ export function useEventDnD(
         return
       }
 
-      const isCopy = e.altKey
+      const isCopy = forceCopy || e.altKey
 
       // Execute direct move/copy immediately without modal interruption
       if (onDirectMove) {

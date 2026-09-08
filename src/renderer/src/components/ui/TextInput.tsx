@@ -1,3 +1,4 @@
+import i18n from '../../i18n'
 import React, { useState } from 'react'
 import { Eye, EyeOff, X } from 'lucide-react'
 
@@ -86,7 +87,7 @@ export const TextInput: React.FC<TextInputProps> = ({
             type="button"
             onClick={handleClear}
             className="p-0.5 text-muted hover:text-primary transition-colors ml-1 shrink-0 cursor-pointer"
-            title="Xóa"
+            title={i18n.t('ui.clear')}
             style={{ borderRadius: 'var(--radius-control)' }}
           >
             <X className="h-3.5 w-3.5" />
@@ -98,7 +99,7 @@ export const TextInput: React.FC<TextInputProps> = ({
             type="button"
             onClick={() => setShowPassword((prev) => !prev)}
             className="p-0.5 text-muted hover:text-primary transition-colors ml-1 shrink-0 cursor-pointer"
-            title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+            title={showPassword ? i18n.t('ui.hidePassword') : i18n.t('ui.showPassword')}
             style={{ borderRadius: 'var(--radius-control)' }}
           >
             {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}

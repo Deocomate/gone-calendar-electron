@@ -1,6 +1,9 @@
+import i18n from '../../i18n'
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Clock, ChevronDown } from 'lucide-react'
+import { formatClockTimeStr } from '@shared/time-format'
+import { useDisplayPreferences } from '../../context/DisplayPreferencesContext'
 
 export interface TimePickerProps {
   value: string // Format: HH:mm (e.g. "09:00", "14:30")
@@ -48,8 +51,8 @@ function formatDuration(startStr: string, endStr: string): string | null {
   const mins = diffMins % 60
 
   if (hours > 0 && mins > 0) return `${hours}h ${mins}m`
-  if (hours > 0) return `${hours} giờ`
-  return `${mins} phút`
+  if (hours > 0) return i18n.t('ui.hours', { n: hours })
+  return i18n.t('ui.minutes', { n: mins })
 }
 
 // Smart parse text into HH:mm
@@ -105,8 +108,9 @@ export const TimePicker: React.FC<TimePickerProps> = ({
   className = '',
   align = 'left'
 }) => {
+  const { timeFormat } = useDisplayPreferences()
   const [isOpen, setIsOpen] = useState(false)
-  const [inputValue, setInputValue] = useState(value || '')
+  const [inputValue, setInputValue] = useState(value ? formatClockTimeStr(value, timeFormat) : '')
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -116,8 +120,8 @@ export const TimePicker: React.FC<TimePickerProps> = ({
   const timeSlots = useMemo(() => generateTimeSlots(stepMinutes), [stepMinutes])
 
   useEffect(() => {
-    setInputValue(value || '')
-  }, [value])
+    setInputValue(value ? formatClockTimeStr(value, timeFormat) : '')
+  }, [value, timeFormat])
 
   const updateCoords = () => {
     if (!containerRef.current) return
@@ -143,25 +147,25 @@ export const TimePicker: React.FC<TimePickerProps> = ({
 
   // Scroll active item into view and update coordinates when opening
   useEffect(() => {
-    if (isOpen) {
-      updateCoords()
-      setTimeout(() => {
-        if (activeItemRef.current && listRef.current) {
-          const list = listRef.current
-          const item = activeItemRef.current
-          list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.clientHeight / 2
-        }
-      }, 50)
+    if (!isOpen) return
 
-      const handleScrollOrResize = () => {
-        updateCoords()
+    updateCoords()
+    setTimeout(() => {
+      if (activeItemRef.current && listRef.current) {
+        const list = listRef.current
+        const item = activeItemRef.current
+        list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.clientHeight / 2
       }
-      window.addEventListener('resize', handleScrollOrResize)
-      window.addEventListener('scroll', handleScrollOrResize, true)
-      return () => {
-        window.removeEventListener('resize', handleScrollOrResize)
-        window.removeEventListener('scroll', handleScrollOrResize, true)
-      }
+    }, 50)
+
+    const handleScrollOrResize = () => {
+      updateCoords()
+    }
+    window.addEventListener('resize', handleScrollOrResize)
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    return () => {
+      window.removeEventListener('resize', handleScrollOrResize)
+      window.removeEventListener('scroll', handleScrollOrResize, true)
     }
   }, [isOpen, align])
 
@@ -184,7 +188,7 @@ export const TimePicker: React.FC<TimePickerProps> = ({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setInputValue(value || '')
+        setInputValue(value ? formatClockTimeStr(value, timeFormat) : '')
         setIsOpen(false)
       }
     }
@@ -195,21 +199,21 @@ export const TimePicker: React.FC<TimePickerProps> = ({
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isOpen, value, inputValue])
+  }, [isOpen, value, inputValue, timeFormat])
 
   const commitInput = () => {
     const parsed = parseSmartTime(inputValue)
     if (parsed) {
       onChange(parsed)
-      setInputValue(parsed)
+      setInputValue(formatClockTimeStr(parsed, timeFormat))
     } else {
-      setInputValue(value || '')
+      setInputValue(value ? formatClockTimeStr(value, timeFormat) : '')
     }
   }
 
   const handleSelectSlot = (slot: string) => {
     onChange(slot)
-    setInputValue(slot)
+    setInputValue(formatClockTimeStr(slot, timeFormat))
     setIsOpen(false)
   }
 
@@ -245,7 +249,7 @@ export const TimePicker: React.FC<TimePickerProps> = ({
     const em = totalMins % 60
     const newTime = `${eh.toString().padStart(2, '0')}:${em.toString().padStart(2, '0')}`
     onChange(newTime)
-    setInputValue(newTime)
+    setInputValue(formatClockTimeStr(newTime, timeFormat))
     setIsOpen(false)
   }
 
@@ -299,7 +303,7 @@ export const TimePicker: React.FC<TimePickerProps> = ({
                     }`}
                     style={{ borderRadius: 'var(--radius-control)' }}
                   >
-                    <span>{slot}</span>
+                    <span>{formatClockTimeStr(slot, timeFormat)}</span>
                     {duration && (
                       <span
                         className={`text-[10px] font-sans ${

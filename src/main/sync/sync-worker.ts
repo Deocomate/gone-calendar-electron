@@ -3,6 +3,7 @@ import { GoogleSyncEngine } from './google-sync-engine'
 import { MicrosoftSyncEngine } from './microsoft-sync-engine'
 import { CalDavSyncEngine } from './caldav-sync-engine'
 import type { SyncStatus, SyncResult } from '@shared/event-model'
+import { mt } from '../i18n-main'
 
 export class SyncWorker {
   private googleEngine: GoogleSyncEngine
@@ -45,10 +46,12 @@ export class SyncWorker {
   }
 
   /**
-   * Adaptive polling policy: 60s when focused, 5m when background/tray
+   * Adaptive polling policy: 20s when focused (near-instant pulls without hammering provider
+   * APIs — true push notifications would need a public HTTPS webhook endpoint, which a desktop
+   * app doesn't have), 5m when background/tray
    */
   setFocusState(isFocused: boolean): void {
-    const nextInterval = isFocused ? 60 * 1000 : 5 * 60 * 1000
+    const nextInterval = isFocused ? 20 * 1000 : 5 * 60 * 1000
     if (this.currentIntervalMs !== nextInterval) {
       this.currentIntervalMs = nextInterval
       if (this.timer) {
@@ -94,7 +97,7 @@ export class SyncWorker {
         pulledCount: totalPulled,
         pushedCount: totalPushed,
         errorCount: totalErrors,
-        message: `Đồng bộ hoàn tất: đã tải ${totalPulled}, đã đẩy ${totalPushed}`
+        message: mt('sync.done', { pulled: totalPulled, pushed: totalPushed })
       }
     } catch (err: any) {
       this.lastError = err.message || String(err)

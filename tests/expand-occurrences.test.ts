@@ -164,4 +164,83 @@ describe('expandOccurrences', () => {
     const dates = occs.map((o) => o.startUtc)
     expect(dates).not.toContain('2026-08-17T09:00:00.000Z')
   })
+
+  describe('lunar-recurring master (âm lịch anniversaries)', () => {
+    const lunarMaster: CalendarEvent = {
+      ...baseEvent,
+      id: 'evt-lunar',
+      title: 'Giỗ ông nội',
+      allDay: true,
+      dtStartUtc: '2024-04-18T00:00:00.000Z',
+      dtEndUtc: '2024-04-18T23:59:59.999Z',
+      lunarRule: { day: 10, month: 3, leap: false }
+    }
+
+    it('emits one all-day occurrence per Gregorian year in range', () => {
+      const occs = expandOccurrences(
+        lunarMaster,
+        [],
+        '2025-01-01T00:00:00.000Z',
+        '2027-12-31T23:59:59.999Z'
+      )
+      expect(occs.map((o) => o.startUtc)).toEqual([
+        '2025-04-07T00:00:00.000Z',
+        '2026-04-26T00:00:00.000Z',
+        '2027-04-16T00:00:00.000Z'
+      ])
+      expect(occs.every((o) => o.allDay && o.isRecurring)).toBe(true)
+      expect(occs[0].title).toBe('Giỗ ông nội')
+    })
+
+    it('honors an EXDATE for a single year', () => {
+      const occs = expandOccurrences(
+        { ...lunarMaster, exdate: '2026-04-26' },
+        [],
+        '2025-01-01T00:00:00.000Z',
+        '2027-12-31T23:59:59.999Z'
+      )
+      expect(occs.map((o) => o.startUtc)).toEqual([
+        '2025-04-07T00:00:00.000Z',
+        '2027-04-16T00:00:00.000Z'
+      ])
+    })
+
+    it('skips years already covered by a materialized instance', () => {
+      const occs = expandOccurrences(
+        lunarMaster,
+        [],
+        '2025-01-01T00:00:00.000Z',
+        '2027-12-31T23:59:59.999Z',
+        new Set([2026])
+      )
+      expect(occs.map((o) => o.startUtc)).toEqual([
+        '2025-04-07T00:00:00.000Z',
+        '2027-04-16T00:00:00.000Z'
+      ])
+    })
+
+    it('applies a per-year exception override', () => {
+      const exception: EventException = {
+        id: 'ex-lunar',
+        masterEventId: 'evt-lunar',
+        originalStartUtc: '2026-04-26T00:00:00.000Z',
+        isCancelled: false,
+        title: 'Giỗ ông nội (làm sớm)',
+        dtStartUtc: '2026-04-25T00:00:00.000Z',
+        dtEndUtc: '2026-04-25T23:59:59.999Z',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+      const occs = expandOccurrences(
+        lunarMaster,
+        [exception],
+        '2026-01-01T00:00:00.000Z',
+        '2026-12-31T23:59:59.999Z'
+      )
+      expect(occs).toHaveLength(1)
+      expect(occs[0].title).toBe('Giỗ ông nội (làm sớm)')
+      expect(occs[0].startUtc).toBe('2026-04-25T00:00:00.000Z')
+      expect(occs[0].isException).toBe(true)
+    })
+  })
 })

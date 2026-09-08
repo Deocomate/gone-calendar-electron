@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, Check, Search } from 'lucide-react'
@@ -32,15 +33,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   value,
   onChange,
   options = [],
-  placeholder = 'Chọn một mục...',
+  placeholder,
   label,
   searchable = false,
-  searchPlaceholder = 'Tìm kiếm...',
+  searchPlaceholder,
   disabled = false,
   variant = 'ghost',
   className = '',
   align = 'left'
 }) => {
+  const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null)
@@ -89,25 +91,26 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
   // Focus search input and update coordinates when opening
   useEffect(() => {
-    if (isOpen) {
-      updateCoords()
-      if (searchable) {
-        setTimeout(() => {
-          searchInputRef.current?.focus()
-        }, 50)
-      }
-
-      const handleScrollOrResize = () => {
-        updateCoords()
-      }
-      window.addEventListener('resize', handleScrollOrResize)
-      window.addEventListener('scroll', handleScrollOrResize, true)
-      return () => {
-        window.removeEventListener('resize', handleScrollOrResize)
-        window.removeEventListener('scroll', handleScrollOrResize, true)
-      }
-    } else {
+    if (!isOpen) {
       setSearchQuery('')
+      return
+    }
+
+    updateCoords()
+    if (searchable) {
+      setTimeout(() => {
+        searchInputRef.current?.focus()
+      }, 50)
+    }
+
+    const handleScrollOrResize = () => {
+      updateCoords()
+    }
+    window.addEventListener('resize', handleScrollOrResize)
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    return () => {
+      window.removeEventListener('resize', handleScrollOrResize)
+      window.removeEventListener('scroll', handleScrollOrResize, true)
     }
   }, [isOpen, searchable, align, options.length])
 
@@ -176,7 +179,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={searchPlaceholder}
+                    placeholder={searchPlaceholder ?? t('ui.searchPlaceholder')}
                     className="w-full bg-transparent text-xs text-primary placeholder:text-muted focus:outline-none"
                   />
                 </div>
@@ -187,7 +190,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             <div className="max-h-56 overflow-y-auto space-y-0.5 pr-0.5">
               {filteredOptions.length === 0 ? (
                 <div className="py-4 text-center text-xs text-muted">
-                  Không tìm thấy kết quả
+                  {t('ui.noResults')}
                 </div>
               ) : (
                 filteredOptions.map((opt) => {

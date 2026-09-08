@@ -43,7 +43,7 @@ describe('Visible Range & Week Calculations', () => {
 
   it('should calculate Year range covering entire calendar year', () => {
     const range = getVisibleRange(anchorDate, 'year', 'en')
-    expect(range.label).toBe('Year 2026')
+    expect(range.label).toBe('2026')
 
     const start = DateTime.fromISO(range.startUtc, { zone: 'utc' })
     const end = DateTime.fromISO(range.endUtc, { zone: 'utc' })

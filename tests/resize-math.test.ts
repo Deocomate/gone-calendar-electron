@@ -89,7 +89,7 @@ describe('resize math', () => {
   it('formats a clock tooltip with duration', () => {
     const start = DateTime.local(2026, 8, 19, 10, 0)
     const end = DateTime.local(2026, 8, 19, 11, 30)
-    expect(formatResizeTooltip('s', start, end)).toBe('11:30 · 1h 30m')
-    expect(formatResizeTooltip('e', start, end)).toContain('19/08 11:30')
+    expect(formatResizeTooltip('s', start, end, '24h')).toBe('11:30 · 1h 30m')
+    expect(formatResizeTooltip('e', start, end, '24h')).toContain('19/08 11:30')
   })
 })

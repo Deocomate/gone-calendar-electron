@@ -7,7 +7,8 @@ const goneApi: GoneAPI = {
     getVersion: () => ipcRenderer.invoke(IPC_CHANNELS.APP.GET_VERSION),
     getLocale: () => ipcRenderer.invoke(IPC_CHANNELS.APP.GET_LOCALE),
     setLocale: (locale: AppLocale) => ipcRenderer.invoke(IPC_CHANNELS.APP.SET_LOCALE, locale),
-    getPlatform: () => ipcRenderer.invoke(IPC_CHANNELS.APP.GET_PLATFORM)
+    getPlatform: () => ipcRenderer.invoke(IPC_CHANNELS.APP.GET_PLATFORM),
+    pickBackgroundImage: () => ipcRenderer.invoke(IPC_CHANNELS.APP.PICK_BACKGROUND_IMAGE)
   },
   settings: {
     getAll: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.GET_ALL),
@@ -49,24 +50,21 @@ const goneApi: GoneAPI = {
     deleteScope: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.DELETE_SCOPE, input),
     upsertException: (exception: Omit<EventException, 'id' | 'createdAt' | 'updatedAt'>) =>
       ipcRenderer.invoke(IPC_CHANNELS.EVENT.UPSERT_EXCEPTION, exception),
+    materializeLunar: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.MATERIALIZE_LUNAR, input),
+    detachLunar: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.DETACH_LUNAR, input),
     search: (query: string, limit?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.EVENT.SEARCH, query, limit),
     shareIcs: (eventId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.EVENT.SHARE_ICS, eventId)
+      ipcRenderer.invoke(IPC_CHANNELS.EVENT.SHARE_ICS, eventId),
+    listConflicts: () => ipcRenderer.invoke(IPC_CHANNELS.EVENT.LIST_CONFLICTS),
+    resolveConflict: (eventId: string, resolution: 'keepMine' | 'keepTheirs') =>
+      ipcRenderer.invoke(IPC_CHANNELS.EVENT.RESOLVE_CONFLICT, eventId, resolution)
   },
   ics: {
     importIcs: (targetCalendarId: string, icsContent: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.ICS.IMPORT, targetCalendarId, icsContent),
     exportIcs: (calendarId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.ICS.EXPORT, calendarId)
-  },
-  tasks: {
-    list: (includeCompleted?: boolean) =>
-      ipcRenderer.invoke(IPC_CHANNELS.TASK.LIST, includeCompleted),
-    create: (input) => ipcRenderer.invoke(IPC_CHANNELS.TASK.CREATE, input),
-    update: (id, input) => ipcRenderer.invoke(IPC_CHANNELS.TASK.UPDATE, id, input),
-    toggle: (id) => ipcRenderer.invoke(IPC_CHANNELS.TASK.TOGGLE, id),
-    delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.TASK.DELETE, id)
   },
   mini: {
     openMain: () => ipcRenderer.invoke(IPC_CHANNELS.MINI.OPEN_MAIN),

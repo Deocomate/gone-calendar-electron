@@ -6,142 +6,83 @@ import {
   Palette,
   Globe,
   Keyboard,
-  Users,
-  FileUp,
-  Filter,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  AlertTriangle
 } from 'lucide-react'
 import type { ThemeMode } from '@shared/theme-mode'
-
-export const COLOR_FILTERS: { hex: string; label: string }[] = [
-  { hex: '#529cca', label: 'Blue' },
-  { hex: '#52b788', label: 'Green' },
-  { hex: '#ea9a5f', label: 'Orange' },
-  { hex: '#9a6dd7', label: 'Lavender' },
-  { hex: '#eb5757', label: 'Coral' },
-  { hex: '#4dab9a', label: 'Teal' },
-  { hex: '#e06f9f', label: 'Rose' }
-]
 
 interface OverflowMenuProps {
   language: string
   themeMode: ThemeMode
-  selectedColorFilter: string | null
+  conflictCount?: number
   onOpenSettings: () => void
   onOpenTheme: () => void
   onOpenShortcuts: () => void
-  onOpenAccounts: () => void
-  onImportIcs: () => void
+  onOpenConflicts?: () => void
   onToggleLanguage: () => void
   onSetThemeMode: (mode: ThemeMode) => void
-  onSelectColorFilter: (hex: string | null) => void
 }
 
 export const OverflowMenu: React.FC<OverflowMenuProps> = ({
   language,
   themeMode,
-  selectedColorFilter,
+  conflictCount = 0,
   onOpenSettings,
   onOpenTheme,
   onOpenShortcuts,
-  onOpenAccounts,
-  onImportIcs,
+  onOpenConflicts,
   onToggleLanguage,
-  onSetThemeMode,
-  onSelectColorFilter
+  onSetThemeMode
 }) => {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const [colorOpen, setColorOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpen(false)
-        setColorOpen(false)
       }
     }
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
 
-  const close = () => {
-    setOpen(false)
-    setColorOpen(false)
-  }
+  const close = () => setOpen(false)
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        className="gc-icon-btn"
+        className="gc-icon-btn relative"
         title={t('actions.more')}
         onClick={() => setOpen((v) => !v)}
       >
         <MoreHorizontal className="h-4 w-4" />
+        {conflictCount > 0 && (
+          <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-today" />
+        )}
       </button>
       {open && (
         <div className="gc-menu right-0 mt-1 w-56">
-          <button type="button" className="gc-menu-item" onClick={() => setColorOpen((v) => !v)}>
-            <Filter className="h-4 w-4 text-muted" />
-            <span>{t('actions.filterColor')}</span>
-          </button>
-          {colorOpen && (
-            <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+          {conflictCount > 0 && onOpenConflicts && (
+            <>
               <button
                 type="button"
-                className={`rounded-md px-2 py-0.5 text-[11px] ${
-                  selectedColorFilter === null ? 'bg-hover font-semibold' : 'text-muted'
-                }`}
+                className="gc-menu-item"
                 onClick={() => {
-                  onSelectColorFilter(null)
+                  onOpenConflicts()
                   close()
                 }}
               >
-                {t('filter.all')}
+                <AlertTriangle className="h-4 w-4 text-today" />
+                <span>{t('sync.conflictsMenuItem', { count: conflictCount })}</span>
               </button>
-              {COLOR_FILTERS.map((c) => (
-                <button
-                  key={c.hex}
-                  type="button"
-                  title={c.label}
-                  className={`h-5 w-5 rounded-full border ${
-                    selectedColorFilter === c.hex ? 'border-primary' : 'border-transparent'
-                  }`}
-                  style={{ backgroundColor: c.hex }}
-                  onClick={() => {
-                    onSelectColorFilter(selectedColorFilter === c.hex ? null : c.hex)
-                    close()
-                  }}
-                />
-              ))}
-            </div>
+              <div className="my-1 border-t border-hairline" />
+            </>
           )}
-          <button
-            type="button"
-            className="gc-menu-item"
-            onClick={() => {
-              onOpenAccounts()
-              close()
-            }}
-          >
-            <Users className="h-4 w-4 text-muted" />
-            <span>{t('actions.accounts')}</span>
-          </button>
-          <button
-            type="button"
-            className="gc-menu-item"
-            onClick={() => {
-              onImportIcs()
-              close()
-            }}
-          >
-            <FileUp className="h-4 w-4 text-muted" />
-            <span>{t('actions.importIcs')}</span>
-          </button>
           <button
             type="button"
             className="gc-menu-item"

@@ -1,19 +1,21 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
 import { Layers } from 'lucide-react'
 import type { ExpandedOccurrence } from '@shared/event-model'
-import type { TaskItem } from '@shared/task-model'
-import { weekdayHeaders, TODAY_COLOR, DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
+import { getDayHighlights, DAY_HIGHLIGHT_COLORS, type DayHighlightKind } from '@shared/day-highlight'
+import { formatClockTime } from '@shared/time-format'
+import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 import LunarLabel from '../components/LunarLabel'
 import WeekNumber from '../components/WeekNumber'
 import EventPill from '../components/EventPill'
 import EventHoverFlyout, { type HoverFlyoutData } from '../components/EventHoverFlyout'
 import { prepareDropEvent, type CalendarDropTarget } from '../dnd/drop-target'
+import { weekdayShortLabels } from '../i18n/weekday-labels'
 
 interface MonthViewProps {
   anchorDate: DateTime
   occurrences: ExpandedOccurrence[]
-  tasks?: TaskItem[]
   showLunar: boolean
   showWeekNumbers: boolean
   draggedOccurrenceId?: string
@@ -26,12 +28,22 @@ interface MonthViewProps {
   onDropOnDate?: (e: React.DragEvent, targetDate: DateTime) => void
 }
 
+/** ~10% tint of the whole cell for one marker, diagonal split when a day carries more than one -
+ *  same subtlety as "today"'s bg-today/5 column tint in Week view, just for a whole day cell. */
+function highlightBackground(kinds: DayHighlightKind[]): string | undefined {
+  if (kinds.length === 0) return undefined
+  const colors = kinds.map((k) => `${DAY_HIGHLIGHT_COLORS[k]}1a`)
+  if (colors.length === 1) return colors[0]
+  const stops = colors.map((c, i) => `${c} ${(i / colors.length) * 100}% ${((i + 1) / colors.length) * 100}%`)
+  return `linear-gradient(135deg, ${stops.join(', ')})`
+}
+
 interface MonthDayCellProps {
   day: DateTime
   anchorDate: DateTime
   dayOccurrences: ExpandedOccurrence[]
-  dayTasks: TaskItem[]
   showLunar: boolean
+  maxVisible: number
   isDropTarget: boolean
   draggedOccurrenceId?: string
   onSelectDate?: (date: DateTime) => void
@@ -48,8 +60,8 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
   day,
   anchorDate,
   dayOccurrences,
-  dayTasks,
   showLunar,
+  maxVisible,
   isDropTarget,
   draggedOccurrenceId,
   onSelectDate,
@@ -61,21 +73,25 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
   onShowFlyout,
   onHideFlyout
 }) => {
+  const { timeFormat } = useDisplayPreferences()
   const today = DateTime.local()
   const dayKey = day.toFormat('yyyy-MM-dd')
   const isCurrentMonth = day.month === anchorDate.month
-  const isToday = day.hasSame(today, 'day')
-  const totalItems = dayOccurrences.length + dayTasks.length
-  const overflow = totalItems - 2
+  const totalItems = dayOccurrences.length
+  const fitsAll = totalItems <= maxVisible
+  const visibleCount = fitsAll ? totalItems : Math.max(0, maxVisible - 1)
+  const overflow = totalItems - visibleCount
+
+  const highlights = React.useMemo(() => getDayHighlights(day, today), [day, today])
+  const highlightBg = highlightBackground(highlights)
 
   const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
     if (totalItems > 0) {
       const rect = e.currentTarget.getBoundingClientRect()
       onShowFlyout({
         title: day.toFormat('cccc, dd/MM/yyyy'),
-        subtitle: `${totalItems} sự kiện & nhiệm vụ`,
+        subtitle: String(totalItems),
         occurrences: dayOccurrences,
-        tasks: dayTasks,
         anchorRect: rect
       })
     }
@@ -94,18 +110,14 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
       className={`gc-cell relative flex min-h-0 min-w-0 cursor-pointer flex-col p-1 overflow-hidden transition-all ${
         isCurrentMonth ? 'bg-surface' : 'bg-app'
       } ${isDropTarget ? 'is-drop-target' : ''}`}
+      style={highlightBg ? { background: highlightBg } : undefined}
     >
       {/* Day number & lunar */}
       <div className="mb-0.5 flex items-center justify-between px-0.5 min-w-0">
         <span
-          className={`flex h-6 w-6 items-center justify-center rounded-full text-xs shrink-0 ${
-            isToday
-              ? 'font-semibold text-white'
-              : isCurrentMonth
-                ? 'text-primary font-medium'
-                : 'text-muted'
+          className={`flex h-7 w-7 items-center justify-center rounded-full text-sm shrink-0 ${
+            isCurrentMonth ? 'text-primary font-medium' : 'text-muted'
           }`}
-          style={isToday ? { backgroundColor: TODAY_COLOR } : undefined}
         >
           {day.day}
         </span>
@@ -113,7 +125,7 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
           {totalItems >= 2 && (
             <span
               className="flex items-center gap-0.5 px-1 py-0.5 rounded-[3px] bg-hover text-muted border border-hairline font-mono text-[9px] font-medium"
-              title={`${totalItems} sự kiện`}
+              title={String(totalItems)}
             >
               <Layers className="w-2.5 h-2.5" />
               {totalItems}
@@ -123,9 +135,9 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
         </div>
       </div>
 
-      {/* Events preview */}
+      {/* Events preview - shows as many as fit, "+N" only for whatever's left over */}
       <div className="min-h-0 flex-1 space-y-0.5 overflow-hidden">
-        {dayOccurrences.slice(0, 2).map((occ) => {
+        {dayOccurrences.slice(0, visibleCount).map((occ) => {
           const occTime = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
           return (
             <EventPill
@@ -135,7 +147,7 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
               isDragging={draggedOccurrenceId === occ.id}
               title={occ.title}
               color={occ.color}
-              time={occ.allDay ? undefined : occTime.toFormat('HH:mm')}
+              time={occ.allDay ? undefined : formatClockTime(occTime, timeFormat)}
               onDragStart={(e) => onDragStart?.(e, occ)}
               onDragEnd={onDragEnd}
               onClick={(e) => {
@@ -146,20 +158,9 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
           )
         })}
 
-        {dayTasks.slice(0, Math.max(0, 2 - dayOccurrences.length)).map((task) => (
-          <div
-            key={task.id}
-            className="gc-event gc-event-dense truncate rounded-none px-1.5 py-0.5 text-[10px] font-medium text-white min-w-0"
-            style={{ backgroundColor: DEFAULT_EVENT_COLOR }}
-            title={`Nhiệm vụ: ${task.title}`}
-          >
-            ✓ {task.title}
-          </div>
-        ))}
-
         {overflow > 0 && (
           <div className="px-1 text-[10px] font-medium text-muted truncate">
-            +{overflow} thêm
+            +{overflow}
           </div>
         )}
       </div>
@@ -167,10 +168,14 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
   )
 }
 
+/** Pixel budget per cell used to derive maxVisible: day-number row + cell padding + per-pill row. */
+const HEADER_ROW_PX = 28
+const CELL_PADDING_PX = 8
+const PILL_ROW_PX = 20
+
 export const MonthView: React.FC<MonthViewProps> = ({
   anchorDate,
   occurrences,
-  tasks = [],
   showLunar,
   showWeekNumbers,
   draggedOccurrenceId,
@@ -182,8 +187,11 @@ export const MonthView: React.FC<MonthViewProps> = ({
   onDragOverTarget,
   onDropOnDate
 }) => {
+  const { t } = useTranslation()
   const [hoverData, setHoverData] = useState<HoverFlyoutData | null>(null)
   const hoverTimerRef = useRef<any>(null)
+  const weeksGridRef = useRef<HTMLDivElement>(null)
+  const [maxVisible, setMaxVisible] = useState(2)
 
   useEffect(() => {
     if (draggedOccurrenceId) {
@@ -191,6 +199,23 @@ export const MonthView: React.FC<MonthViewProps> = ({
       setHoverData(null)
     }
   }, [draggedOccurrenceId])
+
+  // Fit as many events as the row's actual height allows instead of a hardcoded cap.
+  useEffect(() => {
+    const el = weeksGridRef.current
+    if (!el) return
+
+    const recompute = () => {
+      const rowHeight = el.clientHeight / 6
+      const available = rowHeight - HEADER_ROW_PX - CELL_PADDING_PX
+      setMaxVisible(Math.max(1, Math.floor(available / PILL_ROW_PX)))
+    }
+
+    recompute()
+    const ro = new ResizeObserver(recompute)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const handleShowFlyout = useCallback(
     (data: HoverFlyoutData) => {
@@ -229,29 +254,34 @@ export const MonthView: React.FC<MonthViewProps> = ({
 
   const occurrencesByDay = React.useMemo(() => {
     const map = new Map<string, ExpandedOccurrence[]>()
-    for (const occ of occurrences) {
-      const dt = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
-      const dayKey = dt.toFormat('yyyy-MM-dd')
+    const addTo = (dayKey: string, occ: ExpandedOccurrence) => {
       const list = map.get(dayKey) || []
       list.push(occ)
       map.set(dayKey, list)
     }
-    return map
-  }, [occurrences])
-
-  const tasksByDay = React.useMemo(() => {
-    const map = new Map<string, TaskItem[]>()
-    for (const t of tasks) {
-      if (t.dueDate && t.showOnCalendar !== false) {
-        const list = map.get(t.dueDate) || []
-        list.push(t)
-        map.set(t.dueDate, list)
+    for (const occ of occurrences) {
+      const startDt = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
+      if (occ.allDay) {
+        // All-day end is inclusive - a multi-day event must land in every day it
+        // spans, not just its start day. Capped so a malformed/corrupt event with an
+        // absurd end date can't spin this loop for years and stall rendering.
+        const MAX_SPAN_DAYS = 366
+        const lastDay = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local').startOf('day')
+        let cursor = startDt.startOf('day')
+        let daysWalked = 0
+        while (cursor <= lastDay && daysWalked < MAX_SPAN_DAYS) {
+          addTo(cursor.toFormat('yyyy-MM-dd'), occ)
+          cursor = cursor.plus({ days: 1 })
+          daysWalked++
+        }
+      } else {
+        addTo(startDt.toFormat('yyyy-MM-dd'), occ)
       }
     }
     return map
-  }, [tasks])
+  }, [occurrences])
 
-  const headers = weekdayHeaders(1)
+  const headers = weekdayShortLabels(t, 1)
   const gridColumnsClass = showWeekNumbers
     ? 'grid-cols-[28px_repeat(7,minmax(0,1fr))]'
     : 'grid-cols-[repeat(7,minmax(0,1fr))]'
@@ -271,7 +301,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
       </div>
 
       {/* 6 Weeks Grid */}
-      <div className="grid min-h-0 flex-1 grid-rows-6 divide-y divide-hairline">
+      <div ref={weeksGridRef} className="grid min-h-0 flex-1 grid-rows-6 divide-y divide-hairline">
         {Array.from({ length: 6 }).map((_, weekIdx) => {
           const weekDays = days.slice(weekIdx * 7, weekIdx * 7 + 7)
           const firstDayOfWeek = weekDays[0]
@@ -290,7 +320,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
               {weekDays.map((day) => {
                 const dayKey = day.toFormat('yyyy-MM-dd')
                 const dayOccurrences = occurrencesByDay.get(dayKey) || []
-                const dayTasks = tasksByDay.get(dayKey) || []
                 const isDropTarget = dropTarget?.dateKey === dayKey && dropTarget.hour === undefined
 
                 return (
@@ -299,8 +328,8 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     day={day}
                     anchorDate={anchorDate}
                     dayOccurrences={dayOccurrences}
-                    dayTasks={dayTasks}
                     showLunar={showLunar}
+                    maxVisible={maxVisible}
                     isDropTarget={isDropTarget}
                     draggedOccurrenceId={draggedOccurrenceId}
                     onSelectDate={onSelectDate}

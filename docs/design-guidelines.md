@@ -13,7 +13,7 @@ Visual language for the desktop renderer. Minimalist Notion + Notion Calendar ae
 
 Defined in `src/renderer/src/styles/index.css` and mapped as Tailwind theme tokens `app`, `surface`, `sidebar`, `hairline`, `primary`, `muted`, `today`, `accent`, `hover`.
 
-### Light Mode (Default Notion Theme)
+### Light Mode (Notion Theme)
 - Canvas / App: `#f7f6f3` (Warm off-white paper)
 - Surface / Cards: `#ffffff`
 - Sidebar: `#fbfbfa`
@@ -24,16 +24,17 @@ Defined in `src/renderer/src/styles/index.css` and mapped as Tailwind theme toke
 - Today Mark: `#eb5757` (Notion soft coral red)
 - Accent Mark: `#2383e2` (Notion blue)
 
-### Dark Mode (Notion Dark Theme)
-- Canvas / App: `#191919` (Notion dark canvas)
-- Surface / Cards: `#202020` (Notion dark surface)
-- Sidebar: `#191919`
-- Hairline Border: `#2e2e2e`
-- Primary Text: `#ebebeb`
-- Muted Text: `#9b9a97`
-- Hover Fill: `#282828`
-- Today Mark: `#eb5757`
-- Accent Mark: `#529cca` (Soft pastel blue)
+### Dark Mode (Default — Discord-style dark)
+Soft blue-grey, comfortable contrast, deliberately never pure black.
+- Canvas / App: `#2b2d31` (main calendar surface)
+- Surface / Cards: `#313338` (elevated: dialogs, menus, inputs, event blocks)
+- Sidebar: `#232428` (deepest tone, structural chrome)
+- Hairline Border: `#3a3d44`
+- Primary Text: `#dbdee1` (near-white, not `#fff`)
+- Muted Text: `#9aa0a6`
+- Hover Fill: `#35373d`
+- Today Mark: `#f0616d` (red, softened for dark ground)
+- Accent Mark: `#5865f2` (blurple — also the default `themeAccent`)
 
 ### Soft Pastel Event Palette
 Replaced saturated Google primaries with gentle pastel tones:

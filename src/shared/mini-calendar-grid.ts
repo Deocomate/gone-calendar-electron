@@ -32,7 +32,7 @@ export function buildMiniCalendarDays(
 }
 
 export const DEFAULT_EVENT_COLOR = '#529cca'
-export const DEFAULT_ACCENT_COLOR = '#2383e2'
+export const DEFAULT_ACCENT_COLOR = '#5865f2'
 export const TODAY_COLOR = '#eb5757'
 
 export const NOTION_PASTEL_PALETTE = [

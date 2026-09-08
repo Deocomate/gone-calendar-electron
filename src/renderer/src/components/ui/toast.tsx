@@ -1,13 +1,14 @@
 import React from 'react'
 import { Toaster as SonnerToaster, toast } from 'sonner'
 import { CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import i18n from '../../i18n'
 
 export { toast }
 
 /**
- * Format any backend/IPC error message into a human-friendly Vietnamese notification.
+ * Format any backend/IPC error message into a human-friendly, localized notification.
  */
-export function showFriendlyError(err: any, fallbackTitle = 'Có lỗi xảy ra') {
+export function showFriendlyError(err: any, fallbackTitle?: string) {
   const raw = typeof err === 'string' ? err : err?.message || String(err || '')
   const clean = raw.replace(/^Error:\s*/, '').replace(/Error invoking remote method '[^']+':\s*(Error:\s*)?/g, '')
 
@@ -16,28 +17,22 @@ export function showFriendlyError(err: any, fallbackTitle = 'Có lỗi xảy ra'
     clean.includes('Move rejected: Cannot modify') ||
     clean.includes('read-only calendar')
   ) {
-    toast.error('Lịch chỉ đọc (Read-only)', {
-      description: 'Sự kiện này thuộc lịch chỉ đọc (như Lịch ngày lễ hoặc lịch được chia sẻ), không thể di chuyển hoặc chỉnh sửa.'
-    })
+    toast.error(i18n.t('friendly.readOnlyTitle'), { description: i18n.t('friendly.readOnlyMove') })
     return
   }
 
   if (clean.includes('Cannot delete events in read-only calendar')) {
-    toast.error('Lịch chỉ đọc (Read-only)', {
-      description: 'Không thể xóa sự kiện thuộc lịch chỉ đọc (như Lịch ngày lễ).'
-    })
+    toast.error(i18n.t('friendly.readOnlyTitle'), { description: i18n.t('friendly.readOnlyDelete') })
     return
   }
 
   if (clean.includes('RRULE') || clean.includes('recurrence')) {
-    toast.error('Quy tắc lặp không hợp lệ', {
-      description: 'Cú pháp quy tắc lặp lại (RRULE) không đúng định dạng RFC 5545.'
-    })
+    toast.error(i18n.t('friendly.rruleTitle'), { description: i18n.t('friendly.rruleBody') })
     return
   }
 
-  toast.error(fallbackTitle, {
-    description: clean || 'Vui lòng thử lại sau.'
+  toast.error(fallbackTitle || i18n.t('friendly.fallback'), {
+    description: clean || i18n.t('friendly.tryAgain')
   })
 }
 

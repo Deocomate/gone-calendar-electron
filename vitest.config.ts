@@ -7,7 +7,9 @@ export default defineConfig({
       '@main': resolve(__dirname, 'src/main'),
       '@preload': resolve(__dirname, 'src/preload'),
       '@renderer': resolve(__dirname, 'src/renderer/src'),
-      '@shared': resolve(__dirname, 'src/shared')
+      '@shared': resolve(__dirname, 'src/shared'),
+      // Main-process unit tests run in plain Node without the Electron binary.
+      electron: resolve(__dirname, 'tests/stubs/electron.ts')
     }
   },
   test: {

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CalendarHeart, Check, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import type { Calendar } from '@shared/event-model'
 import { HOLIDAY_CALENDAR_META, type HolidayCalendarType } from '@shared/holiday-calendars'
@@ -12,6 +13,7 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
   calendars,
   onCalendarsChanged
 }) => {
+  const { t } = useTranslation()
   const [loadingType, setLoadingType] = useState<HolidayCalendarType | null>(null)
   const [isExpanded, setIsExpanded] = useState(true)
 
@@ -48,7 +50,7 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
       >
         <span className="flex items-center gap-1.5">
           <CalendarHeart className="h-3.5 w-3.5 text-muted" />
-          Lịch Ngày Lễ
+          {t('holidays.title')}
         </span>
         {isExpanded ? (
           <ChevronDown className="h-3 w-3 text-muted" />
@@ -70,7 +72,7 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
           >
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm shrink-0">🇻🇳</span>
-              <span className="font-medium text-xs truncate">Lễ Tết Việt Nam</span>
+              <span className="font-medium text-xs truncate">{t('holidays.vietnam')}</span>
             </div>
 
             <div className="shrink-0 flex items-center">
@@ -78,10 +80,10 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
                 <Loader2 className="h-3 w-3 text-accent animate-spin" />
               ) : isVietnamSubscribed ? (
                 <span className="px-1.5 py-0.5 rounded-[3px] bg-accent/20 text-accent text-[10px] font-medium flex items-center gap-0.5">
-                  <Check className="h-2.5 w-2.5" /> Đã bật
+                  <Check className="h-2.5 w-2.5" /> {t('common.on')}
                 </span>
               ) : (
-                <span className="text-[10px] text-muted hover:text-primary font-medium">+ Bật</span>
+                <span className="text-[10px] text-muted hover:text-primary font-medium">{t('holidays.enable')}</span>
               )}
             </div>
           </div>
@@ -97,7 +99,7 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
           >
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm shrink-0">🌐</span>
-              <span className="font-medium text-xs truncate">Lễ Quốc tế</span>
+              <span className="font-medium text-xs truncate">{t('holidays.international')}</span>
             </div>
 
             <div className="shrink-0 flex items-center">
@@ -105,10 +107,10 @@ export const HolidayCalendarToggle: React.FC<HolidayCalendarToggleProps> = ({
                 <Loader2 className="h-3 w-3 text-accent animate-spin" />
               ) : isInternationalSubscribed ? (
                 <span className="px-1.5 py-0.5 rounded-[3px] bg-accent/20 text-accent text-[10px] font-medium flex items-center gap-0.5">
-                  <Check className="h-2.5 w-2.5" /> Đã bật
+                  <Check className="h-2.5 w-2.5" /> {t('common.on')}
                 </span>
               ) : (
-                <span className="text-[10px] text-muted hover:text-primary font-medium">+ Bật</span>
+                <span className="text-[10px] text-muted hover:text-primary font-medium">{t('holidays.enable')}</span>
               )}
             </div>
           </div>

@@ -3,6 +3,8 @@
  * Based on astronomical formulas by Dr. Ho Ngoc Duc (UTC+7 timezone baseline)
  */
 
+import type { LunarRecurrenceSpec } from './event-model'
+
 export interface LunarDate {
   day: number
   month: number
@@ -301,4 +303,60 @@ export function convertLunarToSolar(
     }
   }
   return null
+}
+
+const lunarOccurrenceCache = new Map<string, string | null>()
+
+function toIsoDate(d: { day: number; month: number; year: number }): string {
+  const mm = String(d.month).padStart(2, '0')
+  const dd = String(d.day).padStart(2, '0')
+  return `${d.year}-${mm}-${dd}`
+}
+
+/**
+ * Resolve a yearly lunar anniversary spec to its Gregorian date in `gregorianYear`.
+ * Returns an ISO date string (YYYY-MM-DD) or null when it cannot be placed in
+ * that year.
+ *
+ * Fallbacks:
+ * - a leap-month anniversary in a year that has no such leap month falls back to
+ *   the ordinary month;
+ * - a day-30 anniversary in a 29-day lunar month falls back to day 29.
+ *
+ * Note: anniversaries in lunar months 11-12 straddle the Gregorian new year and
+ * may occasionally land twice or skip a year across consecutive Gregorian years.
+ * Death anniversaries (giỗ) are rarely in those months, so v1 accepts this.
+ */
+export function resolveLunarOccurrence(
+  spec: LunarRecurrenceSpec,
+  gregorianYear: number
+): string | null {
+  const key = `${spec.day}-${spec.month}-${spec.leap ? 1 : 0}@${gregorianYear}`
+  const cached = lunarOccurrenceCache.get(key)
+  if (cached !== undefined) return cached
+
+  const candidates: Array<{ day: number; month: number; leap: boolean }> = [
+    { day: spec.day, month: spec.month, leap: spec.leap }
+  ]
+  if (spec.leap) {
+    candidates.push({ day: spec.day, month: spec.month, leap: false })
+  }
+  if (spec.day === 30) {
+    candidates.push({ day: 29, month: spec.month, leap: spec.leap })
+    if (spec.leap) candidates.push({ day: 29, month: spec.month, leap: false })
+  }
+
+  let result: string | null = null
+  outer: for (const lunarYear of [gregorianYear, gregorianYear - 1]) {
+    for (const c of candidates) {
+      const solar = convertLunarToSolar(c.day, c.month, lunarYear, c.leap)
+      if (solar && solar.year === gregorianYear) {
+        result = toIsoDate(solar)
+        break outer
+      }
+    }
+  }
+
+  lunarOccurrenceCache.set(key, result)
+  return result
 }

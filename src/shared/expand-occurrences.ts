@@ -1,16 +1,21 @@
 import { DateTime } from 'luxon'
 import { rrulestr } from 'rrule'
 import type { CalendarEvent, EventException, ExpandedOccurrence } from './event-model'
+import { resolveLunarOccurrence } from './lunar-vietnam'
 
 /**
  * Expand a master calendar event and its exceptions into concrete occurrences
  * within a requested UTC date-time window [rangeStartUtc, rangeEndUtc].
+ *
+ * `coveredYears` lists Gregorian years for which a lunar master already has a
+ * materialized standalone instance; those years are skipped so nothing draws twice.
  */
 export function expandOccurrences(
   event: CalendarEvent,
   exceptions: EventException[] = [],
   rangeStartUtc: string,
-  rangeEndUtc: string
+  rangeEndUtc: string,
+  coveredYears?: Set<number>
 ): ExpandedOccurrence[] {
   if (event.isDeleted) {
     return []
@@ -21,6 +26,11 @@ export function expandOccurrences(
 
   if (!rangeStart.isValid || !rangeEnd.isValid) {
     throw new Error(`Invalid range parameters: ${rangeStartUtc}, ${rangeEndUtc}`)
+  }
+
+  // Yearly lunar-date recurrence (âm lịch anniversaries / giỗ)
+  if (event.lunarRule) {
+    return expandLunarOccurrences(event, exceptions, rangeStart, rangeEnd, coveredYears)
   }
 
   // Non-recurring event
@@ -52,6 +62,89 @@ export function expandOccurrences(
     }
     return []
   }
+
+  return expandRruleOccurrences(event, exceptions, rangeStart, rangeEnd)
+}
+
+/**
+ * Expand a lunar-recurring master into one all-day occurrence per Gregorian year
+ * within the range. Honors EXDATE cancellations and per-year exception overrides,
+ * both keyed on the occurrence's ISO date.
+ */
+function expandLunarOccurrences(
+  event: CalendarEvent,
+  exceptions: EventException[],
+  rangeStart: DateTime,
+  rangeEnd: DateTime,
+  coveredYears?: Set<number>
+): ExpandedOccurrence[] {
+  const spec = event.lunarRule!
+  const results: ExpandedOccurrence[] = []
+
+  const exdateSet = new Set<string>()
+  if (event.exdate) {
+    event.exdate
+      .split(',')
+      .map((d) => d.trim())
+      .filter(Boolean)
+      .forEach((d) => {
+        const dt = DateTime.fromISO(d, { zone: 'utc' })
+        if (dt.isValid) exdateSet.add(dt.toISODate() || d.slice(0, 10))
+      })
+  }
+
+  const exceptionsByDate = new Map<string, EventException>()
+  for (const ex of exceptions) {
+    const dt = DateTime.fromISO(ex.originalStartUtc, { zone: 'utc' })
+    if (dt.isValid) exceptionsByDate.set(dt.toISODate() || ex.originalStartUtc.slice(0, 10), ex)
+  }
+
+  for (let year = rangeStart.year - 1; year <= rangeEnd.year + 1; year++) {
+    if (coveredYears?.has(year)) continue
+
+    const isoDate = resolveLunarOccurrence(spec, year)
+    if (!isoDate) continue
+
+    const occStart = DateTime.fromISO(`${isoDate}T00:00:00.000Z`, { zone: 'utc' })
+    const occEnd = DateTime.fromISO(`${isoDate}T23:59:59.999Z`, { zone: 'utc' })
+    if (occStart > rangeEnd || occEnd < rangeStart) continue
+    if (exdateSet.has(isoDate)) continue
+
+    const originalIso = occStart.toISO() || `${isoDate}T00:00:00.000Z`
+    const ex = exceptionsByDate.get(isoDate)
+    if (ex?.isCancelled) continue
+
+    results.push({
+      id: `${event.id}_${originalIso}`,
+      eventId: event.id,
+      calendarId: event.calendarId,
+      title: ex?.title !== undefined ? ex.title : event.title,
+      notes: ex?.notes !== undefined ? ex.notes : event.notes,
+      location: ex?.location !== undefined ? ex.location : event.location,
+      startUtc: ex?.dtStartUtc || originalIso,
+      endUtc: ex?.dtEndUtc || occEnd.toISO() || `${isoDate}T23:59:59.999Z`,
+      tzid: ex?.tzid || event.tzid,
+      allDay: true,
+      color: ex?.color || event.color,
+      meetingUrl: event.meetingUrl,
+      isRecurring: true,
+      isException: Boolean(ex),
+      isLunar: true,
+      originalStartUtc: originalIso
+    })
+  }
+
+  return results
+}
+
+function expandRruleOccurrences(
+  event: CalendarEvent,
+  exceptions: EventException[],
+  rangeStart: DateTime,
+  rangeEnd: DateTime
+): ExpandedOccurrence[] {
+  const rrule = event.rrule
+  if (!rrule) return []
 
   // Recurring Event: Parse master start/end and duration
   const masterStart = DateTime.fromISO(event.dtStartUtc, { zone: 'utc' })
@@ -90,9 +183,9 @@ export function expandOccurrences(
   try {
     // Format DTSTART for RRULE string if needed
     const dtstartUtcStr = masterStart.toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")
-    const ruleString = event.rrule.includes('DTSTART')
-      ? event.rrule
-      : `DTSTART:${dtstartUtcStr}\nRRULE:${event.rrule}`
+    const ruleString = rrule.includes('DTSTART')
+      ? rrule
+      : `DTSTART:${dtstartUtcStr}\nRRULE:${rrule}`
 
     const rule = rrulestr(ruleString, { dtstart: masterStart.toJSDate() })
 

@@ -68,8 +68,7 @@ describe('UI Components SSR Render & Lifecycle', () => {
       renderToString(
         React.createElement(
           FormRow,
-          { label: 'Test Label', divider: true },
-          React.createElement('div', null, 'Child')
+          { label: 'Test Label', divider: true, children: React.createElement('div', null, 'Child') }
         )
       )
     ).toContain('Test Label')
@@ -117,9 +116,9 @@ describe('UI Components SSR Render & Lifecycle', () => {
         onClose: () => {}
       })
     )
-    expect(html).toContain('Tạo sự kiện mới')
-    expect(html).toContain('Bắt đầu')
-    expect(html).toContain('Kết thúc')
+    expect(html).toContain('New event')
+    expect(html).toContain('Start')
+    expect(html).toContain('End')
   })
 
   it('week view fits available width and stacks lunar under the solar day', () => {
@@ -127,8 +126,7 @@ describe('UI Components SSR Render & Lifecycle', () => {
       React.createElement(WeekView, {
         anchorDate: DateTime.fromISO('2026-08-19'),
         occurrences: [],
-        showLunar: true,
-        showWeekNumbers: false
+        showLunar: true
       })
     )
     expect(html).not.toContain('min-w-[1180px]')

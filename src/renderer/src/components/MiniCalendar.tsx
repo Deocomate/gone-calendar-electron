@@ -1,13 +1,10 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { ExpandedOccurrence } from '@shared/event-model'
-import {
-  buildMiniCalendarDays,
-  weekdayHeaders,
-  DEFAULT_EVENT_COLOR,
-  TODAY_COLOR
-} from '@shared/mini-calendar-grid'
+import { buildMiniCalendarDays, DEFAULT_EVENT_COLOR, TODAY_COLOR } from '@shared/mini-calendar-grid'
+import { weekdayShortLabels } from '../i18n/weekday-labels'
 
 interface MiniCalendarProps {
   anchorDate: DateTime
@@ -26,12 +23,13 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = ({
   onPrevMonth,
   onNextMonth
 }) => {
+  const { t, i18n } = useTranslation()
   const today = DateTime.local()
   const days = React.useMemo(
     () => buildMiniCalendarDays(anchorDate, firstDayOfWeek),
     [anchorDate, firstDayOfWeek]
   )
-  const headers = weekdayHeaders(firstDayOfWeek)
+  const headers = weekdayShortLabels(t, firstDayOfWeek)
 
   const colorsByDay = React.useMemo(() => {
     const map = new Map<string, string[]>()
@@ -50,7 +48,7 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = ({
     <div className="select-none">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-semibold text-primary">
-          {anchorDate.toFormat('MMMM yyyy')}
+          {anchorDate.setLocale(i18n.language).toFormat('MMMM yyyy')}
         </span>
         <div className="flex text-muted">
           <button type="button" className="gc-icon-btn p-1" onClick={onPrevMonth} aria-label="Previous month">

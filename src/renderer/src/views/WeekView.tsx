@@ -14,6 +14,7 @@ import { layoutAllDayEvents } from '../dnd/layout-allday-events'
 import { useEventResize } from '../dnd/use-event-resize'
 import { useSlotDragSelect } from '../dnd/use-slot-drag-select'
 import { useDisplayPreferences, HOUR_HEIGHT_BY_SIZE } from '../context/DisplayPreferencesContext'
+import type { EventEditorDraftPreview } from '../editor/EventEditorDialog'
 
 interface WeekViewProps {
   anchorDate: DateTime
@@ -22,6 +23,9 @@ interface WeekViewProps {
   showWeekNumbers?: boolean
   draggedOccurrenceId?: string
   dropTarget?: CalendarDropTarget | null
+  /** Live slot/color for a new event still being drafted in the open editor - painted
+   *  as an outline on the grid so the dialog isn't the only place the event is visible. */
+  previewSlot?: EventEditorDraftPreview | null
   onSelectOccurrence?: (occ: ExpandedOccurrence) => void
   onDeleteOccurrence?: (occ: ExpandedOccurrence) => void
   onSelectSlot?: (start: DateTime, end: DateTime, meta?: { clientX?: number; allDay?: boolean }) => void
@@ -57,6 +61,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
   showWeekNumbers = false,
   draggedOccurrenceId,
   dropTarget,
+  previewSlot,
   onSelectOccurrence,
   onDeleteOccurrence,
   onSelectSlot,
@@ -140,9 +145,46 @@ export const WeekView: React.FC<WeekViewProps> = ({
   )
   const allDayLaneCount =
     allDayLayouts.length === 0 ? 0 : Math.max(...allDayLayouts.map((l) => l.lane + 1))
-  // One extra lane's worth of headroom beyond the busiest row, always clickable to add more.
   const ALL_DAY_LANE_HEIGHT = 24
-  const allDayAreaHeight = (allDayLaneCount + 1) * ALL_DAY_LANE_HEIGHT
+  // Headroom to click and add another all-day event.
+  const ADD_LANE_HEIGHT = 16
+  // Vertical gap between stacked lanes (two overlapping multi-day bars) - without
+  // this, lanes sit flush top-to-bottom with no seam between them at all, unlike the
+  // horizontal gap between same-lane bars.
+  const LANE_ROW_GAP = 4
+
+  // A new all-day event being drafted highlights its date(s) in the header row above
+  // instead of a fake bar in the lanes below - simpler, and it can't be mistaken for
+  // an already-saved event.
+  const isDraftAllDayOn = (day: DateTime): boolean =>
+    Boolean(
+      previewSlot?.allDay &&
+        day.startOf('day') >= previewSlot.start.startOf('day') &&
+        day.startOf('day') <= previewSlot.end.startOf('day')
+    )
+
+  // Draft preview of a new TIMED event, clamped to a single day column - a span past
+  // midnight just gets cut off at that day's edge rather than segmented like a real
+  // multi-day event (this is a still-being-typed draft, not a saved occurrence yet).
+  const timedPreviewForDay = (day: DateTime) => {
+    if (!previewSlot || previewSlot.allDay) return null
+    const dayStart = day.startOf('day')
+    const dayEnd = day.endOf('day')
+    if (previewSlot.end <= dayStart || previewSlot.start >= dayEnd) return null
+    const clampedStart = previewSlot.start < dayStart ? dayStart : previewSlot.start
+    const clampedEnd = previewSlot.end > dayEnd ? dayEnd : previewSlot.end
+    const startMin = clampedStart.diff(dayStart, 'minutes').minutes
+    const endMin = clampedEnd.diff(dayStart, 'minutes').minutes
+    if (endMin <= startMin) return null
+    return { topPos: (startMin / 60) * HOUR_HEIGHT, height: ((endMin - startMin) / 60) * HOUR_HEIGHT }
+  }
+  // Gaps only exist BETWEEN rows, so there are exactly as many as (total rows - 1) -
+  // total rows is allDayLaneCount + 1 (the reserved add-lane), so that's allDayLaneCount
+  // gaps once any real lane exists, and none when the row is just the add-lane alone.
+  const allDayAreaHeight =
+    allDayLaneCount > 0
+      ? allDayLaneCount * ALL_DAY_LANE_HEIGHT + ADD_LANE_HEIGHT + allDayLaneCount * LANE_ROW_GAP
+      : ADD_LANE_HEIGHT
 
   return (
     <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-surface select-none">
@@ -169,15 +211,22 @@ export const WeekView: React.FC<WeekViewProps> = ({
             {weekDays.map((day) => {
               const isToday = day.hasSame(today, 'day')
               const monthChanged = day.day === 1
+              const isDraftAllDay = isDraftAllDayOn(day)
               return (
                 <div
                   key={day.toISO()}
-                  className="flex min-w-0 flex-col items-center overflow-hidden px-1 py-2 text-center"
+                  className="flex min-w-0 flex-col items-center overflow-hidden rounded-lg px-1 py-2 text-center transition-colors"
+                  style={isDraftAllDay ? { backgroundColor: `${previewSlot!.color}1f` } : undefined}
                 >
                   <span
-                    className={`truncate text-lg font-bold tracking-wide ${
-                      isToday ? 'rounded-full bg-today px-2 py-0.5 text-white' : 'text-primary'
+                    className={`truncate rounded-full text-lg font-bold tracking-wide ${
+                      isToday
+                        ? 'bg-today px-2 py-0.5 text-white'
+                        : isDraftAllDay
+                          ? 'px-2 py-0.5 text-primary'
+                          : 'text-primary'
                     }`}
+                    style={isDraftAllDay && !isToday ? { boxShadow: `inset 0 0 0 2px ${previewSlot!.color}` } : undefined}
                   >
                     {monthChanged ? day.toFormat('dd/MM') : day.toFormat('dd')}
                   </span>
@@ -230,14 +279,23 @@ export const WeekView: React.FC<WeekViewProps> = ({
             <div
               className={`pointer-events-none absolute inset-0 grid ${gridColsClass} content-start`}
               style={{
-                gridTemplateRows: `repeat(${Math.max(1, allDayLaneCount)}, ${ALL_DAY_LANE_HEIGHT}px)`,
+                // The reserved "click to add another" lane is its own explicit row
+                // (ADD_LANE_HEIGHT), separate from the repeat() sizing real lanes.
+                gridTemplateRows:
+                  allDayLaneCount > 0
+                    ? `repeat(${allDayLaneCount}, ${ALL_DAY_LANE_HEIGHT}px) ${ADD_LANE_HEIGHT}px`
+                    : `${ADD_LANE_HEIGHT}px`,
+                rowGap: `${LANE_ROW_GAP}px`,
                 paddingTop: 2
               }}
             >
               {allDayLayouts.map((l) => (
                 <div
                   key={l.occ.id}
-                  className="pointer-events-auto min-w-0 px-0.5"
+                  // Gap on one side only (not both) - two adjacent bars then get a single
+                  // ~4px seam between them instead of each contributing its own padding
+                  // and doubling it, so the visible block reads bigger for the same gap.
+                  className="pointer-events-auto min-w-0 h-full pr-1"
                   style={{
                     gridColumn: `${l.startCol + dayColOffset} / span ${l.span}`,
                     gridRow: l.lane + 1
@@ -246,6 +304,10 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   <EventPill
                     dense
                     draggable
+                    // Fill the full lane row instead of shrinking to its own text
+                    // height - otherwise the bar reads much thinner than the lane
+                    // height reserved for it, on top of whatever the side gaps are.
+                    className="h-full"
                     isDragging={draggedOccurrenceId === l.occ.id}
                     title={l.occ.title}
                     color={l.occ.color}
@@ -361,6 +423,24 @@ export const WeekView: React.FC<WeekViewProps> = ({
                       style={{ top: `${slotPreview.topPos}px`, height: `${slotPreview.height}px` }}
                     />
                   )}
+
+                  {/* Draft preview of a new event while its editor is open - outlined in
+                      the color the form currently holds, updating live as it changes. */}
+                  {(() => {
+                    const box = timedPreviewForDay(day)
+                    if (!box) return null
+                    return (
+                      <div
+                        className="pointer-events-none absolute right-1 left-1 z-20 rounded-[6px] border-2 border-dashed"
+                        style={{
+                          top: `${box.topPos}px`,
+                          height: `${box.height}px`,
+                          borderColor: previewSlot!.color,
+                          backgroundColor: `${previewSlot!.color}33`
+                        }}
+                      />
+                    )
+                  })()}
 
                   {dropTarget?.dateKey === dayKey && dropTarget.minutes !== undefined && (
                     <div

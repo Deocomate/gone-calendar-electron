@@ -74,13 +74,18 @@ export const EventPill: React.FC<EventPillProps> = ({
       onMouseDown={handleMouseDown}
       onAuxClick={handleAuxClick}
       title={title}
-      className={`gc-event w-full truncate rounded-none text-white min-w-0 ${
-        dense ? 'gc-event-dense px-1.5 py-0.5 text-[11px] leading-tight' : 'px-2 py-1 text-[13px]'
+      className={`gc-event flex w-full min-w-0 items-center text-white ${
+        // Dense pills (all-day bars, Month view's mini list) are short enough that a
+        // 6px radius - fine on a full-height timed block - eats a chunk of their own
+        // height at each corner, which reads as extra empty space next to a neighbor.
+        dense
+          ? 'gc-event-dense rounded-[4px] px-1.5 py-0.5 text-[11px] leading-tight'
+          : 'rounded-[6px] px-2 py-1 text-[13px]'
       } ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'is-dragging' : ''} ${className}`}
       style={{ backgroundColor: bg }}
     >
-      {time ? <span className="opacity-90 font-mono text-[10px] mr-1">{time}</span> : null}
-      <span className="font-medium">{title}</span>
+      {time ? <span className="shrink-0 opacity-90 font-mono text-[10px] mr-1">{time}</span> : null}
+      <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
     </div>
   )
 }

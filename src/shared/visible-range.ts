@@ -65,9 +65,9 @@ export function getVisibleRange(
       // scrollable, not just a narrow slice around "today".
       start = anchorDate.minus({ days: 90 }).startOf('day')
       end = anchorDate.plus({ days: 180 }).endOf('day')
-      label = isVi
-        ? `Lịch trình (${anchorDate.toFormat('MM/yyyy')})`
-        : `Schedule (${anchorDate.toFormat('MMMM yyyy')})`
+      // No header title for list view - each group's own sticky date heading already
+      // says what date it is, so a static "Schedule (Month)" label above it is redundant.
+      label = ''
       break
     }
   }

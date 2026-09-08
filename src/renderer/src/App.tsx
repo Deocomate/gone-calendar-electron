@@ -20,7 +20,10 @@ import WeekView from './views/WeekView'
 import DayView from './views/DayView'
 import YearView from './views/YearView'
 import ListView from './views/ListView'
-import EventEditorDialog, { type EventEditorInitialData } from './editor/EventEditorDialog'
+import EventEditorDialog, {
+  type EventEditorInitialData,
+  type EventEditorDraftPreview
+} from './editor/EventEditorDialog'
 import RecurringScopeDialog from './editor/RecurringScopeDialog'
 import DropActionPopover, { type PendingDropAction } from './dnd/DropActionPopover'
 import AccountManagerModal from './components/AccountManagerModal'
@@ -80,6 +83,13 @@ export const App: React.FC = () => {
 
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [editorData, setEditorData] = useState<EventEditorInitialData | null>(null)
+  // Live slot/color preview for a NEW event while its editor is open - null the rest
+  // of the time. A plain useCallback identity so the dialog's effect can depend on
+  // it safely without re-firing on every parent render.
+  const [draftPreview, setDraftPreview] = useState<EventEditorDraftPreview | null>(null)
+  const handleDraftChange = useCallback((draft: EventEditorDraftPreview | null) => {
+    setDraftPreview(draft)
+  }, [])
   const [pendingRecurringScope, setPendingRecurringScope] = useState<{
     action: 'edit' | 'delete'
     title: string
@@ -787,6 +797,7 @@ export const App: React.FC = () => {
               occurrences={occurrences}
               showLunar={showLunar}
               showWeekNumbers={showWeekNumbers}
+              previewSlot={draftPreview}
               onSelectSlot={(start, end, meta) => {
                 if (wasJustDragging()) return
                 setEditorData({
@@ -818,6 +829,7 @@ export const App: React.FC = () => {
               anchorDate={anchorDate}
               occurrences={occurrences}
               showLunar={showLunar}
+              previewSlot={draftPreview}
               onSelectSlot={(start, end, meta) => {
                 if (wasJustDragging()) return
                 setEditorData({
@@ -844,6 +856,7 @@ export const App: React.FC = () => {
             <YearView
               anchorDate={anchorDate}
               occurrences={occurrences}
+              showLunar={showLunar}
               onSelectMonth={(year, month) => {
                 setAnchorDate((d) => d.set({ year, month, day: 1 }))
                 setCurrentView('month')
@@ -905,6 +918,7 @@ export const App: React.FC = () => {
         onDelete={handleDeleteEvent}
         onDataChanged={loadCalendarsAndEvents}
         onClose={() => setIsEditorOpen(false)}
+        onDraftChange={handleDraftChange}
       />
 
       <RecurringScopeDialog

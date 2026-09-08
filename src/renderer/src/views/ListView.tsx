@@ -156,19 +156,23 @@ export const ListView: React.FC<ListViewProps> = ({
               if (el) groupRefs.current.set(dateKey, el)
               else groupRefs.current.delete(dateKey)
             }}
-            className="gc-stack-container space-y-2.5"
+            // Today gets its own tinted band around the whole day (heading + events),
+            // not just red text on the date pill - otherwise it reads the same as a
+            // plain weekend day, which only tints its date text.
+            className={`gc-stack-container space-y-2.5 rounded-lg ${isToday ? '-mx-3 px-3 py-2' : ''}`}
+            style={
+              isToday
+                ? { backgroundColor: `${TODAY_COLOR}0f`, boxShadow: `inset 3px 0 0 ${TODAY_COLOR}` }
+                : undefined
+            }
           >
             <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-surface/90 backdrop-blur-md py-1.5 border-b border-hairline">
               <div className="flex min-w-0 items-center gap-2">
                 <span
-                  className="truncate rounded-full px-3 py-1 text-sm font-semibold"
-                  style={
-                    isToday
-                      ? { color: TODAY_COLOR, backgroundColor: `${TODAY_COLOR}14` }
-                      : isWeekend
-                        ? { color: TODAY_COLOR, backgroundColor: 'var(--color-hover-fill)' }
-                        : undefined
-                  }
+                  className={`truncate rounded-full px-3 py-1 text-sm font-semibold ${
+                    isWeekend && !isToday ? 'text-today' : ''
+                  }`}
+                  style={isToday ? { color: '#fff', backgroundColor: TODAY_COLOR } : undefined}
                 >
                   {date.setLocale(i18n.language).toFormat(dateFormat)}
                 </span>

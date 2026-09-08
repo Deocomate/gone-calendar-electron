@@ -12,6 +12,7 @@ import type {
   LunarRecurrenceSpec
 } from '@shared/event-model'
 import { convertSolarToLunar, resolveLunarOccurrence } from '@shared/lunar-vietnam'
+import { DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
 import {
   DatePicker,
   TimePicker,
@@ -37,6 +38,16 @@ export interface EventEditorInitialData {
   initialClientX?: number
 }
 
+/** Live snapshot of a not-yet-saved new event, so the calendar behind the dialog can
+ *  paint a preview at the exact slot/color the form currently holds. */
+export interface EventEditorDraftPreview {
+  start: DateTime
+  end: DateTime
+  allDay: boolean
+  color: string
+  title: string
+}
+
 interface EventEditorDialogProps {
   isOpen: boolean
   calendars: Calendar[]
@@ -51,6 +62,9 @@ interface EventEditorDialogProps {
   onDelete: (eventId: string, occurrenceStartUtc?: string, isRecurring?: boolean) => void
   onDataChanged?: () => void
   onClose: () => void
+  /** Fired whenever the draft's slot/color changes while creating a NEW event (null
+   *  once it's no longer relevant - editing, closed, or the fields don't parse yet). */
+  onDraftChange?: (draft: EventEditorDraftPreview | null) => void
 }
 
 const LUNAR_MONTHS = [
@@ -86,7 +100,8 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
   onSave,
   onDelete,
   onDataChanged,
-  onClose
+  onClose,
+  onDraftChange
 }) => {
   const { t } = useTranslation()
   const isEditing = Boolean(data?.occurrence || data?.event)
@@ -293,6 +308,59 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
     ],
     [t]
   )
+
+  // While creating a brand-new event, mirror the form's current slot + color onto
+  // the calendar behind the dialog - editing an existing occurrence already has its
+  // own card visible on the grid, so it needs no separate highlight. Kept ABOVE the
+  // `if (!isOpen) return null` below (with its own inline copies of isLunarYearly /
+  // selectedCalendar) so this hook always runs, open or closed - a hook placed after
+  // an early return fires on some renders and not others, which React rejects.
+  useEffect(() => {
+    if (!onDraftChange) return
+    if (!isOpen || isEditing) {
+      onDraftChange(null)
+      return
+    }
+
+    const lunarYearly = recurrencePreset === 'lunar-yearly'
+    let start: DateTime
+    let end: DateTime
+    if (allDay || lunarYearly) {
+      start = DateTime.fromISO(startDateStr, { zone: 'local' }).startOf('day')
+      end = DateTime.fromISO((!lunarYearly && endDateStr) || startDateStr, { zone: 'local' }).endOf('day')
+    } else {
+      start = DateTime.fromISO(`${startDateStr}T${startTimeStr}:00`, { zone: 'local' })
+      end = DateTime.fromISO(`${endDateStr}T${endTimeStr}:00`, { zone: 'local' })
+    }
+
+    if (!start.isValid || !end.isValid || end <= start) {
+      onDraftChange(null)
+      return
+    }
+
+    const cal = (calendars || []).find((c) => c.id === calendarId)
+    onDraftChange({
+      start,
+      end,
+      allDay: allDay || lunarYearly,
+      color: color || cal?.color || DEFAULT_EVENT_COLOR,
+      title: title.trim() || t('common.untitled')
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isOpen,
+    isEditing,
+    allDay,
+    recurrencePreset,
+    startDateStr,
+    startTimeStr,
+    endDateStr,
+    endTimeStr,
+    color,
+    calendarId,
+    calendars,
+    title
+  ])
 
   if (!isOpen) return null
 

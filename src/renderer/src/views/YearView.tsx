@@ -4,10 +4,12 @@ import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
 import { TODAY_COLOR, DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
 import { weekdayShortLabels } from '../i18n/weekday-labels'
+import LunarLabel from '../components/LunarLabel'
 
 interface YearViewProps {
   anchorDate: DateTime
   occurrences: ExpandedOccurrence[]
+  showLunar: boolean
   onSelectMonth: (year: number, month: number) => void
   onSelectDate: (date: DateTime) => void
 }
@@ -21,6 +23,7 @@ const MAX_YEARS_WINDOW = 7
 export const YearView: React.FC<YearViewProps> = ({
   anchorDate,
   occurrences,
+  showLunar,
   onSelectMonth,
   onSelectDate
 }) => {
@@ -117,8 +120,10 @@ export const YearView: React.FC<YearViewProps> = ({
         .map((year) => (
           <div key={year} className="mb-10">
             {/* Sticky, not fixed to the app header - it's this year's own label, so it
-                naturally updates as you scroll from one year's block into the next. */}
-            <h3 className="sticky top-0 z-10 mb-4 bg-surface/95 py-2 text-center text-2xl font-bold text-primary backdrop-blur-sm">
+                naturally updates as you scroll from one year's block into the next. The
+                border/shadow only show once it's actually pinned to the top, so scrolling
+                past a year block visibly hands off to the next one's label. */}
+            <h3 className="sticky top-0 z-10 mb-4 border-b border-hairline bg-surface/95 py-2 text-center text-2xl font-bold text-primary shadow-sm backdrop-blur-sm">
               {year}
             </h3>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -143,11 +148,13 @@ export const YearView: React.FC<YearViewProps> = ({
                     onClick={() => onSelectMonth(year, monthNum)}
                     className="cursor-pointer rounded-lg p-3 transition-colors duration-150 hover:bg-hover"
                   >
-                    <h4 className="mb-2 text-sm font-semibold text-primary">
+                    {/* Centered over the week grid below it, rather than pinned to the
+                        left edge - reads as the month's own label, not a section header. */}
+                    <h4 className="mb-2 text-center text-base font-semibold text-primary">
                       {firstDayOfMonth.setLocale(i18n.language).toFormat('MMMM')}
                     </h4>
 
-                    <div className="mb-1 grid grid-cols-7 text-center text-[10px] font-medium text-muted">
+                    <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-medium text-muted">
                       {headers.map((h, idx) => (
                         <span key={h} className={idx >= 5 ? 'text-today' : ''}>
                           {h}
@@ -155,9 +162,9 @@ export const YearView: React.FC<YearViewProps> = ({
                       ))}
                     </div>
 
-                    <div className="grid grid-cols-7 gap-0.5 text-center text-xs">
+                    <div className="grid grid-cols-7 gap-1 text-center text-xs">
                       {cells.map((day, cellIdx) => {
-                        if (!day) return <div key={`empty-${cellIdx}`} className="h-6 w-6" />
+                        if (!day) return <div key={`empty-${cellIdx}`} className="h-9 w-9" />
 
                         const isToday = day.hasSame(today, 'day')
                         const colors = colorsByDay.get(day.toFormat('yyyy-MM-dd')) || []
@@ -171,18 +178,28 @@ export const YearView: React.FC<YearViewProps> = ({
                               e.stopPropagation()
                               onSelectDate(day)
                             }}
-                            className={`relative mx-auto flex h-6 w-6 items-center justify-center rounded text-[11px] text-primary transition-all duration-150 hover:bg-hover ${
+                            className={`relative mx-auto flex h-9 w-9 flex-col items-center justify-center gap-0 rounded-md text-[13px] leading-none text-primary transition-all duration-150 hover:bg-hover ${
                               colors.length > 0 ? 'gc-stack-card-3d font-semibold' : ''
                             }`}
                             style={
                               isToday
                                 ? { color: '#fff', backgroundColor: TODAY_COLOR, fontWeight: 600 }
                                 : blockColor
-                                  ? { backgroundColor: `${blockColor}33`, borderRadius: 4 }
+                                  ? { backgroundColor: `${blockColor}33`, borderRadius: 6 }
                                   : undefined
                             }
                           >
-                            {day.day}
+                            <span>{day.day}</span>
+                            {/* Small enough to sit under the day number without crowding
+                                it - only the lunar day shows here, not the full label. */}
+                            {showLunar && (
+                              <LunarLabel
+                                day={day.day}
+                                month={day.month}
+                                year={day.year}
+                                className={`!text-[8px] leading-none ${isToday ? '!text-white/85' : ''}`}
+                              />
+                            )}
                           </button>
                         )
                       })}

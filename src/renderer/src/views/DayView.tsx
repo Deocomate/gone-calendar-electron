@@ -12,6 +12,7 @@ import { layoutTimedSegments } from '../dnd/layout-timed-events'
 import { useEventResize } from '../dnd/use-event-resize'
 import { useSlotDragSelect } from '../dnd/use-slot-drag-select'
 import { useDisplayPreferences, HOUR_HEIGHT_BY_SIZE } from '../context/DisplayPreferencesContext'
+import type { EventEditorDraftPreview } from '../editor/EventEditorDialog'
 
 interface DayViewProps {
   anchorDate: DateTime
@@ -19,6 +20,9 @@ interface DayViewProps {
   showLunar: boolean
   draggedOccurrenceId?: string
   dropTarget?: CalendarDropTarget | null
+  /** Live slot/color for a new event still being drafted in the open editor - painted
+   *  as an outline on the grid so the dialog isn't the only place the event is visible. */
+  previewSlot?: EventEditorDraftPreview | null
   onSelectOccurrence?: (occ: ExpandedOccurrence) => void
   onSelectSlot?: (start: DateTime, end: DateTime, meta?: { clientX?: number; allDay?: boolean }) => void
   onDragStart?: (e: React.DragEvent, occ: ExpandedOccurrence, segment?: TimedSegment) => void
@@ -35,6 +39,7 @@ export const DayView: React.FC<DayViewProps> = ({
   showLunar,
   draggedOccurrenceId,
   dropTarget,
+  previewSlot,
   onSelectOccurrence,
   onSelectSlot,
   onDragStart,
@@ -100,6 +105,27 @@ export const DayView: React.FC<DayViewProps> = ({
   const timedLayouts = layoutTimedSegments(daySegments, HOUR_HEIGHT)
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
+  // Draft preview of a new event while its editor is open - outlined in the color
+  // the form currently holds, updating live as it changes.
+  const timedPreviewBox = (() => {
+    if (!previewSlot || previewSlot.allDay) return null
+    const dayStart = anchorDate.startOf('day')
+    const dayEnd = anchorDate.endOf('day')
+    if (previewSlot.end <= dayStart || previewSlot.start >= dayEnd) return null
+    const clampedStart = previewSlot.start < dayStart ? dayStart : previewSlot.start
+    const clampedEnd = previewSlot.end > dayEnd ? dayEnd : previewSlot.end
+    const startMin = clampedStart.diff(dayStart, 'minutes').minutes
+    const endMin = clampedEnd.diff(dayStart, 'minutes').minutes
+    if (endMin <= startMin) return null
+    return { topPos: (startMin / 60) * HOUR_HEIGHT, height: ((endMin - startMin) / 60) * HOUR_HEIGHT }
+  })()
+
+  const showAllDayPreview = Boolean(
+    previewSlot?.allDay &&
+      previewSlot.start.startOf('day') <= anchorDate.startOf('day') &&
+      previewSlot.end.startOf('day') >= anchorDate.startOf('day')
+  )
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-surface select-none relative">
       {/* Header */}
@@ -109,7 +135,16 @@ export const DayView: React.FC<DayViewProps> = ({
             className={`flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold shrink-0 ${
               isToday ? 'text-white' : 'bg-hover text-primary'
             }`}
-            style={isToday ? { backgroundColor: TODAY_COLOR } : undefined}
+            style={
+              isToday
+                ? { backgroundColor: TODAY_COLOR }
+                : // A new all-day event being drafted highlights this date instead of a
+                  // fake pill down in the all-day row - simpler, and it can't be mistaken
+                  // for an already-saved event.
+                  showAllDayPreview
+                  ? { boxShadow: `inset 0 0 0 2px ${previewSlot!.color}` }
+                  : undefined
+            }
           >
             {anchorDate.day}
           </span>
@@ -235,6 +270,18 @@ export const DayView: React.FC<DayViewProps> = ({
               <div
                 className="pointer-events-none absolute right-1 left-1 z-20 rounded-md border-2 border-accent bg-accent/25"
                 style={{ top: `${slotPreview.topPos}px`, height: `${slotPreview.height}px` }}
+              />
+            )}
+
+            {timedPreviewBox && (
+              <div
+                className="pointer-events-none absolute right-1 left-1 z-20 rounded-[6px] border-2 border-dashed"
+                style={{
+                  top: `${timedPreviewBox.topPos}px`,
+                  height: `${timedPreviewBox.height}px`,
+                  borderColor: previewSlot!.color,
+                  backgroundColor: `${previewSlot!.color}33`
+                }}
               />
             )}
 

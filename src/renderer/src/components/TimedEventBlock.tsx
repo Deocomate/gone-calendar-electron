@@ -99,8 +99,11 @@ export const TimedEventBlock: React.FC<TimedEventBlockProps> = ({
       style={{
         top: `${layout.topPos}px`,
         height: `${Math.max(minHeight, layout.height - 2)}px`,
-        left: `calc(${layout.leftPercent}% + 2px)`,
-        width: `calc(${layout.widthPercent}% - 4px)`,
+        // Side-by-side (non-nested) columns inset a touch less than a nested card
+        // does against its host, so two plain overlapping events sit 1px closer
+        // together than before while the nested look is untouched.
+        left: `calc(${layout.leftPercent}% + ${layout.isNested ? 2 : 1.5}px)`,
+        width: `calc(${layout.widthPercent}% - ${layout.isNested ? 4 : 3}px)`,
         backgroundColor: layout.effectiveColor,
         borderRadius: 6
       }}

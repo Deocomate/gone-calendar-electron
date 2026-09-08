@@ -263,12 +263,16 @@ export const MonthView: React.FC<MonthViewProps> = ({
       const startDt = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
       if (occ.allDay) {
         // All-day end is inclusive - a multi-day event must land in every day it
-        // spans, not just its start day.
+        // spans, not just its start day. Capped so a malformed/corrupt event with an
+        // absurd end date can't spin this loop for years and stall rendering.
+        const MAX_SPAN_DAYS = 366
         const lastDay = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local').startOf('day')
         let cursor = startDt.startOf('day')
-        while (cursor <= lastDay) {
+        let daysWalked = 0
+        while (cursor <= lastDay && daysWalked < MAX_SPAN_DAYS) {
           addTo(cursor.toFormat('yyyy-MM-dd'), occ)
           cursor = cursor.plus({ days: 1 })
+          daysWalked++
         }
       } else {
         addTo(startDt.toFormat('yyyy-MM-dd'), occ)

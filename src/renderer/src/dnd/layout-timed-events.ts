@@ -73,17 +73,25 @@ export function layoutTimedSegments(segments: TimedSegment[], hourHeight: number
     const topLevel = currentGroup.filter((item) => !parentOf.has(item))
     const nested = currentGroup.filter((item) => parentOf.has(item))
 
-    const resolveRoot = (item: Item): Item => {
-      let root = parentOf.get(item)!
-      while (parentOf.has(root)) root = parentOf.get(root)!
-      return root
+    const depthOf = (item: Item): number => {
+      let depth = 0
+      let cur = item
+      while (parentOf.has(cur)) {
+        cur = parentOf.get(cur)!
+        depth++
+      }
+      return depth
     }
+    // Shallowest first, so a parent's own box is always laid out before any child
+    // that needs to inset within it - required for chains deeper than one level.
+    const nestedByDepth = [...nested].sort((a, b) => depthOf(a) - depthOf(b))
 
-    // Roots carrying a nested child give up half their own box to it, so both cards
-    // keep a legible strip for their own title/time instead of one hiding the other.
+    // Any item hosting a direct nested child gives up half its own box to it, so
+    // both cards keep a legible strip for their own title/time instead of one
+    // hiding the other. This includes nested items that themselves host a child.
     const NEST_SPLIT_PERCENT = 50
     const hostsWithNested = new Set<Item>()
-    for (const item of nested) hostsWithNested.add(resolveRoot(item))
+    for (const item of nested) hostsWithNested.add(parentOf.get(item)!)
 
     const columns: Item[][] = []
     const colIndexByItem = new Map<Item, number>()
@@ -138,26 +146,36 @@ export function layoutTimedSegments(segments: TimedSegment[], hourHeight: number
       })
     }
 
-    // Each nested item takes the right half of whichever top-level box its
-    // containment chain resolves to - right edges stay flush (no extra gutter),
-    // while the host's own content was already confined to its left half above.
-    for (const item of nested) {
-      const root = resolveRoot(item)
-      const rootLayout = layoutByItem.get(root) || { leftPercent: 0, widthPercent: MAX_COLUMN_WIDTH_PERCENT }
-      const childWidth = rootLayout.widthPercent * (NEST_SPLIT_PERCENT / 100)
+    // Each nested item takes the right half of its own DIRECT parent's box (not
+    // the outermost ancestor's) - right edges stay flush against that parent, so a
+    // chain of nested-inside-nested events insets progressively at every level
+    // instead of every descendant landing in the same slot on the top-level box.
+    for (const item of nestedByDepth) {
+      const parent = parentOf.get(item)!
+      const parentLayout = layoutByItem.get(parent) || {
+        leftPercent: 0,
+        widthPercent: MAX_COLUMN_WIDTH_PERCENT
+      }
+      const childWidth = parentLayout.widthPercent * (NEST_SPLIT_PERCENT / 100)
+      const itemLayout = {
+        leftPercent: parentLayout.leftPercent + parentLayout.widthPercent - childWidth,
+        widthPercent: childWidth
+      }
+      // Stored so any item nested inside THIS one can inset relative to it in turn.
+      layoutByItem.set(item, itemLayout)
 
       layouts.push({
         occ: item.occ,
         segment: item.segment,
         topPos: item.topPos,
         height: item.height,
-        leftPercent: rootLayout.leftPercent + rootLayout.widthPercent - childWidth,
-        widthPercent: childWidth,
+        leftPercent: itemLayout.leftPercent,
+        widthPercent: itemLayout.widthPercent,
         overlapIndex: 0,
         totalOverlaps: 1,
         effectiveColor: item.occ.color || DEFAULT_EVENT_COLOR,
         isNested: true,
-        contentWidthPercent: 100
+        contentWidthPercent: hostsWithNested.has(item) ? 100 - NEST_SPLIT_PERCENT : 100
       })
     }
   }

@@ -37,6 +37,7 @@
     "src/shared/**/*",
     "tests/ui-components.test.ts",
     "tests/drop-target.test.ts",
-    "tests/resize-math.test.ts"
+    "tests/resize-math.test.ts",
+    "tests/i18n-parity.test.ts"
   ]
 }

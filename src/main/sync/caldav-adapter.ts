@@ -1,10 +1,11 @@
+import { fetchWithTimeout } from './http'
 import { generateIcs } from '../ics/write-ics'
 import {
   parseCalDavMultistatus,
   extractXmlTagValue,
   type CalDavCalendarDescriptor
 } from './caldav-discover'
-import type { Calendar, CalendarEvent } from '@shared/event-model'
+import type { Calendar, CalendarEvent, EventException } from '@shared/event-model'
 
 export interface CalDavCredentials {
   url: string
@@ -29,7 +30,7 @@ export class CalDavAdapter {
     body?: string,
     headers: Record<string, string> = {}
   ): Promise<Response> {
-    return fetch(url, {
+    return fetchWithTimeout(url, {
       method,
       headers: {
         Authorization: this.authHeader,
@@ -121,9 +122,13 @@ export class CalDavAdapter {
    */
   async pushEvent(
     calendar: Calendar,
-    event: CalendarEvent
+    event: CalendarEvent,
+    exceptions: EventException[] = []
   ): Promise<{ success: boolean; etag?: string; conflict?: boolean }> {
-    const icsContent = generateIcs(calendar, [event])
+    // A CalDAV series lives in one resource, so per-occurrence overrides and
+    // cancellations have to travel with the master as RECURRENCE-ID components;
+    // omitting them silently strips the occurrence edit from the push.
+    const icsContent = generateIcs(calendar, [event], exceptions)
     const eventUrl = `${calendar.id.replace(/\/+$/, '')}/${encodeURIComponent(event.uid || event.id)}.ics`
 
     const headers: Record<string, string> = {

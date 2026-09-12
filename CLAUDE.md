@@ -7,6 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev            # electron-vite dev app with renderer HMR
 npm run build          # production bundle -> out/{main,preload,renderer}
+npm run lint           # eslint . (flat config in eslint.config.mjs)
+npm run lint:fix       # eslint . --fix
+npm run clean          # remove out/, dist/, *.tsbuildinfo
 npm run typecheck      # typecheck:node && typecheck:web (run this before commit)
 npm run typecheck:node # tsc -p tsconfig.node.json  (main + preload + shared + most tests)
 npm run typecheck:web  # tsc -p tsconfig.web.json   (renderer + shared + renderer-touching tests)
@@ -23,7 +26,7 @@ npx vitest run -t "expands weekly RRULE"      # one test by name
 npx vitest                                    # watch mode
 ```
 
-There is **no linter or formatter configured** (some source files contain `eslint-disable` comments but no ESLint is installed). `npm run typecheck` with the project's strict flags (`noUnusedLocals`, `noImplicitReturns`, etc.) is the only static gate. CI (`.github/workflows/ci.yml`) runs typecheck + test + build on every push/PR.
+ESLint 9 (flat config, `eslint.config.mjs`) is the lint gate; **there is no formatter** — match surrounding style by hand (2-space indent, single quotes, no semicolons; `.editorconfig` carries these for your editor). `@typescript-eslint/no-explicit-any` is set to `warn` on purpose: provider payloads and IPC boundaries are genuinely untyped at the edge, so the ~100 existing warnings are visible debt rather than a CI blocker — don't add more, and don't "fix" them by silencing the rule. Everything else is an error and CI fails on it. `npm run typecheck` with the project's strict flags (`noUnusedLocals`, `noImplicitReturns`, etc.) remains the type gate. CI (`.github/workflows/ci.yml`) runs lint + typecheck + test + build on every push/PR.
 
 ## Architecture
 
@@ -64,11 +67,15 @@ Never pass raw channel strings to `invoke`/`handle`. `tests/ipc-contract.test.ts
 - `src/shared/expand-occurrences.ts` expands recurring masters via `rrule` and applies `event_exceptions` rows (EXDATE cancellations + per-instance overrides).
 - Edit/delete of a recurring series is scoped `this` / `this-and-future` / `all` (`RecurringEditScope`); the renderer prompts via `RecurringScopeDialog`.
 - **Lunar anniversaries** (`giỗ` / âm lịch): an event with a `lunar_rule` JSON column (`{day,month,leap}`) and no `rrule`. `expand-occurrences.ts` resolves one all-day occurrence per Gregorian year via `resolveLunarOccurrence()` in `src/shared/lunar-vietnam.ts` (leap-month + 29-day-month fallbacks, memoized). The master is local-only; `EventsRepo.materializeLunarEvent()` writes standalone `dirty=1` instances (linked by `lunar_source_event_id`) into a syncable calendar so they push to providers as ordinary events. `queryEventsByRange` passes a covered-years set so the synthetic master and its materialized instances never double-draw. Editing a lunar occurrence always applies to the whole series (no scope prompt); deleting still offers this-year vs series.
-- Calendars with `is_read_only` (holiday subscriptions, some provider calendars) must have mutations rejected in the IPC handler.
+- Calendars with `is_read_only` (holiday subscriptions, some provider calendars) reject mutations in the **repo layer**: every write path in `EventsRepo` calls `checkReadOnlyCalendar()` and throws `ReadOnlyCalendarError`, which the IPC handler translates into a user-facing message. Put the guard in the repo, not the handler — it can't be bypassed there.
 
 ### Sync
 
-`src/main/sync/sync-worker.ts` runs one poll loop across all connected accounts. Interval is adaptive — 20s while the main window is focused, 5m when blurred — driven by `SyncWorker.setFocusState()`, wired to `BrowserWindow` `focus`/`blur` in `src/main/index.ts`. (`docs/code-standards.md` still says 60s for the focused interval — that doc is stale, trust the code.) Local edits set `dirty = 1`; the engine pushes dirty rows before pulling. Conflict strategy is last-write-wins; a provider 412 surfaces a visible error rather than silently overwriting. Per-provider engines: `google-sync-engine.ts`, `microsoft-sync-engine.ts`, `caldav-sync-engine.ts`.
+`src/main/sync/sync-worker.ts` runs one poll loop across all connected accounts. Interval is adaptive — 20s while the main window is focused, 5m when blurred — driven by `SyncWorker.setFocusState()`, wired to `BrowserWindow` `focus`/`blur` in `src/main/index.ts`. Local edits set `dirty = 1`; the engine pushes dirty rows before pulling. Every request goes through `fetchWithTimeout` (`src/main/sync/http.ts`) — Node's bare `fetch` never times out, and a stalled connection would wedge `SyncWorker.isSyncing` for the life of the process. The three engines run concurrently under `Promise.all` with per-engine `.catch`, so one provider cannot block or cancel the others.
+
+Conflict strategy is last-write-wins guarded by an `If-Match` precondition on every update/delete (Google and CalDAV use `If-Match`, Graph uses `if-match`). A 412 sets `has_conflict = 1`, and conflicted rows are excluded from the push set until `resolveConflict()` clears them — otherwise they retry and re-fail every poll.
+
+**Occurrence exceptions sync too.** A `this`-scoped edit or delete writes an `event_exceptions` row with `dirty = 1`. CalDAV re-PUTs the whole series (master + `RECURRENCE-ID` components) since a series is one resource; Google and Graph resolve the occurrence through the master's `/instances` collection and PATCH (or DELETE) that instance, caching the resolved id in `provider_instance_id`. A pull never overwrites a row that is still `dirty`. Per-provider engines: `google-sync-engine.ts`, `microsoft-sync-engine.ts`, `caldav-sync-engine.ts`.
 
 ### Secrets
 
@@ -77,7 +84,7 @@ Never pass raw channel strings to `invoke`/`handle`. `tests/ipc-contract.test.ts
 ### Renderer
 
 - `src/renderer/src/main.tsx` inspects the URL hash: `#mini` → `MiniApp` (frameless always-on-top tray companion), otherwise `App`.
-- `App.tsx` is a single large `useState` container that owns view routing (Day/Week/Month/Year/List), the global keyboard-shortcut listener, and all modal state. `zustand` is a dependency but is currently unused — follow the existing `useState` pattern unless deliberately introducing a store.
+- `App.tsx` is a single large `useState` container that owns view routing (Day/Week/Month/Year/List), the global keyboard-shortcut listener, and all modal state. There is no state-management library — follow the existing `useState` pattern unless deliberately introducing one.
 - All five calendar views are hand-built React components (no third-party calendar library). Drag/drop and edge-resize math lives in `src/renderer/src/dnd/` with pure functions unit-tested separately.
 - All user-visible strings go through i18next; keys in `src/renderer/src/i18n/index.ts`, `vi` + `en` kept in sync.
 

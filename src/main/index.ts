@@ -6,6 +6,7 @@ import { initDatabase, closeDatabase } from './db/database'
 import { setupTray } from './tray'
 import { registerMiniIpcHandlers } from './mini-window'
 import { getSyncWorker } from './ipc/auth-sync-ipc'
+import { isSafeExternalUrl } from './safe-external-url'
 
 // Enforce single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -53,10 +54,32 @@ if (!gotTheLock) {
       getSyncWorker()?.setFocusState(false)
     })
 
-    // Open target links in default external browser, not in Electron shell
+    // Open target links in default external browser, not in Electron shell.
+    // Only web and mail schemes are handed to the OS: event titles, locations
+    // and meeting links arrive from synced providers, so the URL here is not
+    // necessarily something the user typed, and shell.openExternal will happily
+    // launch a registered handler for file:, smb:, or any custom scheme.
     mainWindow.webContents.setWindowOpenHandler((details) => {
-      shell.openExternal(details.url)
+      if (isSafeExternalUrl(details.url)) {
+        shell.openExternal(details.url)
+      } else {
+        console.warn('Blocked window.open for disallowed URL scheme')
+      }
       return { action: 'deny' }
+    })
+
+    // The app is a fixed local document; nothing should ever navigate the
+    // top-level frame away from it. Without this, a link or injected content
+    // could replace the renderer with a remote page that keeps the preload
+    // bridge in scope.
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+      const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+      const isDevServer = Boolean(rendererUrl && url.startsWith(rendererUrl))
+      const isLocalFile = url.startsWith('file://')
+      if (!isDevServer && !isLocalFile) {
+        event.preventDefault()
+        if (isSafeExternalUrl(url)) shell.openExternal(url)
+      }
     })
 
     // Load URL in dev or index.html in production
@@ -112,5 +135,3 @@ if (!gotTheLock) {
     }
   })
 }
-
-

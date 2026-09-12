@@ -16,8 +16,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/gone-calendar/gone-calendar
-cd gone-calendar
+git clone https://github.com/Deocomate/gone-calendar-electron
+cd gone-calendar-electron
 
 # Install dependencies
 npm install

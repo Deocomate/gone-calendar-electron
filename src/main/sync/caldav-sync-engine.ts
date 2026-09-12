@@ -2,13 +2,16 @@ import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { SecureStore } from '../secure-store'
 import { CalDavAdapter, type CalDavCredentials } from './caldav-adapter'
 import { parseIcsContent } from '../ics/parse-ics'
+import { EventsRepo } from '../db/repos/events-repo'
 import type { Calendar, SyncResult } from '@shared/event-model'
 
 export class CalDavSyncEngine {
   private secureStore: SecureStore
+  private eventsRepo: EventsRepo
 
   constructor(private db: ISqliteDatabase) {
     this.secureStore = new SecureStore(db)
+    this.eventsRepo = new EventsRepo(db)
   }
 
   /**
@@ -150,8 +153,18 @@ export class CalDavSyncEngine {
     }
 
     const dirtyRows = this.db
-      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1')
+      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1 AND has_conflict = 0')
       .all<any>(calendarId)
+
+    // A series whose master is clean but which has a pending occurrence override
+    // or cancellation still needs re-PUTting: CalDAV keeps the whole series in
+    // one resource, so the exception rides along with the master.
+    const dirtyIds = new Set(dirtyRows.map((r) => r.id))
+    for (const master of this.eventsRepo.listMastersWithDirtyExceptions(calendarId)) {
+      if (dirtyIds.has(master.id)) continue
+      const row = this.db.prepare('SELECT * FROM events WHERE id = ?').get<any>(master.id)
+      if (row) dirtyRows.push(row)
+    }
 
     let pushedCount = 0
     let errorCount = 0
@@ -169,30 +182,38 @@ export class CalDavSyncEngine {
             errorCount++
           }
         } else {
-          const pushRes = await adapter.pushEvent(calendar, {
-            id: row.id,
-            calendarId: row.calendar_id,
-            uid: row.uid,
-            title: row.title,
-            notes: row.notes,
-            location: row.location,
-            dtStartUtc: row.dtstart_utc,
-            dtEndUtc: row.dtend_utc,
-            tzid: row.tzid,
-            allDay: row.all_day === 1,
-            rrule: row.rrule,
-            etag: row.etag,
-            dirty: false,
-            isDeleted: false,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at
-          })
+          const pushRes = await adapter.pushEvent(
+            calendar,
+            {
+              id: row.id,
+              calendarId: row.calendar_id,
+              uid: row.uid,
+              title: row.title,
+              notes: row.notes,
+              location: row.location,
+              dtStartUtc: row.dtstart_utc,
+              dtEndUtc: row.dtend_utc,
+              tzid: row.tzid,
+              allDay: row.all_day === 1,
+              rrule: row.rrule,
+              exdate: row.exdate,
+              color: row.color,
+              meetingUrl: row.meeting_url,
+              etag: row.etag,
+              dirty: false,
+              isDeleted: false,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at
+            },
+            this.eventsRepo.getExceptionsForEvent(row.id)
+          )
 
           if (pushRes.success) {
             const now = new Date().toISOString()
             this.db
               .prepare('UPDATE events SET etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?')
               .run(pushRes.etag || row.etag, now, row.id)
+            this.eventsRepo.markExceptionsSyncedForMaster(row.id)
             pushedCount++
           } else if (pushRes.conflict) {
             console.warn(`ETag conflict on CalDAV event ${row.id}`)

@@ -42,7 +42,24 @@ export interface GoogleCalendarApiEvent {
   conferenceData?: {
     entryPoints?: { entryPointType: string; uri: string }[]
   }
+  extendedProperties?: {
+    private?: Record<string, string>
+  }
 }
+
+/** Reverse of GOOGLE_COLOR_MAP, for pushing a local hex colour back as a colorId. */
+export const GOOGLE_COLOR_ID_BY_HEX: Record<string, string> = Object.fromEntries(
+  Object.entries(GOOGLE_COLOR_MAP).map(([id, hex]) => [hex.toLowerCase(), id])
+)
+
+/**
+ * Google exposes no writable field for an arbitrary meeting link - `hangoutLink`
+ * and `conferenceData` are server-owned (conferenceData only accepts a Meet
+ * create-request, not a URL). Private extended properties are the documented
+ * per-client escape hatch and round-trip losslessly, so the link survives a
+ * push/pull cycle instead of being dropped on the way out.
+ */
+export const GONE_MEETING_URL_PROP = 'goneMeetingUrl'
 
 /**
  * Format Google Event DateTime to ISO UTC and determine all-day status
@@ -96,6 +113,8 @@ export function mapGoogleEventToDomain(
     )
     if (videoEntry) meetingUrl = videoEntry.uri
   }
+  // A link we pushed ourselves comes back here rather than as a real conference.
+  if (!meetingUrl) meetingUrl = gEvent.extendedProperties?.private?.[GONE_MEETING_URL_PROP]
 
   const isCancelled = gEvent.status === 'cancelled'
 
@@ -191,6 +210,16 @@ export function mapDomainEventToGoogle(
 
   if (event.rrule) {
     gEvent.recurrence = [`RRULE:${event.rrule}`]
+  }
+
+  const hex = event.color?.toLowerCase()
+  if (hex && GOOGLE_COLOR_ID_BY_HEX[hex]) {
+    gEvent.colorId = GOOGLE_COLOR_ID_BY_HEX[hex]
+  }
+  if (event.meetingUrl) {
+    gEvent.extendedProperties = {
+      private: { [GONE_MEETING_URL_PROP]: event.meetingUrl }
+    }
   }
 
   if ((event as CalendarEvent).etag) {

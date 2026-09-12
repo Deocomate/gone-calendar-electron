@@ -45,10 +45,6 @@ export function jdFromDate(dd: number, mm: number, yy: number): number {
  */
 export function jdToDate(jd: number): { day: number; month: number; year: number } {
   let a: number
-  let b: number
-  let c: number
-  let d: number
-  let e: number
   let m: number
 
   if (jd > 2299160) {
@@ -58,10 +54,10 @@ export function jdToDate(jd: number): { day: number; month: number; year: number
     a = jd
   }
 
-  b = a + 1524
-  c = Math.floor((b - 122.1) / 365.25)
-  d = Math.floor(365.25 * c)
-  e = Math.floor((b - d) / 30.6001)
+  const b = a + 1524
+  const c = Math.floor((b - 122.1) / 365.25)
+  const d = Math.floor(365.25 * c)
+  const e = Math.floor((b - d) / 30.6001)
 
   const day = b - d - Math.floor(30.6001 * e)
   if (e < 14) {
@@ -87,7 +83,7 @@ export function getNewMoonDay(k: number, timeZone: number = 7): number {
   const T3 = T2 * T
   const dr = PI / 180
 
-  let Jd1 =
+  const Jd1 =
     2415020.75933 +
     29.53058868 * k +
     0.0001178 * T2 -
@@ -98,7 +94,7 @@ export function getNewMoonDay(k: number, timeZone: number = 7): number {
   const Mpr = 306.0253 + 385.81691806 * k + 0.0107306 * T2 + 0.00001236 * T3
   const F = 21.2964 + 390.67050646 * k - 0.0016528 * T2 - 0.00000239 * T3
 
-  let C1 =
+  const C1 =
     (0.1734 - 0.000393 * T) * Math.sin(M * dr) +
     0.0021 * Math.sin(2 * dr * M) -
     0.4068 * Math.sin(Mpr * dr) +

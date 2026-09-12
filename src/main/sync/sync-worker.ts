@@ -10,6 +10,9 @@ export class SyncWorker {
   private microsoftEngine: MicrosoftSyncEngine
   private caldavEngine: CalDavSyncEngine
   private timer: NodeJS.Timeout | null = null
+  /** Kick-off timer from start(); tracked so stop() can cancel it before it
+   *  fires a sync against a database the app is in the middle of closing. */
+  private startupTimer: NodeJS.Timeout | null = null
   private isSyncing = false
   private lastSyncTime?: string
   private lastError?: string
@@ -36,7 +39,9 @@ export class SyncWorker {
     if (this.timer) clearInterval(this.timer)
 
     // Initial sync
-    setTimeout(() => {
+    if (this.startupTimer) clearTimeout(this.startupTimer)
+    this.startupTimer = setTimeout(() => {
+      this.startupTimer = null
       this.triggerSync().catch(() => {})
     }, 3000)
 
@@ -68,6 +73,17 @@ export class SyncWorker {
       clearInterval(this.timer)
       this.timer = null
     }
+    if (this.startupTimer) {
+      clearTimeout(this.startupTimer)
+      this.startupTimer = null
+    }
+  }
+
+  /** Contain an engine-level throw so one provider cannot cancel the others. */
+  private engineFailure(provider: string, err: any): SyncResult {
+    const message = `${provider} sync failed: ${err?.message || String(err)}`
+    console.error(message)
+    return { success: false, pulledCount: 0, pushedCount: 0, errorCount: 1, message }
   }
 
   /**
@@ -80,9 +96,18 @@ export class SyncWorker {
 
     this.isSyncing = true
     try {
-      const googleRes = await this.googleEngine.syncAll(this.googleClientId, this.googleClientSecret)
-      const msRes = await this.microsoftEngine.syncAll(this.msClientId, this.msClientSecret)
-      const caldavRes = await this.caldavEngine.syncAll()
+      // Run the three providers concurrently and settle independently: in
+      // sequence, a slow provider delays the other two and a throw from the
+      // first skips the rest entirely.
+      const [googleRes, msRes, caldavRes] = await Promise.all([
+        this.googleEngine
+          .syncAll(this.googleClientId, this.googleClientSecret)
+          .catch((err) => this.engineFailure('Google', err)),
+        this.microsoftEngine
+          .syncAll(this.msClientId, this.msClientSecret)
+          .catch((err) => this.engineFailure('Microsoft', err)),
+        this.caldavEngine.syncAll().catch((err) => this.engineFailure('CalDAV', err))
+      ])
 
       const totalPulled = googleRes.pulledCount + msRes.pulledCount + caldavRes.pulledCount
       const totalPushed = googleRes.pushedCount + msRes.pushedCount + caldavRes.pushedCount
@@ -90,7 +115,6 @@ export class SyncWorker {
 
       this.lastSyncTime = new Date().toISOString()
       this.lastError = totalErrors > 0 ? `Sync completed with ${totalErrors} errors` : undefined
-      this.isSyncing = false
 
       return {
         success: totalErrors === 0,
@@ -101,8 +125,11 @@ export class SyncWorker {
       }
     } catch (err: any) {
       this.lastError = err.message || String(err)
-      this.isSyncing = false
       return { success: false, pulledCount: 0, pushedCount: 0, errorCount: 1, message: this.lastError }
+    } finally {
+      // Always release, on every exit path: a flag left set makes every later
+      // poll return "sync already in progress" until the app is restarted.
+      this.isSyncing = false
     }
   }
 

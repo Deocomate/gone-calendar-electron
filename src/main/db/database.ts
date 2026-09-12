@@ -168,6 +168,76 @@ CREATE INDEX IF NOT EXISTS idx_events_has_conflict ON events (has_conflict) WHER
 `
 
 /**
+ * Occurrence exceptions (a single edited or cancelled instance of a recurring
+ * series) had no push-tracking columns, so they were written locally and never
+ * sent to any provider. `dirty` puts them in the push set the same way events
+ * use it; `provider_instance_id` caches the provider's id for the instance so a
+ * repeat push does not have to re-resolve it.
+ */
+const MIGRATION_007_SQL = `
+ALTER TABLE event_exceptions ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE event_exceptions ADD COLUMN etag TEXT;
+ALTER TABLE event_exceptions ADD COLUMN provider_instance_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_event_exceptions_dirty ON event_exceptions (dirty) WHERE dirty = 1;
+`
+
+/**
+ * `sync_state` as created in 001 cannot store a sync token: it has no
+ * `updated_at` column, its NOT NULL `id`/`account_id` are never supplied by the
+ * writer, and `calendar_id` carries no unique constraint for ON CONFLICT. The
+ * token upsert therefore always threw - and because it runs inside the same
+ * transaction as the pulled events, it rolled back the whole page. Any calendar
+ * small enough to return nextSyncToken on its first page imported zero events.
+ *
+ * Rebuilt keyed on calendar_id, which is how every reader addresses it.
+ */
+const MIGRATION_008_SQL = `
+CREATE TABLE sync_state_new (
+  calendar_id TEXT PRIMARY KEY REFERENCES calendars(id) ON DELETE CASCADE,
+  account_id TEXT,
+  last_synced_at TEXT,
+  sync_token TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'idle',
+  error_message TEXT,
+  updated_at TEXT
+);
+
+INSERT OR IGNORE INTO sync_state_new
+  (calendar_id, account_id, last_synced_at, sync_token, sync_status, error_message)
+SELECT calendar_id, account_id, last_synced_at, sync_token, sync_status, error_message
+FROM sync_state
+WHERE calendar_id IS NOT NULL;
+
+DROP TABLE sync_state;
+ALTER TABLE sync_state_new RENAME TO sync_state;
+`
+
+/**
+ * `idx_event_exceptions_master` was created non-unique in 001, but both provider
+ * pulls upsert onto those columns with ON CONFLICT(master_event_id,
+ * original_start_utc). SQLite requires a UNIQUE index for that, so every page of
+ * events containing a recurring-occurrence exception threw "ON CONFLICT clause
+ * does not match any PRIMARY KEY or UNIQUE constraint", rolled back its
+ * transaction, and aborted the whole calendar. Calendars therefore imported only
+ * the whole pages preceding their first exception - or nothing at all.
+ *
+ * The pair is genuinely unique (one override per occurrence of a series), so any
+ * duplicates are historical noise; keep the newest and enforce it from here on.
+ */
+const MIGRATION_009_SQL = `
+DELETE FROM event_exceptions
+WHERE rowid NOT IN (
+  SELECT MAX(rowid) FROM event_exceptions GROUP BY master_event_id, original_start_utc
+);
+
+DROP INDEX IF EXISTS idx_event_exceptions_master;
+
+CREATE UNIQUE INDEX idx_event_exceptions_master
+  ON event_exceptions (master_event_id, original_start_utc);
+`
+
+/**
  * Execute all schema migrations in order
  */
 export function runMigrations(db: ISqliteDatabase): void {
@@ -226,6 +296,30 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_006_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       6,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 7) {
+    db.exec(MIGRATION_007_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      7,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 8) {
+    db.exec(MIGRATION_008_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      8,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 9) {
+    db.exec(MIGRATION_009_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      9,
       new Date().toISOString()
     )
   }

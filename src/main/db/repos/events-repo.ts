@@ -373,7 +373,8 @@ export class EventsRepo {
         .prepare(
           `UPDATE event_exceptions SET
             is_cancelled = ?, title = ?, notes = ?, location = ?,
-            dtstart_utc = ?, dtend_utc = ?, tzid = ?, color = ?, updated_at = ?
+            dtstart_utc = ?, dtend_utc = ?, tzid = ?, color = ?, updated_at = ?,
+            dirty = 1
            WHERE id = ?`
         )
         .run(
@@ -393,8 +394,9 @@ export class EventsRepo {
         .prepare(
           `INSERT INTO event_exceptions (
             id, master_event_id, original_start_utc, is_cancelled,
-            title, notes, location, dtstart_utc, dtend_utc, tzid, color, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            title, notes, location, dtstart_utc, dtend_utc, tzid, color, created_at, updated_at,
+            dirty
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
         )
         .run(
           id,
@@ -417,6 +419,81 @@ export class EventsRepo {
     return mapRowToException(row!)
   }
 
+  /**
+   * Occurrence exceptions in a calendar that still need pushing, with the master
+   * they belong to. Masters that have never been pushed (no etag) are skipped:
+   * there is no remote series to attach an instance override to yet, and the
+   * master's own push will carry the series on the next cycle.
+   */
+  listDirtyExceptions(calendarId: string): {
+    exception: EventException
+    master: CalendarEvent
+    providerInstanceId: string | null
+  }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT x.* FROM event_exceptions x
+         JOIN events e ON e.id = x.master_event_id
+         WHERE e.calendar_id = ? AND x.dirty = 1 AND e.has_conflict = 0 AND e.is_deleted = 0
+           AND e.etag IS NOT NULL`
+      )
+      .all<ExceptionRow & { provider_instance_id: string | null }>(calendarId)
+
+    const out: {
+      exception: EventException
+      master: CalendarEvent
+      providerInstanceId: string | null
+    }[] = []
+    for (const row of rows) {
+      const master = this.getEventById(row.master_event_id)
+      if (!master) continue
+      out.push({
+        exception: mapRowToException(row),
+        master: master.event,
+        providerInstanceId: row.provider_instance_id ?? null
+      })
+    }
+    return out
+  }
+
+  /** Master events whose series has a pending occurrence override or cancellation. */
+  listMastersWithDirtyExceptions(calendarId: string): CalendarEvent[] {
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT e.id FROM events e
+         JOIN event_exceptions x ON x.master_event_id = e.id
+         WHERE e.calendar_id = ? AND x.dirty = 1 AND e.has_conflict = 0 AND e.is_deleted = 0`
+      )
+      .all<{ id: string }>(calendarId)
+
+    const out: CalendarEvent[] = []
+    for (const row of rows) {
+      const found = this.getEventById(row.id)
+      if (found) out.push(found.event)
+    }
+    return out
+  }
+
+  markExceptionSynced(id: string, providerInstanceId?: string | null, etag?: string | null): void {
+    this.db
+      .prepare(
+        `UPDATE event_exceptions
+         SET dirty = 0,
+             provider_instance_id = COALESCE(?, provider_instance_id),
+             etag = COALESCE(?, etag)
+         WHERE id = ?`
+      )
+      .run(providerInstanceId ?? null, etag ?? null, id)
+  }
+
+  /** Clear the dirty flag on every pending exception of a master (CalDAV pushes
+   *  the whole series as one resource, so they all land together). */
+  markExceptionsSyncedForMaster(masterEventId: string): void {
+    this.db
+      .prepare('UPDATE event_exceptions SET dirty = 0 WHERE master_event_id = ? AND dirty = 1')
+      .run(masterEventId)
+  }
+
   queryEventsByRange(
     calendarIds: string[],
     startUtc: string,
@@ -437,14 +514,18 @@ export class EventsRepo {
         AND is_deleted = 0
         AND (
           (rrule IS NULL AND lunar_rule IS NULL AND dtstart_utc <= ? AND dtend_utc >= ?)
-          OR (rrule IS NOT NULL)
+          -- A recurrence cannot produce an occurrence before its own DTSTART, so
+          -- series starting after the window are skipped rather than loaded and
+          -- expanded to nothing. (An UNTIL/COUNT bound lives inside the RRULE
+          -- text and can't be filtered in SQL; expandOccurrences handles that.)
+          OR (rrule IS NOT NULL AND dtstart_utc <= ?)
           OR (lunar_rule IS NOT NULL)
         )
     `
 
     const rows = this.db
       .prepare(sql)
-      .all<EventRow>(...calendarIds, endUtc, startUtc)
+      .all<EventRow>(...calendarIds, endUtc, startUtc, endUtc)
 
     const occurrences: ExpandedOccurrence[] = []
 
@@ -551,6 +632,9 @@ export class EventsRepo {
    * `dirty = 1` so the deletion propagates; never-synced ones are hard-deleted.
    */
   detachLunarMaterialized(input: DetachLunarInput): { count: number } {
+    const master = this.getEventById(input.masterEventId)
+    if (master) this.checkReadOnlyCalendar(master.event.calendarId)
+
     const children = this.db
       .prepare(
         'SELECT id, etag FROM events WHERE lunar_source_event_id = ? AND is_deleted = 0'
@@ -843,6 +927,8 @@ export class EventsRepo {
       .prepare('SELECT calendar_id FROM events WHERE id = ? AND has_conflict = 1')
       .get<{ calendar_id: string }>(eventId)
     if (!row) return false
+    // 'keepMine' re-arms a push, so it is a write to the calendar like any other.
+    this.checkReadOnlyCalendar(row.calendar_id)
 
     if (resolution === 'keepMine') {
       this.db

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Desktop Calendar for Windows and Linux with modern UX and multi-provider sync",
   "private": true,
+  "license": "MIT",
   "author": "Gone Calendar Team",
   "homepage": "https://github.com/Deocomate/gone-calendar-electron#readme",
   "repository": {

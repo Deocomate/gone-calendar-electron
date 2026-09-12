@@ -16,6 +16,7 @@
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square" alt="React">
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square" alt="TypeScript">
   <img src="https://img.shields.io/badge/version-0.1.0-E63946?style=flat-square" alt="Version 0.1.0">
+  <img src="https://img.shields.io/badge/license-MIT-6C757D?style=flat-square" alt="License MIT">
 </p>
 
 <p align="center">
@@ -181,6 +182,15 @@ Chi tiết: [`docs/deployment-guide.md`](docs/deployment-guide.md).
 | [Roadmap](docs/project-roadmap.md) | R1–R3 + Stretch đã xong |
 | [Deploy](docs/deployment-guide.md) | Build, pack, OAuth |
 | [Standards](docs/code-standards.md) | Naming, security |
+
+---
+
+## Giấy phép
+
+[MIT](LICENSE) © Gone Calendar Team.
+
+Phần mềm dùng `ical.js` (MPL-2.0) và `rrule` (BSD-3-Clause); các thư viện còn
+lại là MIT hoặc ISC. Không có phụ thuộc copyleft lây lan.
 
 ---
 

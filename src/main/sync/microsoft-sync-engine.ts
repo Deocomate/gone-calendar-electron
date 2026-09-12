@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from './http'
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { MicrosoftOAuthManager } from '../oauth/microsoft-oauth'
 import {
@@ -5,22 +6,25 @@ import {
   mapDomainEventToGraph,
   type MicrosoftGraphApiEvent
 } from './microsoft-event-mapper'
+import { EventsRepo } from '../db/repos/events-repo'
 import type { SyncResult } from '@shared/event-model'
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 
 export class MicrosoftSyncEngine {
   private oauthManager: MicrosoftOAuthManager
+  private eventsRepo: EventsRepo
 
   constructor(private db: ISqliteDatabase) {
     this.oauthManager = new MicrosoftOAuthManager(db)
+    this.eventsRepo = new EventsRepo(db)
   }
 
   /**
    * Sync calendars list from Microsoft Graph
    */
   async syncCalendarList(accountId: string, accessToken: string): Promise<string[]> {
-    const res = await fetch(`${GRAPH_BASE}/me/calendars`, {
+    const res = await fetchWithTimeout(`${GRAPH_BASE}/me/calendars`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     })
 
@@ -73,7 +77,7 @@ export class MicrosoftSyncEngine {
   ): Promise<{ pulledCount: number }> {
     const url = `${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`
 
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.timezone="UTC"' }
     })
 
@@ -110,7 +114,8 @@ export class MicrosoftSyncEngine {
                 dtend_utc = excluded.dtend_utc,
                 tzid = excluded.tzid,
                 color = excluded.color,
-                updated_at = excluded.updated_at`
+                updated_at = excluded.updated_at
+              WHERE event_exceptions.dirty = 0`
             )
             .run(
               excId,
@@ -191,7 +196,7 @@ export class MicrosoftSyncEngine {
     accessToken: string
   ): Promise<{ pushedCount: number; errorCount: number }> {
     const dirtyRows = this.db
-      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1')
+      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1 AND has_conflict = 0')
       .all<any>(calendarId)
 
     let pushedCount = 0
@@ -203,13 +208,19 @@ export class MicrosoftSyncEngine {
         const eventId = row.id
 
         if (isDeleted) {
-          const delRes = await fetch(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
+          const delRes = await fetchWithTimeout(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
             method: 'DELETE',
-            headers: { Authorization: `Bearer ${accessToken}` }
+            headers: row.etag
+              ? { Authorization: `Bearer ${accessToken}`, 'if-match': row.etag }
+              : { Authorization: `Bearer ${accessToken}` }
           })
           if (delRes.ok || delRes.status === 404) {
             this.db.prepare('DELETE FROM events WHERE id = ?').run(row.id)
             pushedCount++
+          } else if (delRes.status === 412) {
+            console.warn(`Conflict deleting event ${row.id}: ETag precondition failed (412)`)
+            this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
+            errorCount++
           } else {
             errorCount++
           }
@@ -231,17 +242,20 @@ export class MicrosoftSyncEngine {
           let res: Response
           if (row.etag) {
             // PATCH existing
-            res = await fetch(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
+            res = await fetchWithTimeout(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
               method: 'PATCH',
               headers: {
                 Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                // Graph honours the precondition only as a header; without it
+                // the 412 branch below is unreachable.
+                'if-match': row.etag
               },
               body: JSON.stringify(payload)
             })
           } else {
             // POST new event to calendar
-            res = await fetch(`${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/events`, {
+            res = await fetchWithTimeout(`${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/events`, {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -283,7 +297,127 @@ export class MicrosoftSyncEngine {
       }
     }
 
+    const excRes = await this.pushDirtyExceptions(calendarId, accessToken)
+    return {
+      pushedCount: pushedCount + excRes.pushedCount,
+      errorCount: errorCount + excRes.errorCount
+    }
+  }
+
+  /**
+   * Push per-occurrence overrides and cancellations.
+   *
+   * Graph exposes the occurrences of a series through the master's /instances
+   * collection, each with its own event id. A cancelled occurrence is a DELETE
+   * on that instance; an edited one is a PATCH - patching the master carries no
+   * occurrence information at all.
+   */
+  private async pushDirtyExceptions(
+    calendarId: string,
+    accessToken: string
+  ): Promise<{ pushedCount: number; errorCount: number }> {
+    const pending = this.eventsRepo.listDirtyExceptions(calendarId)
+    let pushedCount = 0
+    let errorCount = 0
+
+    for (const { exception, master, providerInstanceId } of pending) {
+      try {
+        let instanceId = providerInstanceId
+        if (!instanceId) {
+          instanceId = await this.findInstanceId(
+            master.id,
+            exception.originalStartUtc,
+            accessToken
+          )
+        }
+        if (!instanceId) {
+          errorCount++
+          continue
+        }
+
+        let res: Response
+        if (exception.isCancelled) {
+          res = await fetchWithTimeout(
+            `${GRAPH_BASE}/me/events/${encodeURIComponent(instanceId)}`,
+            { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+        } else {
+          const tz = exception.tzid || master.tzid || 'UTC'
+          const startIso = exception.dtStartUtc || exception.originalStartUtc
+          const endIso = exception.dtEndUtc || master.dtEndUtc
+          res = await fetchWithTimeout(
+            `${GRAPH_BASE}/me/events/${encodeURIComponent(instanceId)}`,
+            {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                subject: exception.title || master.title,
+                body: {
+                  contentType: 'text',
+                  content: exception.notes ?? master.notes ?? ''
+                },
+                location: { displayName: exception.location ?? master.location ?? '' },
+                start: { dateTime: startIso, timeZone: tz },
+                end: { dateTime: endIso, timeZone: tz }
+              })
+            }
+          )
+        }
+
+        // A cancelled instance that is already gone counts as delivered.
+        if (res.ok || res.status === 204 || res.status === 404) {
+          this.eventsRepo.markExceptionSynced(exception.id, instanceId, null)
+          pushedCount++
+        } else {
+          console.warn(`Failed to push occurrence override ${exception.id}: HTTP ${res.status}`)
+          errorCount++
+        }
+      } catch (err) {
+        console.error(`Failed to push occurrence override ${exception.id}:`, err)
+        errorCount++
+      }
+    }
+
     return { pushedCount, errorCount }
+  }
+
+  /** Resolve a master + original start time to Graph's own id for that instance. */
+  private async findInstanceId(
+    masterEventId: string,
+    originalStartUtc: string,
+    accessToken: string
+  ): Promise<string | null> {
+    const origin = new Date(originalStartUtc)
+    const from = new Date(origin.getTime() - 1000).toISOString()
+    const to = new Date(origin.getTime() + 1000).toISOString()
+
+    const res = await fetchWithTimeout(
+      `${GRAPH_BASE}/me/events/${encodeURIComponent(masterEventId)}/instances` +
+        `?startDateTime=${encodeURIComponent(from)}&endDateTime=${encodeURIComponent(to)}&$top=10`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Prefer: 'outlook.timezone="UTC"'
+        }
+      }
+    )
+    if (!res.ok) return null
+
+    const data = await res.json()
+    const items: MicrosoftGraphApiEvent[] = data.value || []
+    const targetMs = origin.getTime()
+
+    for (const item of items) {
+      const raw = item.start?.dateTime
+      if (!raw) continue
+      // Graph returns a zone-less local string alongside the requested timeZone.
+      const parsed = new Date(raw.endsWith('Z') ? raw : `${raw}Z`)
+      if (Math.abs(parsed.getTime() - targetMs) < 1000) return item.id
+    }
+    return items[0]?.id ?? null
   }
 
   /**

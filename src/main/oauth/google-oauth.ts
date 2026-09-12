@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from '../sync/http'
 import http from 'http'
 import crypto from 'crypto'
 import { shell } from 'electron'
@@ -131,7 +132,7 @@ export class GoogleOAuthManager {
             tokenParams.append('client_secret', clientSecret)
           }
 
-          const tokenRes = await fetch(GOOGLE_TOKEN_ENDPOINT, {
+          const tokenRes = await fetchWithTimeout(GOOGLE_TOKEN_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: tokenParams.toString()
@@ -153,7 +154,7 @@ export class GoogleOAuthManager {
           }
 
           // Fetch User Profile
-          const userRes = await fetch(GOOGLE_USERINFO_ENDPOINT, {
+          const userRes = await fetchWithTimeout(GOOGLE_USERINFO_ENDPOINT, {
             headers: { Authorization: `Bearer ${tokens.accessToken}` }
           })
           const userInfo: GoogleUserInfo = userRes.ok
@@ -256,7 +257,7 @@ export class GoogleOAuthManager {
       refreshParams.append('client_secret', clientSecret)
     }
 
-    const res = await fetch(GOOGLE_TOKEN_ENDPOINT, {
+    const res = await fetchWithTimeout(GOOGLE_TOKEN_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: refreshParams.toString()

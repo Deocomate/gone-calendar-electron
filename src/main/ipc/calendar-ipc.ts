@@ -2,7 +2,17 @@ import { ipcMain, app, shell } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC_CHANNELS, type IcsImportResult } from '@shared/ipc-contract'
-import type { CreateEventInput, UpdateEventInput, EventException } from '@shared/event-model'
+import type {
+  CreateEventInput,
+  UpdateEventInput,
+  EventException,
+  MoveEventInput,
+  CopyEventInput,
+  UpdateRecurringScopeInput,
+  DeleteRecurringScopeInput,
+  MaterializeLunarInput,
+  DetachLunarInput
+} from '@shared/event-model'
 import { CalendarsRepo } from '../db/repos/calendars-repo'
 import { EventsRepo, ReadOnlyCalendarError } from '../db/repos/events-repo'
 import { getDatabase } from '../db/database'
@@ -139,7 +149,7 @@ export function registerCalendarIpcHandlers(): void {
     }
   )
 
-  ipcMain.handle(IPC_CHANNELS.EVENT.MOVE, (_event, input: any) => {
+  ipcMain.handle(IPC_CHANNELS.EVENT.MOVE, (_event, input: MoveEventInput) => {
     try {
       const result = eventsRepo.moveEvent(input)
       nudgeSync()
@@ -152,7 +162,7 @@ export function registerCalendarIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.EVENT.COPY, (_event, input: any) => {
+  ipcMain.handle(IPC_CHANNELS.EVENT.COPY, (_event, input: CopyEventInput) => {
     try {
       const result = eventsRepo.copyEvent(input)
       nudgeSync()
@@ -165,7 +175,7 @@ export function registerCalendarIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.EVENT.UPDATE_SCOPE, (_event, input: any) => {
+  ipcMain.handle(IPC_CHANNELS.EVENT.UPDATE_SCOPE, (_event, input: UpdateRecurringScopeInput) => {
     try {
       const result = eventsRepo.updateRecurringScope(input)
       nudgeSync()
@@ -178,7 +188,7 @@ export function registerCalendarIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.EVENT.DELETE_SCOPE, (_event, input: any) => {
+  ipcMain.handle(IPC_CHANNELS.EVENT.DELETE_SCOPE, (_event, input: DeleteRecurringScopeInput) => {
     try {
       const result = eventsRepo.deleteRecurringScope(input)
       nudgeSync()
@@ -191,7 +201,7 @@ export function registerCalendarIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.EVENT.MATERIALIZE_LUNAR, (_event, input: any) => {
+  ipcMain.handle(IPC_CHANNELS.EVENT.MATERIALIZE_LUNAR, (_event, input: MaterializeLunarInput) => {
     try {
       return eventsRepo.materializeLunarEvent(input)
     } catch (err: any) {
@@ -202,8 +212,15 @@ export function registerCalendarIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.EVENT.DETACH_LUNAR, (_event, input: any) => {
-    return eventsRepo.detachLunarMaterialized(input)
+  ipcMain.handle(IPC_CHANNELS.EVENT.DETACH_LUNAR, (_event, input: DetachLunarInput) => {
+    try {
+      return eventsRepo.detachLunarMaterialized(input)
+    } catch (err: any) {
+      if (err instanceof ReadOnlyCalendarError) {
+        throw new Error(`Detach rejected: ${err.message}`)
+      }
+      throw err
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.EVENT.SEARCH, (_event, query: string, limit?: number) => {

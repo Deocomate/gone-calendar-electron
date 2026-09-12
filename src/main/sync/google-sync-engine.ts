@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from './http'
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { GoogleOAuthManager } from '../oauth/google-oauth'
 import {
@@ -5,22 +6,48 @@ import {
   mapDomainEventToGoogle,
   type GoogleCalendarApiEvent
 } from './google-event-mapper'
-import type { SyncResult } from '@shared/event-model'
+import { EventsRepo } from '../db/repos/events-repo'
+import type { CalendarEvent, EventException, SyncResult } from '@shared/event-model'
+
+/**
+ * Start/end payload for an occurrence override, falling back to the master's
+ * shape when the override only changes text.
+ */
+function buildInstanceTimes(
+  exception: EventException,
+  master: CalendarEvent
+): Record<string, unknown> {
+  const startIso = exception.dtStartUtc || exception.originalStartUtc
+  const endIso = exception.dtEndUtc || master.dtEndUtc
+  if (master.allDay) {
+    return {
+      start: { date: startIso.split('T')[0] },
+      end: { date: endIso.split('T')[0] }
+    }
+  }
+  const tz = exception.tzid || master.tzid || 'UTC'
+  return {
+    start: { dateTime: startIso, timeZone: tz },
+    end: { dateTime: endIso, timeZone: tz }
+  }
+}
 
 const GOOGLE_API_BASE = 'https://www.googleapis.com/calendar/v3'
 
 export class GoogleSyncEngine {
   private oauthManager: GoogleOAuthManager
+  private eventsRepo: EventsRepo
 
   constructor(private db: ISqliteDatabase) {
     this.oauthManager = new GoogleOAuthManager(db)
+    this.eventsRepo = new EventsRepo(db)
   }
 
   /**
    * Sync calendar list from Google
    */
   async syncCalendarList(accountId: string, accessToken: string): Promise<string[]> {
-    const res = await fetch(`${GOOGLE_API_BASE}/users/me/calendarList`, {
+    const res = await fetchWithTimeout(`${GOOGLE_API_BASE}/users/me/calendarList`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     })
 
@@ -82,14 +109,14 @@ export class GoogleSyncEngine {
       url += `&syncToken=${encodeURIComponent(syncRow.sync_token)}`
     }
 
-    let res = await fetch(url, {
+    let res = await fetchWithTimeout(url, {
       headers: { Authorization: `Bearer ${accessToken}` }
     })
 
     // Handle 410 Gone (syncToken expired/invalidated) -> full resync
     if (res.status === 410) {
       url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=250`
-      res = await fetch(url, {
+      res = await fetchWithTimeout(url, {
         headers: { Authorization: `Bearer ${accessToken}` }
       })
     }
@@ -129,7 +156,8 @@ export class GoogleSyncEngine {
                 dtend_utc = excluded.dtend_utc,
                 tzid = excluded.tzid,
                 color = excluded.color,
-                updated_at = excluded.updated_at`
+                updated_at = excluded.updated_at
+              WHERE event_exceptions.dirty = 0`
             )
             .run(
               excId,
@@ -223,7 +251,7 @@ export class GoogleSyncEngine {
     accessToken: string
   ): Promise<{ pushedCount: number; errorCount: number }> {
     const dirtyRows = this.db
-      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1')
+      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1 AND has_conflict = 0')
       .all<any>(calendarId)
 
     let pushedCount = 0
@@ -236,17 +264,26 @@ export class GoogleSyncEngine {
 
         if (isDeleted) {
           // DELETE
-          const delRes = await fetch(
+          const delRes = await fetchWithTimeout(
             `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
             {
               method: 'DELETE',
-              headers: { Authorization: `Bearer ${accessToken}` }
+              headers: row.etag
+                ? { Authorization: `Bearer ${accessToken}`, 'If-Match': row.etag }
+                : { Authorization: `Bearer ${accessToken}` }
             }
           )
 
           if (delRes.ok || delRes.status === 404 || delRes.status === 410) {
             this.db.prepare('DELETE FROM events WHERE id = ?').run(row.id)
             pushedCount++
+          } else if (delRes.status === 412) {
+            // Someone edited the event remotely after our last pull. Surface it
+            // rather than deleting their change; the row stays out of the push
+            // set until the user resolves.
+            console.warn(`Conflict deleting event ${row.id}: ETag precondition failed (412)`)
+            this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
+            errorCount++
           } else {
             errorCount++
           }
@@ -264,26 +301,32 @@ export class GoogleSyncEngine {
             tzid: row.tzid,
             allDay: row.all_day === 1,
             rrule: row.rrule,
+            color: row.color,
+            meetingUrl: row.meeting_url,
             etag: row.etag
           } as any)
 
           let putRes: Response
           if (row.etag) {
             // Existing event update
-            putRes = await fetch(
+            putRes = await fetchWithTimeout(
               `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
               {
                 method: 'PUT',
                 headers: {
                   Authorization: `Bearer ${accessToken}`,
-                  'Content-Type': 'application/json'
+                  'Content-Type': 'application/json',
+                  // Optimistic concurrency. Google honours the precondition
+                  // only as a header - an etag in the request body is ignored,
+                  // so without this the 412 branch below is unreachable.
+                  'If-Match': row.etag
                 },
                 body: JSON.stringify(payload)
               }
             )
           } else {
             // New event insertion
-            putRes = await fetch(
+            putRes = await fetchWithTimeout(
               `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events`,
               {
                 method: 'POST',
@@ -330,7 +373,117 @@ export class GoogleSyncEngine {
       }
     }
 
+    const excRes = await this.pushDirtyExceptions(calendarId, accessToken)
+    return {
+      pushedCount: pushedCount + excRes.pushedCount,
+      errorCount: errorCount + excRes.errorCount
+    }
+  }
+
+  /**
+   * Push per-occurrence overrides and cancellations.
+   *
+   * Google models these as separate event resources reachable through the
+   * master's /instances collection, so each one has to be resolved to its own
+   * instance id and PATCHed there - a PUT of the master carries no occurrence
+   * information at all. The resolved id is cached on the row so later edits
+   * skip the lookup.
+   */
+  private async pushDirtyExceptions(
+    calendarId: string,
+    accessToken: string
+  ): Promise<{ pushedCount: number; errorCount: number }> {
+    const pending = this.eventsRepo.listDirtyExceptions(calendarId)
+    let pushedCount = 0
+    let errorCount = 0
+
+    for (const { exception, master, providerInstanceId } of pending) {
+      try {
+        let instanceId = providerInstanceId
+        if (!instanceId) {
+          instanceId = await this.findInstanceId(
+            calendarId,
+            master.id,
+            exception.originalStartUtc,
+            accessToken
+          )
+        }
+        if (!instanceId) {
+          // The series may not have propagated yet; leave it dirty and retry.
+          errorCount++
+          continue
+        }
+
+        const body: Record<string, unknown> = exception.isCancelled
+          ? { status: 'cancelled' }
+          : {
+              summary: exception.title || master.title,
+              description: exception.notes ?? master.notes ?? undefined,
+              location: exception.location ?? master.location ?? undefined,
+              ...buildInstanceTimes(exception, master)
+            }
+
+        const res = await fetchWithTimeout(
+          `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(instanceId)}`,
+          {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          }
+        )
+
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}))
+          this.eventsRepo.markExceptionSynced(exception.id, instanceId, json?.etag ?? null)
+          pushedCount++
+        } else {
+          console.warn(
+            `Failed to push occurrence override ${exception.id}: HTTP ${res.status}`
+          )
+          errorCount++
+        }
+      } catch (err) {
+        console.error(`Failed to push occurrence override ${exception.id}:`, err)
+        errorCount++
+      }
+    }
+
     return { pushedCount, errorCount }
+  }
+
+  /** Resolve a master + original start time to Google's own id for that instance. */
+  private async findInstanceId(
+    calendarId: string,
+    masterEventId: string,
+    originalStartUtc: string,
+    accessToken: string
+  ): Promise<string | null> {
+    // A one-second window either side is enough to isolate the occurrence while
+    // tolerating sub-second representation differences.
+    const origin = new Date(originalStartUtc)
+    const timeMin = new Date(origin.getTime() - 1000).toISOString()
+    const timeMax = new Date(origin.getTime() + 1000).toISOString()
+
+    const res = await fetchWithTimeout(
+      `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(masterEventId)}/instances` +
+        `?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&showDeleted=true&maxResults=10`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    if (!res.ok) return null
+
+    const data = await res.json()
+    const items: GoogleCalendarApiEvent[] = data.items || []
+    const targetMs = origin.getTime()
+
+    for (const item of items) {
+      const raw = item.originalStartTime?.dateTime || item.originalStartTime?.date
+      if (!raw) continue
+      if (Math.abs(new Date(raw).getTime() - targetMs) < 1000) return item.id
+    }
+    return items[0]?.id ?? null
   }
 
   /**

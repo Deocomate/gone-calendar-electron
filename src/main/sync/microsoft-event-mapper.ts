@@ -159,5 +159,12 @@ export function mapDomainEventToGraph(
     gEvent.recurrence = rruleToGraphRecurrence(event.rrule, startDateStr)
   }
 
+  // Deliberately not pushed: Graph has no writable counterpart for either field.
+  // `meetingUrl` is read back from `onlineMeeting.joinUrl`/`webLink`, both
+  // server-owned, and per-event colour does not exist on Graph at all (Outlook
+  // colours come from named categories, which are an account-level concept the
+  // app does not model). Both are preserved locally; they just do not round-trip
+  // through Microsoft.
+
   return gEvent
 }

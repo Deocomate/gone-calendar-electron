@@ -168,6 +168,21 @@ CREATE INDEX IF NOT EXISTS idx_events_has_conflict ON events (has_conflict) WHER
 `
 
 /**
+ * Occurrence exceptions (a single edited or cancelled instance of a recurring
+ * series) had no push-tracking columns, so they were written locally and never
+ * sent to any provider. `dirty` puts them in the push set the same way events
+ * use it; `provider_instance_id` caches the provider's id for the instance so a
+ * repeat push does not have to re-resolve it.
+ */
+const MIGRATION_007_SQL = `
+ALTER TABLE event_exceptions ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE event_exceptions ADD COLUMN etag TEXT;
+ALTER TABLE event_exceptions ADD COLUMN provider_instance_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_event_exceptions_dirty ON event_exceptions (dirty) WHERE dirty = 1;
+`
+
+/**
  * Execute all schema migrations in order
  */
 export function runMigrations(db: ISqliteDatabase): void {
@@ -226,6 +241,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_006_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       6,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 7) {
+    db.exec(MIGRATION_007_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      7,
       new Date().toISOString()
     )
   }

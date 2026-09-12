@@ -10,6 +10,10 @@ import { EventsRepo } from '../db/repos/events-repo'
 import type { SyncResult } from '@shared/event-model'
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
+/** Events requested per page. */
+const PAGE_SIZE = 250
+/** Safety stop so a pathological calendar cannot spin forever. */
+const MAX_SYNC_PAGES = 200
 
 export class MicrosoftSyncEngine {
   private oauthManager: MicrosoftOAuthManager
@@ -75,17 +79,42 @@ export class MicrosoftSyncEngine {
     calendarId: string,
     accessToken: string
   ): Promise<{ pulledCount: number }> {
-    const url = `${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`
+    // Walk every page: Graph caps a response at $top and returns the rest behind
+    // @odata.nextLink. Reading one page and stopping capped each calendar at
+    // PAGE_SIZE events, silently dropping everything past it.
+    let nextUrl: string | undefined =
+      `${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/events?$top=${PAGE_SIZE}`
+    let pulledCount = 0
+    let pages = 0
 
-    const res = await fetchWithTimeout(url, {
-      headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.timezone="UTC"' }
-    })
+    while (nextUrl) {
+      const res = await fetchWithTimeout(nextUrl, {
+        headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.timezone="UTC"' }
+      })
 
-    if (!res.ok) {
-      throw new Error(`Microsoft event pull failed for ${calendarId}: ${await res.text()}`)
+      if (!res.ok) {
+        throw new Error(`Microsoft event pull failed for ${calendarId}: ${await res.text()}`)
+      }
+
+      const data = await res.json()
+      pulledCount += this.applyPulledPage(calendarId, data)
+
+      // nextLink is an absolute URL carrying its own paging state.
+      nextUrl = data['@odata.nextLink']
+      if (!nextUrl) break
+      if (++pages >= MAX_SYNC_PAGES) {
+        console.warn(
+          `Microsoft pull for ${calendarId} stopped at ${MAX_SYNC_PAGES} pages; remaining events follow next sync`
+        )
+        break
+      }
     }
 
-    const data = await res.json()
+    return { pulledCount }
+  }
+
+  /** Apply one page of listing results. Returns how many rows it touched. */
+  private applyPulledPage(calendarId: string, data: any): number {
     const items: MicrosoftGraphApiEvent[] = data.value || []
     let pulledCount = 0
 
@@ -185,7 +214,7 @@ export class MicrosoftSyncEngine {
       }
     })()
 
-    return { pulledCount }
+    return pulledCount
   }
 
   /**
@@ -442,12 +471,21 @@ export class MicrosoftSyncEngine {
         const calendarIds = await this.syncCalendarList(acc.id, token)
 
         for (const calId of calendarIds) {
-          const pushRes = await this.pushDirtyEvents(calId, token)
-          totalPushed += pushRes.pushedCount
-          totalErrors += pushRes.errorCount
+          // Isolate each calendar. Some entries the calendar list returns are not
+          // real event collections (Google's "Tasks" pseudo-calendar, for one) and
+          // reject the events endpoint; without this, the first such calendar threw
+          // and every remaining calendar on the account was silently skipped.
+          try {
+            const pushRes = await this.pushDirtyEvents(calId, token)
+            totalPushed += pushRes.pushedCount
+            totalErrors += pushRes.errorCount
 
-          const pullRes = await this.pullCalendarEvents(calId, token)
-          totalPulled += pullRes.pulledCount
+            const pullRes = await this.pullCalendarEvents(calId, token)
+            totalPulled += pullRes.pulledCount
+          } catch (calErr: any) {
+            console.error(`Microsoft sync failed for calendar ${calId}:`, calErr)
+            totalErrors++
+          }
         }
       } catch (err: any) {
         console.error(`Microsoft sync failed for account ${acc.id}:`, err)

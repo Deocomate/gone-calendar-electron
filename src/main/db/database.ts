@@ -183,6 +183,37 @@ CREATE INDEX IF NOT EXISTS idx_event_exceptions_dirty ON event_exceptions (dirty
 `
 
 /**
+ * `sync_state` as created in 001 cannot store a sync token: it has no
+ * `updated_at` column, its NOT NULL `id`/`account_id` are never supplied by the
+ * writer, and `calendar_id` carries no unique constraint for ON CONFLICT. The
+ * token upsert therefore always threw - and because it runs inside the same
+ * transaction as the pulled events, it rolled back the whole page. Any calendar
+ * small enough to return nextSyncToken on its first page imported zero events.
+ *
+ * Rebuilt keyed on calendar_id, which is how every reader addresses it.
+ */
+const MIGRATION_008_SQL = `
+CREATE TABLE sync_state_new (
+  calendar_id TEXT PRIMARY KEY REFERENCES calendars(id) ON DELETE CASCADE,
+  account_id TEXT,
+  last_synced_at TEXT,
+  sync_token TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'idle',
+  error_message TEXT,
+  updated_at TEXT
+);
+
+INSERT OR IGNORE INTO sync_state_new
+  (calendar_id, account_id, last_synced_at, sync_token, sync_status, error_message)
+SELECT calendar_id, account_id, last_synced_at, sync_token, sync_status, error_message
+FROM sync_state
+WHERE calendar_id IS NOT NULL;
+
+DROP TABLE sync_state;
+ALTER TABLE sync_state_new RENAME TO sync_state;
+`
+
+/**
  * Execute all schema migrations in order
  */
 export function runMigrations(db: ISqliteDatabase): void {
@@ -249,6 +280,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_007_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       7,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 8) {
+    db.exec(MIGRATION_008_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      8,
       new Date().toISOString()
     )
   }

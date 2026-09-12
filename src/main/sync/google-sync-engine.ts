@@ -33,6 +33,10 @@ function buildInstanceTimes(
 }
 
 const GOOGLE_API_BASE = 'https://www.googleapis.com/calendar/v3'
+/** Events requested per page; Google's own maximum for events.list. */
+const PAGE_SIZE = 250
+/** Safety stop so a pathological calendar cannot spin forever. */
+const MAX_SYNC_PAGES = 200
 
 export class GoogleSyncEngine {
   private oauthManager: GoogleOAuthManager
@@ -104,28 +108,65 @@ export class GoogleSyncEngine {
       .prepare('SELECT sync_token FROM sync_state WHERE calendar_id = ?')
       .get<{ sync_token: string }>(calendarId)
 
-    let url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=250`
-    if (syncRow?.sync_token) {
-      url += `&syncToken=${encodeURIComponent(syncRow.sync_token)}`
-    }
+    const baseUrl = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=${PAGE_SIZE}`
+    let queryUrl = syncRow?.sync_token
+      ? `${baseUrl}&syncToken=${encodeURIComponent(syncRow.sync_token)}`
+      : baseUrl
 
-    let res = await fetchWithTimeout(url, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    })
+    let pageToken: string | undefined
+    let pulledCount = 0
+    let pages = 0
+    let resyncedAfterGone = false
 
-    // Handle 410 Gone (syncToken expired/invalidated) -> full resync
-    if (res.status === 410) {
-      url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=250`
-      res = await fetchWithTimeout(url, {
+    // Walk every page. Google caps a response at maxResults and hands back a
+    // nextPageToken; it only emits nextSyncToken on the FINAL page. Reading one
+    // page and stopping therefore capped a calendar at maxResults events AND
+    // never stored a sync token, so each poll refetched the same first page
+    // forever and the rest of the calendar never arrived.
+    for (;;) {
+      const pageUrl = pageToken
+        ? `${queryUrl}&pageToken=${encodeURIComponent(pageToken)}`
+        : queryUrl
+
+      const res = await fetchWithTimeout(pageUrl, {
         headers: { Authorization: `Bearer ${accessToken}` }
       })
+
+      // 410 Gone: the stored syncToken is no longer valid. Drop it and restart
+      // from the first page of a full listing (once - a second 410 is a real error).
+      if (res.status === 410 && !resyncedAfterGone) {
+        resyncedAfterGone = true
+        this.db
+          .prepare('UPDATE sync_state SET sync_token = NULL WHERE calendar_id = ?')
+          .run(calendarId)
+        queryUrl = baseUrl
+        pageToken = undefined
+        pulledCount = 0
+        continue
+      }
+
+      if (!res.ok) {
+        throw new Error(`Google event pull failed for ${calendarId}: ${await res.text()}`)
+      }
+
+      const data = await res.json()
+      pulledCount += this.applyPulledPage(calendarId, data)
+
+      pageToken = data.nextPageToken
+      if (!pageToken) break
+      if (++pages >= MAX_SYNC_PAGES) {
+        console.warn(
+          `Google pull for ${calendarId} stopped at ${MAX_SYNC_PAGES} pages; remaining events follow next sync`
+        )
+        break
+      }
     }
 
-    if (!res.ok) {
-      throw new Error(`Google event pull failed for ${calendarId}: ${await res.text()}`)
-    }
+    return { pulledCount }
+  }
 
-    const data = await res.json()
+  /** Apply one page of listing results. Returns how many rows it touched. */
+  private applyPulledPage(calendarId: string, data: any): number {
     const items: GoogleCalendarApiEvent[] = data.items || []
     let pulledCount = 0
 
@@ -240,7 +281,7 @@ export class GoogleSyncEngine {
       }
     })()
 
-    return { pulledCount }
+    return pulledCount
   }
 
   /**
@@ -508,12 +549,21 @@ export class GoogleSyncEngine {
         const calendarIds = await this.syncCalendarList(acc.id, token)
 
         for (const calId of calendarIds) {
-          const pushRes = await this.pushDirtyEvents(calId, token)
-          totalPushed += pushRes.pushedCount
-          totalErrors += pushRes.errorCount
+          // Isolate each calendar. Some entries the calendar list returns are not
+          // real event collections (Google's "Tasks" pseudo-calendar, for one) and
+          // reject the events endpoint; without this, the first such calendar threw
+          // and every remaining calendar on the account was silently skipped.
+          try {
+            const pushRes = await this.pushDirtyEvents(calId, token)
+            totalPushed += pushRes.pushedCount
+            totalErrors += pushRes.errorCount
 
-          const pullRes = await this.pullCalendarEvents(calId, token)
-          totalPulled += pullRes.pulledCount
+            const pullRes = await this.pullCalendarEvents(calId, token)
+            totalPulled += pullRes.pulledCount
+          } catch (calErr: any) {
+            console.error(`Google sync failed for calendar ${calId}:`, calErr)
+            totalErrors++
+          }
         }
       } catch (err: any) {
         console.error(`Sync failed for account ${acc.id}:`, err)

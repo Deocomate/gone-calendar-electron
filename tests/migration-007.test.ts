@@ -21,12 +21,22 @@ describe('migration 007 (exception sync columns)', () => {
   it('is recorded once and is idempotent across repeated runs', () => {
     const db = createSqliteDriver(':memory:')
     runMigrations(db)
-    runMigrations(db)
-    runMigrations(db)
-    const rows = db
+    const first = db
       .prepare('SELECT version FROM schema_migrations ORDER BY version')
       .all<{ version: number }>()
-    expect(rows.map((r) => r.version)).toEqual([1, 2, 3, 4, 5, 6, 7])
+      .map((r) => r.version)
+
+    runMigrations(db)
+    runMigrations(db)
+    const after = db
+      .prepare('SELECT version FROM schema_migrations ORDER BY version')
+      .all<{ version: number }>()
+      .map((r) => r.version)
+
+    // Version-agnostic so adding migration N+1 does not break this: the set must
+    // stay contiguous from 1, free of duplicates, and unchanged by re-running.
+    expect(after).toEqual(first)
+    expect(after).toEqual([...Array(first.length)].map((_, i) => i + 1))
   })
 
   it('upgrades a database left at version 6 without losing rows', () => {
@@ -36,6 +46,8 @@ describe('migration 007 (exception sync columns)', () => {
 
     // Rewind to the pre-007 state: drop the new columns by rebuilding the table
     // the way version 6 defined it, then re-run migrations as an upgrade would.
+    // Every version at or above 7 is cleared - leaving a later one behind would
+    // keep MAX(version) high enough that 007 never re-applies.
     db.exec(`
       DROP TABLE event_exceptions;
       CREATE TABLE event_exceptions (
@@ -47,7 +59,7 @@ describe('migration 007 (exception sync columns)', () => {
         dtstart_utc TEXT, dtend_utc TEXT, tzid TEXT, color TEXT,
         created_at TEXT NOT NULL, updated_at TEXT NOT NULL
       );
-      DELETE FROM schema_migrations WHERE version = 7;
+      DELETE FROM schema_migrations WHERE version >= 7;
     `)
     const calId = db.prepare('SELECT id FROM calendars LIMIT 1').get<{ id: string }>()!.id
     db.prepare(

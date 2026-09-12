@@ -214,6 +214,30 @@ ALTER TABLE sync_state_new RENAME TO sync_state;
 `
 
 /**
+ * `idx_event_exceptions_master` was created non-unique in 001, but both provider
+ * pulls upsert onto those columns with ON CONFLICT(master_event_id,
+ * original_start_utc). SQLite requires a UNIQUE index for that, so every page of
+ * events containing a recurring-occurrence exception threw "ON CONFLICT clause
+ * does not match any PRIMARY KEY or UNIQUE constraint", rolled back its
+ * transaction, and aborted the whole calendar. Calendars therefore imported only
+ * the whole pages preceding their first exception - or nothing at all.
+ *
+ * The pair is genuinely unique (one override per occurrence of a series), so any
+ * duplicates are historical noise; keep the newest and enforce it from here on.
+ */
+const MIGRATION_009_SQL = `
+DELETE FROM event_exceptions
+WHERE rowid NOT IN (
+  SELECT MAX(rowid) FROM event_exceptions GROUP BY master_event_id, original_start_utc
+);
+
+DROP INDEX IF EXISTS idx_event_exceptions_master;
+
+CREATE UNIQUE INDEX idx_event_exceptions_master
+  ON event_exceptions (master_event_id, original_start_utc);
+`
+
+/**
  * Execute all schema migrations in order
  */
 export function runMigrations(db: ISqliteDatabase): void {
@@ -288,6 +312,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_008_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       8,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 9) {
+    db.exec(MIGRATION_009_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      9,
       new Date().toISOString()
     )
   }

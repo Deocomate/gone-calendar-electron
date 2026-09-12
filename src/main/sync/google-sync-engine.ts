@@ -7,6 +7,7 @@ import {
   type GoogleCalendarApiEvent
 } from './google-event-mapper'
 import { EventsRepo } from '../db/repos/events-repo'
+import { SyncStateRepo } from '../db/repos/sync-state-repo'
 import type { CalendarEvent, EventException, SyncResult } from '@shared/event-model'
 
 /**
@@ -41,10 +42,12 @@ const MAX_SYNC_PAGES = 200
 export class GoogleSyncEngine {
   private oauthManager: GoogleOAuthManager
   private eventsRepo: EventsRepo
+  private syncStateRepo: SyncStateRepo
 
   constructor(private db: ISqliteDatabase) {
     this.oauthManager = new GoogleOAuthManager(db)
     this.eventsRepo = new EventsRepo(db)
+    this.syncStateRepo = new SyncStateRepo(db)
   }
 
   /**
@@ -103,15 +106,10 @@ export class GoogleSyncEngine {
     calendarId: string,
     accessToken: string
   ): Promise<{ pulledCount: number }> {
-    // Read existing syncToken from sync_state table
-    const syncRow = this.db
-      .prepare('SELECT sync_token FROM sync_state WHERE calendar_id = ?')
-      .get<{ sync_token: string }>(calendarId)
+    const storedToken = this.syncStateRepo.getSyncToken(calendarId)
 
     const baseUrl = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=${PAGE_SIZE}`
-    let queryUrl = syncRow?.sync_token
-      ? `${baseUrl}&syncToken=${encodeURIComponent(syncRow.sync_token)}`
-      : baseUrl
+    let queryUrl = storedToken ? `${baseUrl}&syncToken=${encodeURIComponent(storedToken)}` : baseUrl
 
     let pageToken: string | undefined
     let pulledCount = 0
@@ -136,9 +134,7 @@ export class GoogleSyncEngine {
       // from the first page of a full listing (once - a second 410 is a real error).
       if (res.status === 410 && !resyncedAfterGone) {
         resyncedAfterGone = true
-        this.db
-          .prepare('UPDATE sync_state SET sync_token = NULL WHERE calendar_id = ?')
-          .run(calendarId)
+        this.syncStateRepo.clearSyncToken(calendarId)
         queryUrl = baseUrl
         pageToken = undefined
         pulledCount = 0
@@ -268,18 +264,12 @@ export class GoogleSyncEngine {
         }
       }
 
-      // Save nextSyncToken
-      if (data.nextSyncToken) {
-        const now = new Date().toISOString()
-        this.db
-          .prepare(
-            `INSERT INTO sync_state (calendar_id, sync_token, updated_at)
-             VALUES (?, ?, ?)
-             ON CONFLICT(calendar_id) DO UPDATE SET sync_token = excluded.sync_token, updated_at = excluded.updated_at`
-          )
-          .run(calendarId, data.nextSyncToken, now)
-      }
     })()
+
+    // Only the final page carries a sync token; store it outside the row loop.
+    if (data.nextSyncToken) {
+      this.syncStateRepo.saveSyncToken(calendarId, data.nextSyncToken)
+    }
 
     return pulledCount
   }
@@ -560,8 +550,10 @@ export class GoogleSyncEngine {
 
             const pullRes = await this.pullCalendarEvents(calId, token)
             totalPulled += pullRes.pulledCount
+            this.syncStateRepo.recordSuccess(calId, pullRes.pulledCount)
           } catch (calErr: any) {
             console.error(`Google sync failed for calendar ${calId}:`, calErr)
+            this.syncStateRepo.recordFailure(calId, calErr)
             totalErrors++
           }
         }

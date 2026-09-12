@@ -7,6 +7,7 @@ import {
   type MicrosoftGraphApiEvent
 } from './microsoft-event-mapper'
 import { EventsRepo } from '../db/repos/events-repo'
+import { SyncStateRepo } from '../db/repos/sync-state-repo'
 import type { SyncResult } from '@shared/event-model'
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
@@ -18,10 +19,12 @@ const MAX_SYNC_PAGES = 200
 export class MicrosoftSyncEngine {
   private oauthManager: MicrosoftOAuthManager
   private eventsRepo: EventsRepo
+  private syncStateRepo: SyncStateRepo
 
   constructor(private db: ISqliteDatabase) {
     this.oauthManager = new MicrosoftOAuthManager(db)
     this.eventsRepo = new EventsRepo(db)
+    this.syncStateRepo = new SyncStateRepo(db)
   }
 
   /**
@@ -482,8 +485,10 @@ export class MicrosoftSyncEngine {
 
             const pullRes = await this.pullCalendarEvents(calId, token)
             totalPulled += pullRes.pulledCount
+            this.syncStateRepo.recordSuccess(calId, pullRes.pulledCount)
           } catch (calErr: any) {
             console.error(`Microsoft sync failed for calendar ${calId}:`, calErr)
+            this.syncStateRepo.recordFailure(calId, calErr)
             totalErrors++
           }
         }

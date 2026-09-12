@@ -7,6 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev            # electron-vite dev app with renderer HMR
 npm run build          # production bundle -> out/{main,preload,renderer}
+npm run lint           # eslint . (flat config in eslint.config.mjs)
+npm run lint:fix       # eslint . --fix
+npm run clean          # remove out/, dist/, *.tsbuildinfo
 npm run typecheck      # typecheck:node && typecheck:web (run this before commit)
 npm run typecheck:node # tsc -p tsconfig.node.json  (main + preload + shared + most tests)
 npm run typecheck:web  # tsc -p tsconfig.web.json   (renderer + shared + renderer-touching tests)
@@ -23,7 +26,7 @@ npx vitest run -t "expands weekly RRULE"      # one test by name
 npx vitest                                    # watch mode
 ```
 
-There is **no linter or formatter configured** (some source files contain `eslint-disable` comments but no ESLint is installed). `npm run typecheck` with the project's strict flags (`noUnusedLocals`, `noImplicitReturns`, etc.) is the only static gate. CI (`.github/workflows/ci.yml`) runs typecheck + test + build on every push/PR.
+ESLint 9 (flat config, `eslint.config.mjs`) is the lint gate; **there is no formatter** — match surrounding style by hand (2-space indent, single quotes, no semicolons; `.editorconfig` carries these for your editor). `@typescript-eslint/no-explicit-any` is set to `warn` on purpose: provider payloads and IPC boundaries are genuinely untyped at the edge, so the ~100 existing warnings are visible debt rather than a CI blocker — don't add more, and don't "fix" them by silencing the rule. Everything else is an error and CI fails on it. `npm run typecheck` with the project's strict flags (`noUnusedLocals`, `noImplicitReturns`, etc.) remains the type gate. CI (`.github/workflows/ci.yml`) runs lint + typecheck + test + build on every push/PR.
 
 ## Architecture
 

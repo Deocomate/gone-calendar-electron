@@ -88,6 +88,6 @@ if (process.contextIsolated) {
     console.error('Failed to expose gone API in context bridge:', error)
   }
 } else {
-  // @ts-ignore (for non-context isolated fallback in testing)
+  // @ts-expect-error - fallback for non-context-isolated test renderers
   window.gone = goneApi
 }

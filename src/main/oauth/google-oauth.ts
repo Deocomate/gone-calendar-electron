@@ -77,7 +77,9 @@ export class GoogleOAuthManager {
         }
         try {
           server.close()
-        } catch {}
+        } catch {
+          // Already closed, or never listened - nothing to recover from here.
+        }
       }
 
       timeoutId = setTimeout(() => {

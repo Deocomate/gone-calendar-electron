@@ -234,11 +234,9 @@ are typechecked under `tsconfig.web.json`; all others under `tsconfig.node.json`
 | `electron-vite` | Build + dev server |
 | `react` 19 | Renderer UI |
 | `tailwindcss` 4 | Styling |
-| `zustand` 5 | Renderer state management |
 | `luxon` | Date/time + timezone handling |
 | `rrule` | RFC 5545 recurrence expansion |
 | `ical.js` | ICS import/export |
 | `i18next` / `react-i18next` | vi/en internationalization |
 | `lucide-react` | Icon set |
-| `clsx` + `tailwind-merge` | Conditional class utilities |
 | `vitest` | Unit test runner |

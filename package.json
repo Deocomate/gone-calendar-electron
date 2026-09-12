@@ -2,9 +2,17 @@
   "name": "gone-calendar",
   "version": "0.1.0",
   "description": "Desktop Calendar for Windows and Linux with modern UX and multi-provider sync",
-  "main": "./out/main/index.js",
+  "private": true,
   "author": "Gone Calendar Team",
-  "homepage": "https://github.com/gone-calendar/gone-calendar",
+  "homepage": "https://github.com/Deocomate/gone-calendar-electron#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Deocomate/gone-calendar-electron.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Deocomate/gone-calendar-electron/issues"
+  },
+  "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -19,7 +27,6 @@
     "app:update": "bash scripts/install-linux-app.sh"
   },
   "dependencies": {
-    "clsx": "^2.1.1",
     "i18next": "^24.2.2",
     "ical.js": "^2.2.1",
     "lucide-react": "^1.16.0",
@@ -28,9 +35,7 @@
     "react-dom": "^19.0.0",
     "react-i18next": "^15.4.1",
     "rrule": "^2.8.1",
-    "sonner": "^2.0.8",
-    "tailwind-merge": "^3.0.2",
-    "zustand": "^5.0.3"
+    "sonner": "^2.0.8"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.9",

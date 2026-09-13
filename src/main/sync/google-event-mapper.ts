@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { exclusiveEndToInclusive, inclusiveEndToExclusiveDate } from '@shared/all-day'
 import type {
   CalendarEvent,
   EventException,
@@ -64,6 +65,19 @@ export const GONE_MEETING_URL_PROP = 'goneMeetingUrl'
 /**
  * Format Google Event DateTime to ISO UTC and determine all-day status
  */
+/**
+ * All-day ends arrive exclusive from Google; the app stores them inclusive.
+ * Timed events are unaffected.
+ */
+function normaliseEnd(
+  startInfo: { iso: string; allDay: boolean },
+  endInfo: { iso: string }
+): string {
+  return startInfo.allDay
+    ? exclusiveEndToInclusive(startInfo.iso, endInfo.iso)
+    : endInfo.iso
+}
+
 export function parseGoogleDateTime(dt?: GoogleEventDateTime): {
   iso: string
   allDay: boolean
@@ -132,7 +146,7 @@ export function mapGoogleEventToDomain(
         notes: gEvent.description || undefined,
         location: gEvent.location || undefined,
         dtStartUtc: startInfo.iso,
-        dtEndUtc: endInfo.iso,
+        dtEndUtc: normaliseEnd(startInfo, endInfo),
         tzid: startInfo.tzid,
         color
       }
@@ -161,7 +175,7 @@ export function mapGoogleEventToDomain(
       notes: gEvent.description || undefined,
       location: gEvent.location || undefined,
       dtStartUtc: startInfo.iso,
-      dtEndUtc: endInfo.iso,
+      dtEndUtc: normaliseEnd(startInfo, endInfo),
       tzid: startInfo.tzid,
       allDay: startInfo.allDay,
       rrule: rruleString,
@@ -184,10 +198,9 @@ export function mapDomainEventToGoogle(
   let end: GoogleEventDateTime
 
   if (isAllDay) {
-    const startDateStr = event.dtStartUtc.split('T')[0]
-    const endDateStr = event.dtEndUtc.split('T')[0]
-    start = { date: startDateStr }
-    end = { date: endDateStr }
+    start = { date: event.dtStartUtc.split('T')[0] }
+    // Google wants the exclusive end date back.
+    end = { date: inclusiveEndToExclusiveDate(event.dtStartUtc, event.dtEndUtc) }
   } else {
     start = {
       dateTime: event.dtStartUtc,

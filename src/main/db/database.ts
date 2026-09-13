@@ -238,6 +238,25 @@ CREATE UNIQUE INDEX idx_event_exceptions_master
 `
 
 /**
+ * Repair all-day events imported before the exclusive/inclusive end conversion
+ * existed. Providers send an exclusive end date (a single-day event on the 14th
+ * ends on the 15th); the app stores an inclusive end (23:59:59.999 of the last
+ * day), and the importers stored the provider value verbatim - so every imported
+ * all-day event rendered one day too long.
+ *
+ * Only rows still in the exclusive shape are touched: all_day, an end at exactly
+ * midnight, and an end strictly after the start. Locally created rows already
+ * end at 23:59:59.999 and are left alone, as are any zero-length oddities.
+ */
+const MIGRATION_010_SQL = `
+UPDATE events
+SET dtend_utc = strftime('%Y-%m-%dT23:59:59.999Z', datetime(dtend_utc, '-1 day'))
+WHERE all_day = 1
+  AND dtend_utc LIKE '%T00:00:00.000Z'
+  AND dtend_utc > dtstart_utc;
+`
+
+/**
  * Execute all schema migrations in order
  */
 export function runMigrations(db: ISqliteDatabase): void {
@@ -320,6 +339,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_009_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       9,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 10) {
+    db.exec(MIGRATION_010_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      10,
       new Date().toISOString()
     )
   }

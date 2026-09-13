@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { exclusiveEndToInclusive, inclusiveEndToExclusiveDate } from '@shared/all-day'
 import type {
   CalendarEvent,
   EventException,
@@ -67,6 +68,17 @@ export function parseGraphDateTime(
 /**
  * Map Microsoft Graph API event to Canonical CalendarEvent / EventException
  */
+/**
+ * All-day ends arrive exclusive from Graph; the app stores them inclusive.
+ */
+function normaliseEnd(
+  isAllDay: boolean,
+  startInfo: { iso: string },
+  endInfo: { iso: string }
+): string {
+  return isAllDay ? exclusiveEndToInclusive(startInfo.iso, endInfo.iso) : endInfo.iso
+}
+
 export function mapGraphEventToDomain(
   gEvent: MicrosoftGraphApiEvent,
   calendarId: string
@@ -94,7 +106,7 @@ export function mapGraphEventToDomain(
         notes: gEvent.bodyPreview || gEvent.body?.content || undefined,
         location: gEvent.location?.displayName || undefined,
         dtStartUtc: startInfo.iso,
-        dtEndUtc: endInfo.iso,
+        dtEndUtc: normaliseEnd(isAllDay, startInfo, endInfo),
         tzid: startInfo.tzid
       }
     }
@@ -116,7 +128,7 @@ export function mapGraphEventToDomain(
       notes: gEvent.bodyPreview || gEvent.body?.content || undefined,
       location: gEvent.location?.displayName || undefined,
       dtStartUtc: startInfo.iso,
-      dtEndUtc: endInfo.iso,
+      dtEndUtc: normaliseEnd(isAllDay, startInfo, endInfo),
       tzid: startInfo.tzid,
       allDay: isAllDay,
       rrule: rruleString,
@@ -137,7 +149,8 @@ export function mapDomainEventToGraph(
   const tzid = event.tzid || 'UTC'
 
   const startDateStr = event.dtStartUtc.split('T')[0]
-  const endDateStr = event.dtEndUtc.split('T')[0]
+  // Graph, like Google and RFC 5545, wants the exclusive end date for all-day.
+  const endDateStr = inclusiveEndToExclusiveDate(event.dtStartUtc, event.dtEndUtc)
 
   const gEvent: MicrosoftGraphApiEvent = {
     id: (event as any).id || undefined,

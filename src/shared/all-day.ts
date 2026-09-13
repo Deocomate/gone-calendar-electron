@@ -75,3 +75,16 @@ export function inclusiveEndToExclusiveDate(startIsoUtc: string, endIsoUtc: stri
 
   return exclusive.toUTC().toISODate()!
 }
+
+/**
+ * The calendar date an occurrence should be filed under, as `yyyy-MM-dd`.
+ *
+ * All-day occurrences are floating dates stored at UTC midnight, so their date
+ * is read straight off the stored string; converting them to local time shifts
+ * them by the zone offset (a day east of GMT, a day back west of it). Timed
+ * occurrences are real instants and do convert to the viewer's zone.
+ */
+export function occurrenceDateKey(allDay: boolean, isoUtc: string): string {
+  if (allDay) return isoUtc.slice(0, 10)
+  return DateTime.fromISO(isoUtc, { zone: 'utc' }).toLocal().toISODate()!
+}

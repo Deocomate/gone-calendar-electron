@@ -16,6 +16,9 @@ export interface GraphDateTimeTimeZone {
   timeZone: string // e.g. "UTC", "SE Asia Standard Time", "Asia/Ho_Chi_Minh"
 }
 
+/** What we send to Graph - see GoogleEventWritePayload for why the id is absent. */
+export type GraphEventWritePayload = Omit<MicrosoftGraphApiEvent, 'id'>
+
 export interface MicrosoftGraphApiEvent {
   id: string
   subject?: string
@@ -146,7 +149,7 @@ export function mapGraphEventToDomain(
  */
 export function mapDomainEventToGraph(
   event: CalendarEvent | (CreateEventInput & { id?: string })
-): MicrosoftGraphApiEvent {
+): GraphEventWritePayload {
   const isAllDay = Boolean(event.allDay)
   const tzid = event.tzid || 'UTC'
 
@@ -154,8 +157,9 @@ export function mapDomainEventToGraph(
   // Graph, like Google and RFC 5545, wants the exclusive end date for all-day.
   const endDateStr = inclusiveEndToExclusiveDate(event.dtStartUtc, event.dtEndUtc)
 
-  const gEvent: MicrosoftGraphApiEvent = {
-    id: (event as any).id || undefined,
+  const gEvent: GraphEventWritePayload = {
+    // No `id`, for the same reason as the Google mapper: it is in the URL on a
+    // PATCH, and on a POST it is a server-assigned, read-only property.
     subject: event.title,
     body: event.notes ? { contentType: 'text', content: event.notes } : undefined,
     location: event.location ? { displayName: event.location } : undefined,

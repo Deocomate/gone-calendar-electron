@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from './http'
+import { fetchWithTimeout, describeHttpFailure } from './http'
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { GoogleOAuthManager } from '../oauth/google-oauth'
 import {
@@ -289,13 +289,14 @@ export class GoogleSyncEngine {
   async pushDirtyEvents(
     calendarId: string,
     accessToken: string
-  ): Promise<{ pushedCount: number; errorCount: number }> {
+  ): Promise<{ pushedCount: number; errorCount: number; lastError: string | null }> {
     const dirtyRows = this.db
       .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1 AND has_conflict = 0')
       .all<any>(calendarId)
 
     let pushedCount = 0
     let errorCount = 0
+    let lastError: string | null = null
 
     for (const row of dirtyRows) {
       try {
@@ -325,6 +326,9 @@ export class GoogleSyncEngine {
             this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
             errorCount++
           } else {
+            const detail = await describeHttpFailure(delRes)
+            console.error(`Failed to delete event ${row.id} on Google: ${detail}`)
+            lastError = detail
             errorCount++
           }
         } else {
@@ -404,11 +408,15 @@ export class GoogleSyncEngine {
             this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
             errorCount++
           } else {
+            const detail = await describeHttpFailure(putRes)
+            console.error(`Failed to push event ${row.id} to Google: ${detail}`)
+            lastError = detail
             errorCount++
           }
         }
       } catch (err) {
         console.error(`Failed to push dirty event ${row.id}:`, err)
+        lastError = err instanceof Error ? err.message : String(err)
         errorCount++
       }
     }
@@ -416,7 +424,8 @@ export class GoogleSyncEngine {
     const excRes = await this.pushDirtyExceptions(calendarId, accessToken)
     return {
       pushedCount: pushedCount + excRes.pushedCount,
-      errorCount: errorCount + excRes.errorCount
+      errorCount: errorCount + excRes.errorCount,
+      lastError
     }
   }
 
@@ -559,7 +568,18 @@ export class GoogleSyncEngine {
 
             const pullRes = await this.pullCalendarEvents(calId, token)
             totalPulled += pullRes.pulledCount
-            this.syncStateRepo.recordSuccess(calId, pullRes.pulledCount)
+
+            // A calendar that pulled cleanly but could not push is not "ok".
+            // Recording success regardless is how an insert rejected on every
+            // single poll stayed invisible for as long as it did.
+            if (pushRes.errorCount > 0) {
+              this.syncStateRepo.recordFailure(
+                calId,
+                `push failed for ${pushRes.errorCount} event(s): ${pushRes.lastError ?? 'unknown error'}`
+              )
+            } else {
+              this.syncStateRepo.recordSuccess(calId, pullRes.pulledCount)
+            }
           } catch (calErr: any) {
             console.error(`Google sync failed for calendar ${calId}:`, calErr)
             this.syncStateRepo.recordFailure(calId, calErr)

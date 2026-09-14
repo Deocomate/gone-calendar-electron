@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { fetchWithTimeout, RequestTimeoutError } from '../src/main/sync/http'
+import { fetchWithTimeout, RequestTimeoutError, describeHttpFailure } from '../src/main/sync/http'
 
 /**
  * Node's fetch has no default request timeout, so a stalled provider connection
@@ -58,5 +58,36 @@ describe('fetchWithTimeout', () => {
     await expect(pending).rejects.toSatisfy(
       (err: Error) => err.name === 'AbortError' && !(err instanceof RequestTimeoutError)
     )
+  })
+})
+
+describe('describeHttpFailure', () => {
+  it('includes the status and the provider body, which is where the reason is', async () => {
+    const res = new Response('{"error":{"code":400,"message":"Invalid resource id value."}}', {
+      status: 400,
+      statusText: 'Bad Request'
+    })
+
+    const detail = await describeHttpFailure(res)
+
+    expect(detail).toContain('400')
+    expect(detail).toContain('Invalid resource id value.')
+  })
+
+  it('truncates a body long enough to be an HTML error page', async () => {
+    const res = new Response('x'.repeat(5000), { status: 500, statusText: 'Server Error' })
+
+    const detail = await describeHttpFailure(res)
+
+    expect(detail.length).toBeLessThan(600)
+    expect(detail).toContain('…')
+  })
+
+  it('still says something useful when the body cannot be read', async () => {
+    const res = { status: 403, statusText: 'Forbidden', text: () => Promise.reject(new Error('gone')) }
+
+    const detail = await describeHttpFailure(res as unknown as Response)
+
+    expect(detail).toBe('HTTP 403 Forbidden')
   })
 })

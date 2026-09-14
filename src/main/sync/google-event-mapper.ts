@@ -26,6 +26,13 @@ export interface GoogleEventDateTime {
   timeZone?: string
 }
 
+/**
+ * What we send to Google. The id is deliberately not part of this shape: on an
+ * update it lives in the request URL, and on an insert Google assigns it. Typing
+ * the write payload separately is what stops an id being put back by accident.
+ */
+export type GoogleEventWritePayload = Omit<GoogleCalendarApiEvent, 'id'>
+
 export interface GoogleCalendarApiEvent {
   id: string
   status?: string
@@ -194,7 +201,7 @@ export function mapGoogleEventToDomain(
  */
 export function mapDomainEventToGoogle(
   event: CalendarEvent | (CreateEventInput & { id?: string })
-): GoogleCalendarApiEvent {
+): GoogleEventWritePayload {
   const isAllDay = Boolean(event.allDay)
   let start: GoogleEventDateTime
   let end: GoogleEventDateTime
@@ -214,8 +221,13 @@ export function mapDomainEventToGoogle(
     }
   }
 
-  const gEvent: GoogleCalendarApiEvent = {
-    id: (event as any).id || undefined,
+  const gEvent: GoogleEventWritePayload = {
+    // No `id`. On an update the id is in the request URL, so sending it again is
+    // redundant; on an insert it is actively harmful. Google only accepts
+    // base32hex ids - lowercase a-v and digits - and ours look like
+    // `evt_1789396326299_uqqwff`, so every insert came back 400 and no event
+    // created here ever reached Google. Let the provider assign the id; the
+    // engine already re-keys the local row when the response id differs.
     summary: event.title,
     description: event.notes || undefined,
     location: event.location || undefined,

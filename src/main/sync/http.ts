@@ -52,3 +52,22 @@ export async function fetchWithTimeout(
     if (external) external.removeEventListener('abort', onExternalAbort)
   }
 }
+
+/**
+ * Turn a non-OK response into something worth logging.
+ *
+ * A push that failed used to increment an error counter and nothing else - no
+ * status, no body - so a provider rejecting every insert looked exactly like a
+ * provider accepting every insert. Reading the body here is safe: the caller has
+ * already decided the response failed and will not read it again.
+ */
+export async function describeHttpFailure(res: Response): Promise<string> {
+  let body = ''
+  try {
+    body = (await res.text()).trim()
+  } catch {
+    // A body that cannot be read is not worth failing over; the status still says something.
+  }
+  if (body.length > 500) body = `${body.slice(0, 500)}…`
+  return body ? `HTTP ${res.status} ${res.statusText}: ${body}` : `HTTP ${res.status} ${res.statusText}`
+}

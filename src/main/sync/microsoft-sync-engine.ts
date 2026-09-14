@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from './http'
+import { fetchWithTimeout, describeHttpFailure } from './http'
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { MicrosoftOAuthManager } from '../oauth/microsoft-oauth'
 import {
@@ -233,13 +233,14 @@ export class MicrosoftSyncEngine {
   async pushDirtyEvents(
     calendarId: string,
     accessToken: string
-  ): Promise<{ pushedCount: number; errorCount: number }> {
+  ): Promise<{ pushedCount: number; errorCount: number; lastError: string | null }> {
     const dirtyRows = this.db
       .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1 AND has_conflict = 0')
       .all<any>(calendarId)
 
     let pushedCount = 0
     let errorCount = 0
+    let lastError: string | null = null
 
     for (const row of dirtyRows) {
       try {
@@ -261,6 +262,9 @@ export class MicrosoftSyncEngine {
             this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
             errorCount++
           } else {
+            const detail = await describeHttpFailure(delRes)
+            console.error(`Failed to delete Microsoft event ${row.id}: ${detail}`)
+            lastError = detail
             errorCount++
           }
         } else {
@@ -327,17 +331,22 @@ export class MicrosoftSyncEngine {
             this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
             errorCount++
           } else {
+            const detail = await describeHttpFailure(res)
+            console.error(`Failed to push Microsoft event ${row.id}: ${detail}`)
+            lastError = detail
             errorCount++
           }
         }
       } catch (err) {
         console.error(`Failed to push Microsoft event ${row.id}:`, err)
+        lastError = err instanceof Error ? err.message : String(err)
         errorCount++
       }
     }
 
     const excRes = await this.pushDirtyExceptions(calendarId, accessToken)
     return {
+      lastError,
       pushedCount: pushedCount + excRes.pushedCount,
       errorCount: errorCount + excRes.errorCount
     }
@@ -492,7 +501,16 @@ export class MicrosoftSyncEngine {
 
             const pullRes = await this.pullCalendarEvents(calId, token)
             totalPulled += pullRes.pulledCount
-            this.syncStateRepo.recordSuccess(calId, pullRes.pulledCount)
+
+            // A calendar that pulled cleanly but could not push is not "ok".
+            if (pushRes.errorCount > 0) {
+              this.syncStateRepo.recordFailure(
+                calId,
+                `push failed for ${pushRes.errorCount} event(s): ${pushRes.lastError ?? 'unknown error'}`
+              )
+            } else {
+              this.syncStateRepo.recordSuccess(calId, pullRes.pulledCount)
+            }
           } catch (calErr: any) {
             console.error(`Microsoft sync failed for calendar ${calId}:`, calErr)
             this.syncStateRepo.recordFailure(calId, calErr)

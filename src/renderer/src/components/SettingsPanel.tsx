@@ -62,6 +62,8 @@ interface SettingsPanelProps {
   onChangeHourBlockSize: (next: DisplayPreferences['hourBlockSize']) => void
   secondaryTimezone: string
   onChangeSecondaryTimezone: (next: string) => void
+  suggestionShowCalendarName: boolean
+  onToggleSuggestionShowCalendarName: (next: boolean) => void
   timezoneNames: string[]
   autoHideHeader: boolean
   onToggleAutoHideHeader: (next: boolean) => void
@@ -115,9 +117,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
   return (
     // Same presentation as the event editor's side panel: a light scrim with the
     // sheet sliding in from the right, rather than a centred modal.
-    <div className="fixed inset-0 z-50 select-none bg-black/10" onMouseDown={props.onClose}>
+    <div className="fixed inset-0 z-50 select-none bg-black/30" onMouseDown={props.onClose}>
       <div
-        className="gc-slide-right absolute top-0 right-0 flex h-full w-full max-w-[400px] flex-col overflow-hidden border-l border-hairline bg-surface text-primary shadow-xl"
+        className="gc-slide-right absolute top-0 right-0 flex h-full w-full max-w-[400px] flex-col overflow-hidden border-l border-hairline bg-dialog text-primary shadow-xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <header className="flex shrink-0 items-center gap-1 border-b border-hairline px-2 py-2.5">
@@ -319,6 +321,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                   </Row>
                   <Row label={t('settings.autoHideHeader')}>
                     <Toggle on={props.autoHideHeader} onChange={props.onToggleAutoHideHeader} />
+                  </Row>
+                  <Row label={t('settings.suggestionShowCalendarName')}>
+                    <Toggle
+                      on={props.suggestionShowCalendarName}
+                      onChange={props.onToggleSuggestionShowCalendarName}
+                    />
                   </Row>
                   {/* Full width: a searchable zone list needs the room. */}
                   <div className="border-b border-hairline py-3 last:border-b-0">

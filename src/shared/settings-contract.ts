@@ -23,6 +23,9 @@ export interface AppSettings {
   /** IANA zone name (e.g. "America/New_York") shown as a second hour gutter in
    *  Day/Week view - empty means disabled. */
   secondaryTimezone: string
+  /** Title suggestions always show the calendar's colour dot; this adds its name
+   *  next to it. Off keeps the list to one line per suggestion. */
+  suggestionShowCalendarName: boolean
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -40,5 +43,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   autoHideHeader: true,
   dayStartHour: 7,
   hourBlockSize: 'medium',
-  secondaryTimezone: ''
+  secondaryTimezone: '',
+  suggestionShowCalendarName: true
 }

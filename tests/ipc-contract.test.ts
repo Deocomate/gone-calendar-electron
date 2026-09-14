@@ -50,7 +50,8 @@ describe('IPC Channels and Contracts', () => {
           autoHideHeader: true,
           dayStartHour: 7,
           hourBlockSize: 'medium',
-          secondaryTimezone: ''
+          secondaryTimezone: '',
+          suggestionShowCalendarName: true
         }),
         get: async () => true as any,
         set: async () => true

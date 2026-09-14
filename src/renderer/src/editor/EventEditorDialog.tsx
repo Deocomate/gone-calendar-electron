@@ -633,7 +633,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
   return (
     <div
-      className={isSidePanel ? 'fixed inset-0 z-50 select-none bg-black/10' : 'gc-overlay select-none'}
+      className={isSidePanel ? 'fixed inset-0 z-50 select-none bg-black/30' : 'gc-overlay select-none'}
       onClick={(e) => {
         if (e.target === e.currentTarget) handleCloseAttempt()
       }}
@@ -641,7 +641,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       <div
         className={
           isSidePanel
-            ? `absolute top-0 flex h-full w-full max-w-[420px] flex-col overflow-hidden bg-surface text-primary shadow-xl ${
+            ? `absolute top-0 flex h-full w-full max-w-[420px] flex-col overflow-hidden bg-dialog text-primary shadow-xl ${
                 panelSide === 'right' ? 'right-0 border-l border-hairline gc-slide-right' : 'left-0 border-r border-hairline gc-slide-left'
               }`
             : 'gc-dialog w-full max-w-lg'
@@ -1052,7 +1052,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
         {showDiscardConfirm && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-6 z-60">
             <div
-              className="bg-surface border border-hairline p-5 max-w-xs w-full"
+              className="bg-dialog border border-hairline p-5 max-w-xs w-full"
               style={{ borderRadius: 'var(--radius-dialog)' }}
             >
               <h4 className="text-sm font-semibold text-primary mb-1.5">{t('editor.discardTitle')}</h4>

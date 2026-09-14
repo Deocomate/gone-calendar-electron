@@ -70,6 +70,7 @@ export const App: React.FC = () => {
   const [dayStartHour, setDayStartHour] = useState(7)
   const [hourBlockSize, setHourBlockSize] = useState<DisplayPreferences['hourBlockSize']>('medium')
   const [secondaryTimezone, setSecondaryTimezone] = useState<string>('')
+  const [suggestionShowCalendarName, setSuggestionShowCalendarName] = useState<boolean>(true)
   const [headerVisible, setHeaderVisible] = useState(true)
   const headerHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [firstDayOfWeek, setFirstDayOfWeek] = useState(1)
@@ -396,6 +397,7 @@ export const App: React.FC = () => {
           setDayStartHour(settings.dayStartHour ?? 7)
           setHourBlockSize(settings.hourBlockSize ?? 'medium')
           setSecondaryTimezone(settings.secondaryTimezone ?? '')
+          setSuggestionShowCalendarName(settings.suggestionShowCalendarName ?? true)
           setFirstDayOfWeek(settings.firstDayOfWeek ?? 1)
           const loc = settings.locale === 'vi' || settings.locale === 'en' ? settings.locale : 'en'
           if (loc !== i18n.language) await i18n.changeLanguage(loc)
@@ -515,6 +517,12 @@ export const App: React.FC = () => {
   const changeSecondaryTimezone = async (value: string) => {
     setSecondaryTimezone(value)
     if (window.gone?.settings) await window.gone.settings.set('secondaryTimezone', value)
+  }
+
+  const toggleSuggestionShowCalendarName = async (next: boolean) => {
+    setSuggestionShowCalendarName(next)
+    if (window.gone?.settings)
+      await window.gone.settings.set('suggestionShowCalendarName', next)
   }
 
   const toggleMiniCalendar = async (enabled: boolean) => {
@@ -714,7 +722,13 @@ export const App: React.FC = () => {
   }
 
   return (
-    <DisplayPreferencesProvider value={{ timeFormat, hourBlockSize, dayStartHour, secondaryTimezone }}>
+    <DisplayPreferencesProvider value={{
+        timeFormat,
+        hourBlockSize,
+        dayStartHour,
+        secondaryTimezone,
+        suggestionShowCalendarName
+      }}>
     <div
       className="relative flex h-screen w-screen flex-col overflow-hidden bg-app font-sans text-primary select-none"
       style={
@@ -994,6 +1008,8 @@ export const App: React.FC = () => {
         onChangeHourBlockSize={changeHourBlockSize}
         secondaryTimezone={secondaryTimezone}
         onChangeSecondaryTimezone={changeSecondaryTimezone}
+        suggestionShowCalendarName={suggestionShowCalendarName}
+        onToggleSuggestionShowCalendarName={toggleSuggestionShowCalendarName}
         timezoneNames={TIMEZONE_NAMES}
         autoHideHeader={autoHideHeader}
         onToggleAutoHideHeader={toggleAutoHideHeader}

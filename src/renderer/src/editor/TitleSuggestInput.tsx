@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { History } from 'lucide-react'
 import type { Calendar } from '@shared/event-model'
 import type { TitleSuggestion } from '@shared/title-suggestions'
+import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 
 interface TitleSuggestInputProps {
   value: string
@@ -22,14 +21,6 @@ interface TitleSuggestInputProps {
 const DEBOUNCE_MS = 140
 const MAX_SUGGESTIONS = 5
 
-function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
-
 /**
  * The event title field, with autocomplete over what you have scheduled before.
  *
@@ -37,6 +28,14 @@ function formatDuration(minutes: number): string {
  * the accepted row back. The list is contextual rather than alphabetical - it is
  * built from the slot currently in the form, so the same field offers different
  * answers at 09:00 Monday and 19:00 Saturday.
+ *
+ * It stays shut until something has actually been typed. Opening on focus put a
+ * list over the form every single time the editor appeared, which is noise when
+ * most events are not repeats of an old one.
+ *
+ * Each row is one line: the title, and the calendar it would move the event to.
+ * The frequency and duration behind the ranking are deliberately not shown -
+ * they explain the order but nobody is choosing between rows on them.
  *
  * Enter is shared with the form's submit. The active index starts at -1 so a
  * plain Enter still saves the event; it only accepts a suggestion once one has
@@ -53,7 +52,7 @@ export const TitleSuggestInput: React.FC<TitleSuggestInputProps> = ({
   autoFocus,
   enabled
 }) => {
-  const { t } = useTranslation()
+  const { suggestionShowCalendarName } = useDisplayPreferences()
   const [suggestions, setSuggestions] = useState<TitleSuggestion[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
@@ -64,8 +63,10 @@ export const TitleSuggestInput: React.FC<TitleSuggestInputProps> = ({
     [calendars]
   )
 
+  const hasQuery = value.trim().length > 0
+
   useEffect(() => {
-    if (!enabled || !targetStartUtc) {
+    if (!enabled || !targetStartUtc || !hasQuery) {
       setSuggestions([])
       return
     }
@@ -92,7 +93,7 @@ export const TitleSuggestInput: React.FC<TitleSuggestInputProps> = ({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [value, targetStartUtc, targetAllDay, enabled])
+  }, [value, targetStartUtc, targetAllDay, enabled, hasQuery])
 
   const accept = useCallback(
     (suggestion: TitleSuggestion) => {
@@ -107,7 +108,7 @@ export const TitleSuggestInput: React.FC<TitleSuggestInputProps> = ({
     [onPick]
   )
 
-  const visible = isOpen && suggestions.length > 0
+  const visible = isOpen && hasQuery && suggestions.length > 0
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (!visible) return
@@ -141,7 +142,7 @@ export const TitleSuggestInput: React.FC<TitleSuggestInputProps> = ({
           onChange(e.target.value)
           setIsOpen(true)
         }}
-        onFocus={() => setIsOpen(true)}
+        onFocus={() => setIsOpen(hasQuery)}
         onBlur={() => setIsOpen(false)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
@@ -161,17 +162,12 @@ export const TitleSuggestInput: React.FC<TitleSuggestInputProps> = ({
           // Keep focus in the input: blur would close the list before the click
           // on a row ever landed.
           onMouseDown={(e) => e.preventDefault()}
-          className="absolute left-0 right-0 top-full z-50 mt-1.5 border border-hairline bg-surface p-1 text-primary animate-popover select-none"
+          className="absolute left-0 right-0 top-full z-50 mt-1.5 border border-hairline bg-dialog p-1 text-primary animate-popover select-none"
           style={{
             borderRadius: 'var(--radius-dialog)',
             boxShadow: '0 12px 32px rgba(0, 0, 0, 0.18), 0 0 0 1px var(--color-border)'
           }}
         >
-          <div className="flex items-center gap-1.5 px-2 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wide text-muted/80">
-            <History className="h-3 w-3" />
-            {t('editor.suggestionsLabel')}
-          </div>
-
           {suggestions.map((s, i) => {
             const cal = calendarById.get(s.calendarId)
             return (
@@ -192,22 +188,12 @@ export const TitleSuggestInput: React.FC<TitleSuggestInputProps> = ({
                   className="h-2 w-2 shrink-0 rounded-full"
                   style={{ backgroundColor: cal?.color || 'var(--color-muted)' }}
                 />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium text-primary">{s.title}</span>
-                  <span className="block truncate text-[10px] text-muted">
-                    {[
-                      cal?.name,
-                      s.allDay
-                        ? t('editor.allDay')
-                        : s.durationMinutes
-                          ? formatDuration(s.durationMinutes)
-                          : null,
-                      t('editor.suggestionUses', { count: s.uses })
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
+                <span className="min-w-0 flex-1 truncate text-xs text-primary">{s.title}</span>
+                {suggestionShowCalendarName && cal && (
+                  <span className="max-w-[40%] shrink-0 truncate text-[10px] text-muted">
+                    {cal.name}
                   </span>
-                </span>
+                )}
               </button>
             )
           })}

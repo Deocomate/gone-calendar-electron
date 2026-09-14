@@ -1,4 +1,7 @@
 import React, { useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import { allDayCoversDate } from '@shared/all-day'
+import { sortOccurrencesWithinDay } from '@shared/occurrence-order'
 import HourGutter from '../components/HourGutter'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
@@ -53,6 +56,7 @@ export const DayView: React.FC<DayViewProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
 
+  const { t } = useTranslation()
   const { hourBlockSize, dayStartHour } = useDisplayPreferences()
   const HOUR_HEIGHT = HOUR_HEIGHT_BY_SIZE[hourBlockSize]
   const gridColsClass = 'grid-cols-[68px_minmax(0,1fr)]'
@@ -96,7 +100,12 @@ export const DayView: React.FC<DayViewProps> = ({
         return startUtc && endUtc ? { ...occ, startUtc, endUtc } : occ
       })
     : occurrences
-  const allDayOccurrences = displayOccurrences.filter((o) => o.allDay)
+  // The query returns anything overlapping this local day as an instant, which
+  // east of GMT reaches back into the previous UTC date - so the day's own date
+  // has to be checked against the floating span, not the range.
+  const allDayOccurrences = sortOccurrencesWithinDay(
+    displayOccurrences.filter((o) => o.allDay && allDayCoversDate(o.startUtc, o.endUtc, dayKey))
+  )
   const timedOccurrences = displayOccurrences.filter((o) => !o.allDay)
   const daySegments = timedOccurrences
     .flatMap(segmentTimedOccurrence)
@@ -174,25 +183,31 @@ export const DayView: React.FC<DayViewProps> = ({
             const dayStart = anchorDate.startOf('day')
             onSelectSlot?.(dayStart, dayStart, { clientX: e.clientX, allDay: true })
           }}
-          className={`gc-cell flex min-h-[2rem] max-w-md cursor-pointer items-center gap-2 overflow-x-auto rounded-lg p-1 min-w-0 ${
+          // Wraps instead of scrolling sideways in a 448px strip: the day view
+          // has the whole window, and a hidden all-day event is a missed one.
+          className={`gc-cell flex min-h-[2.25rem] min-w-0 cursor-pointer flex-wrap content-start items-start gap-1 rounded-lg p-1.5 ${
             dropTarget?.dateKey === dayKey && dropTarget.hour === undefined ? 'is-drop-target' : ''
           }`}
         >
-          {allDayOccurrences.map((occ) => (
-            <EventPill
-              key={occ.id}
-              draggable
-              isDragging={draggedOccurrenceId === occ.id}
-              title={occ.title}
-              color={occ.color}
-              onDragStart={(e) => onDragStart?.(e, occ)}
-              onDragEnd={onDragEnd}
-              onClick={(e) => {
-                e.stopPropagation()
-                onSelectOccurrence?.(occ)
-              }}
-            />
-          ))}
+          {allDayOccurrences.length === 0 ? (
+            <span className="px-1 py-0.5 text-xs text-muted">{t('list.allDay')}</span>
+          ) : (
+            allDayOccurrences.map((occ) => (
+              <EventPill
+                key={occ.id}
+                draggable
+                isDragging={draggedOccurrenceId === occ.id}
+                title={occ.title}
+                color={occ.color}
+                onDragStart={(e) => onDragStart?.(e, occ)}
+                onDragEnd={onDragEnd}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelectOccurrence?.(occ)
+                }}
+              />
+            ))
+          )}
         </div>
       </div>
 

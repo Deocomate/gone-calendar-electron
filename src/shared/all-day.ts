@@ -88,3 +88,16 @@ export function occurrenceDateKey(allDay: boolean, isoUtc: string): string {
   if (allDay) return isoUtc.slice(0, 10)
   return DateTime.fromISO(isoUtc, { zone: 'utc' }).toLocal().toISODate()!
 }
+
+/**
+ * Whether an all-day occurrence covers a given calendar date (`yyyy-MM-dd`).
+ *
+ * All-day spans are floating dates with an inclusive end, so this is a plain
+ * string comparison against the stored dates. Filtering them by instant overlap
+ * instead - which is what a UTC range query does - pulls in the neighbouring
+ * day: a local day window east of GMT starts on the previous UTC date, so
+ * yesterday's all-day events fall inside it.
+ */
+export function allDayCoversDate(startUtc: string, endUtc: string, dayKey: string): boolean {
+  return startUtc.slice(0, 10) <= dayKey && dayKey <= endUtc.slice(0, 10)
+}

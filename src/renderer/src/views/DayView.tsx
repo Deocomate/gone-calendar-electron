@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react'
+import HourGutter from '../components/HourGutter'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
 import { TODAY_COLOR } from '@shared/mini-calendar-grid'
@@ -52,11 +53,9 @@ export const DayView: React.FC<DayViewProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
 
-  const { hourBlockSize, dayStartHour, secondaryTimezone } = useDisplayPreferences()
+  const { hourBlockSize, dayStartHour } = useDisplayPreferences()
   const HOUR_HEIGHT = HOUR_HEIGHT_BY_SIZE[hourBlockSize]
-  const gridColsClass = secondaryTimezone
-    ? 'grid-cols-[56px_68px_minmax(0,1fr)]'
-    : 'grid-cols-[68px_minmax(0,1fr)]'
+  const gridColsClass = 'grid-cols-[68px_minmax(0,1fr)]'
 
   const today = DateTime.local()
   const isToday = anchorDate.hasSame(today, 'day')
@@ -203,42 +202,7 @@ export const DayView: React.FC<DayViewProps> = ({
           className={`relative grid ${gridColsClass} divide-x divide-hairline`}
           style={{ minHeight: `${24 * HOUR_HEIGHT}px` }}
         >
-          {secondaryTimezone && (
-            <div className="bg-app pr-1.5 text-right select-none min-w-0">
-              {hours.map((hour) => {
-                const secondaryLabel = anchorDate
-                  .startOf('day')
-                  .plus({ hours: hour })
-                  .setZone(secondaryTimezone)
-                  .toFormat('HH:mm')
-                return (
-                  <div
-                    key={hour}
-                    style={{ height: `${HOUR_HEIGHT}px` }}
-                    className={`font-mono text-[10px] text-muted/70 truncate ${
-                      hour === 0 ? 'pt-1' : '-translate-y-2.5 pt-1'
-                    }`}
-                  >
-                    {secondaryLabel}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          <div className="bg-app pr-3 text-right select-none min-w-0">
-              {hours.map((hour) => (
-                <div
-                  key={hour}
-                  style={{ height: `${HOUR_HEIGHT}px` }}
-                  className={`font-mono text-xs text-muted truncate ${
-                    hour === 0 ? 'pt-1' : '-translate-y-2.5 pt-1'
-                  }`}
-                >
-                  {hour.toString().padStart(2, '0')}:00
-                </div>
-              ))}
-          </div>
-
+          <HourGutter hours={hours} hourHeight={HOUR_HEIGHT} referenceDay={anchorDate} dense />
           <div
             ref={columnRef}
             className={`relative min-w-0 cursor-pointer overflow-visible ${isToday ? 'bg-today/5' : ''}`}

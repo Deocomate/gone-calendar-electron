@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
-import { Settings as SettingsIcon, X, Users } from 'lucide-react'
 import type { AppLocale } from '@shared/ipc-contract'
 import type {
   Calendar,
@@ -28,15 +27,13 @@ import RecurringScopeDialog from './editor/RecurringScopeDialog'
 import DropActionPopover, { type PendingDropAction } from './dnd/DropActionPopover'
 import AccountManagerModal from './components/AccountManagerModal'
 import SearchPaletteModal from './components/SearchPaletteModal'
-import AppearanceSettings from './components/AppearanceSettings'
+import SettingsDialog, { type SettingsTab } from './components/SettingsDialog'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
 import SyncConflictsModal from './components/SyncConflictsModal'
-import HolidayCalendarToggle from './components/HolidayCalendarToggle'
 import AppHeader from './components/shell/AppHeader'
 import AppSidebar from './components/shell/AppSidebar'
 import { useEventDnD } from './dnd/use-event-dnd'
-import { NotionToaster, NumberInput, CustomSelect, toast, showFriendlyError } from './components/ui'
-import { CALENDAR_COLOR_PALETTE } from './lib/calendar-colors'
+import { NotionToaster, toast, showFriendlyError } from './components/ui'
 import { DisplayPreferencesProvider, type DisplayPreferences } from './context/DisplayPreferencesContext'
 
 export type { CalendarViewType }
@@ -58,8 +55,7 @@ export const App: React.FC = () => {
   const [appVersion, setAppVersion] = useState<string>('0.1.0')
   const [platform, setPlatform] = useState<string>('win32')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [settingsTab, setSettingsTab] =
-    useState<'general' | 'appearance' | 'view' | 'calendars'>('general')
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('general')
   const [colorPickerCalId, setColorPickerCalId] = useState<string | null>(null)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
   const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState(false)
@@ -980,267 +976,46 @@ export const App: React.FC = () => {
         onAccountsChanged={() => loadCalendarsAndEvents()}
       />
 
-      {isSettingsOpen && (
-        <div className="gc-overlay">
-          <div className="gc-dialog w-full max-w-md p-6">
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(false)}
-              className="gc-icon-btn absolute top-3 right-3"
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-              <SettingsIcon className="h-5 w-5 text-accent" />
-              {t('settings.title')}
-            </h3>
-
-            <div className="mb-4 flex gap-1 border-b border-hairline">
-              {(['general', 'appearance', 'view', 'calendars'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setSettingsTab(tab)}
-                  className={`-mb-px border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
-                    settingsTab === tab
-                      ? 'border-accent text-primary'
-                      : 'border-transparent text-muted hover:text-primary'
-                  }`}
-                >
-                  {t(`settings.tab${tab[0].toUpperCase()}${tab.slice(1)}`)}
-                </button>
-              ))}
-            </div>
-
-            {settingsTab === 'general' && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.language')}</span>
-                  <button type="button" className="gc-btn" onClick={toggleLanguage}>
-                    {i18n.language === 'vi' ? 'Tiếng Việt' : 'English'}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.lunar')}</span>
-                  <button
-                    type="button"
-                    className={showLunar ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleLunar(!showLunar)}
-                  >
-                    {showLunar ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.weekNumbers')}</span>
-                  <button
-                    type="button"
-                    className={showWeekNumbers ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleWeekNumbers(!showWeekNumbers)}
-                  >
-                    {showWeekNumbers ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.timeFormat')}</span>
-                  <div className="flex gap-1">
-                    {(['24h', '12h'] as const).map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        className={timeFormat === opt ? 'gc-btn-primary' : 'gc-btn'}
-                        onClick={() => changeTimeFormat(opt)}
-                      >
-                        {opt === '24h' ? t('settings.timeFormat24h') : t('settings.timeFormat12h')}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.showMiniCalendar')}</span>
-                  <button
-                    type="button"
-                    className={showMiniCalendar ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleMiniCalendar(!showMiniCalendar)}
-                  >
-                    {showMiniCalendar ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-sm">{t('settings.version')}</span>
-                  <span className="font-mono text-xs text-muted">
-                    v{appVersion} ({platform})
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {settingsTab === 'appearance' && (
-              <AppearanceSettings
-                mode={mode}
-                onSetMode={persistMode}
-                onThemeChanged={(theme) => setThemeConfig(theme)}
-              />
-            )}
-
-            {settingsTab === 'view' && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.dayStartHour')}</span>
-                  <NumberInput
-                    value={dayStartHour}
-                    onChange={(v) => changeDayStartHour(Math.max(0, Math.min(23, Math.round(v))))}
-                    min={0}
-                    max={23}
-                    suffix="h"
-                  />
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.hourBlockSize')}</span>
-                  <div className="flex gap-1">
-                    {(['small', 'medium', 'large'] as const).map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        className={hourBlockSize === opt ? 'gc-btn-primary' : 'gc-btn'}
-                        onClick={() => changeHourBlockSize(opt)}
-                      >
-                        {t(`settings.hourBlockSize${opt[0].toUpperCase()}${opt.slice(1)}`)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2 gap-3">
-                  <span className="text-sm shrink-0">{t('settings.secondaryTimezone')}</span>
-                  <div className="w-48">
-                    <CustomSelect
-                      value={secondaryTimezone}
-                      onChange={changeSecondaryTimezone}
-                      searchable
-                      placeholder={t('settings.secondaryTimezoneNone')}
-                      options={[
-                        { value: '', label: t('settings.secondaryTimezoneNone') },
-                        ...TIMEZONE_NAMES.map((tz) => ({ value: tz, label: tz.replace(/_/g, ' ') }))
-                      ]}
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-sm">{t('settings.autoHideHeader')}</span>
-                  <button
-                    type="button"
-                    className={autoHideHeader ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleAutoHideHeader(!autoHideHeader)}
-                  >
-                    {autoHideHeader ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {settingsTab === 'calendars' && (
-              <div className="space-y-3">
-                <div className="space-y-0.5">
-                  <div className="text-[11px] font-medium text-muted">{t('settings.myCalendars')}</div>
-                  {calendars.length > 0 ? (
-                    calendars.map((cal) => (
-                      <div
-                        key={cal.id}
-                        className="relative flex items-center gap-2 rounded-[3px] px-1 py-1.5 text-xs text-primary hover:bg-hover transition-colors"
-                      >
-                        <label className="flex flex-1 min-w-0 cursor-pointer items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={cal.isVisible}
-                            onChange={() => toggleCalendarVisibility(cal)}
-                            className="h-3.5 w-3.5 rounded-[3px] accent-accent cursor-pointer"
-                          />
-                          <button
-                            type="button"
-                            title={t('settings.changeColor')}
-                            onClick={(e) => {
-                              e.preventDefault()
-                              setColorPickerCalId(colorPickerCalId === cal.id ? null : cal.id)
-                            }}
-                            className="h-2.5 w-2.5 shrink-0 rounded-full cursor-pointer ring-offset-1 hover:ring-2 hover:ring-hairline transition-all"
-                            style={{ backgroundColor: cal.color }}
-                          />
-                          <span className="flex-1 truncate font-medium">{cal.name}</span>
-                        </label>
-                        {cal.isReadOnly && (
-                          <span className="text-[9px] font-medium text-muted bg-hover px-1.5 py-0.5 rounded-[3px]">
-                            {t('common.readOnlyShort')}
-                          </span>
-                        )}
-
-                        {colorPickerCalId === cal.id && (
-                          <div
-                            className="absolute top-full left-0 z-20 mt-1 grid grid-cols-8 gap-1.5 border border-hairline bg-surface p-2 shadow-lg"
-                            style={{ borderRadius: 'var(--radius-control)' }}
-                          >
-                            {CALENDAR_COLOR_PALETTE.map((hex) => {
-                              const usedByOther = calendars.some(
-                                (other) => other.id !== cal.id && other.color?.toLowerCase() === hex.toLowerCase()
-                              )
-                              return (
-                                <button
-                                  key={hex}
-                                  type="button"
-                                  onClick={() => changeCalendarColor(cal, hex)}
-                                  className="relative h-5 w-5 shrink-0 rounded-full cursor-pointer transition-transform hover:scale-110"
-                                  style={{
-                                    backgroundColor: hex,
-                                    outline: cal.color === hex ? '2px solid var(--color-border)' : 'none',
-                                    outlineOffset: '1px'
-                                  }}
-                                  title={usedByOther ? `${hex} (${t('settings.colorInUse')})` : hex}
-                                >
-                                  {usedByOther && (
-                                    <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-surface border border-hairline" />
-                                  )}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-1 py-1.5 text-xs text-muted">{t('settings.noCalendars')}</div>
-                  )}
-                </div>
-
-                <HolidayCalendarToggle
-                  calendars={calendars}
-                  onCalendarsChanged={loadCalendarsAndEvents}
-                />
-
-                <button
-                  type="button"
-                  className="gc-btn w-full justify-center"
-                  onClick={() => {
-                    setIsSettingsOpen(false)
-                    setIsAccountModalOpen(true)
-                  }}
-                >
-                  <Users className="h-4 w-4" />
-                  <span>{t('settings.manageAccounts')}</span>
-                </button>
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                className="gc-btn-primary"
-                onClick={() => setIsSettingsOpen(false)}
-              >
-                {t('common.close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SettingsDialog
+        isOpen={isSettingsOpen}
+        tab={settingsTab}
+        onTabChange={setSettingsTab}
+        onClose={() => setIsSettingsOpen(false)}
+        language={i18n.language}
+        onToggleLanguage={toggleLanguage}
+        showLunar={showLunar}
+        onToggleLunar={toggleLunar}
+        showWeekNumbers={showWeekNumbers}
+        onToggleWeekNumbers={toggleWeekNumbers}
+        showMiniCalendar={showMiniCalendar}
+        onToggleMiniCalendar={toggleMiniCalendar}
+        timeFormat={timeFormat}
+        onChangeTimeFormat={changeTimeFormat}
+        themeMode={mode}
+        onSetThemeMode={persistMode}
+        onThemeChanged={setThemeConfig}
+        dayStartHour={dayStartHour}
+        onChangeDayStartHour={changeDayStartHour}
+        hourBlockSize={hourBlockSize}
+        onChangeHourBlockSize={changeHourBlockSize}
+        secondaryTimezone={secondaryTimezone}
+        onChangeSecondaryTimezone={changeSecondaryTimezone}
+        timezoneNames={TIMEZONE_NAMES}
+        autoHideHeader={autoHideHeader}
+        onToggleAutoHideHeader={toggleAutoHideHeader}
+        calendars={calendars}
+        colorPickerCalId={colorPickerCalId}
+        onColorPickerToggle={setColorPickerCalId}
+        onToggleCalendarVisibility={toggleCalendarVisibility}
+        onChangeCalendarColor={changeCalendarColor}
+        onCalendarsChanged={loadCalendarsAndEvents}
+        onManageAccounts={() => {
+          setIsSettingsOpen(false)
+          setIsAccountModalOpen(true)
+        }}
+        appVersion={appVersion}
+        platform={platform}
+      />
 
       <NotionToaster />
     </div>

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useMemo, useCallback } from 'react'
+import HourGutter from '../components/HourGutter'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
 import { TODAY_COLOR } from '@shared/mini-calendar-grid'
@@ -41,7 +42,6 @@ interface WeekViewProps {
 }
 
 const WEEK_GRID_COLS = 'grid-cols-[76px_repeat(7,minmax(0,1fr))]'
-const WEEK_GRID_COLS_WITH_TZ = 'grid-cols-[56px_76px_repeat(7,minmax(0,1fr))]'
 
 function withResizePreview(
   occurrences: ExpandedOccurrence[],
@@ -80,10 +80,10 @@ export const WeekView: React.FC<WeekViewProps> = ({
   const gridRef = useRef<HTMLDivElement>(null)
   const columnRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
-  const { hourBlockSize, dayStartHour, secondaryTimezone } = useDisplayPreferences()
+  const { hourBlockSize, dayStartHour } = useDisplayPreferences()
   const HOUR_HEIGHT = HOUR_HEIGHT_BY_SIZE[hourBlockSize]
-  const gridColsClass = secondaryTimezone ? WEEK_GRID_COLS_WITH_TZ : WEEK_GRID_COLS
-  const dayColOffset = secondaryTimezone ? 3 : 2
+  const gridColsClass = WEEK_GRID_COLS
+  const dayColOffset = 2
 
   const today = DateTime.local()
   const weekStartKey = anchorDate.startOf('week').toISODate()
@@ -190,7 +190,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
     <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-surface select-none">
       <div className="gc-week-header shrink-0 overflow-x-hidden border-b border-hairline [scrollbar-gutter:stable]">
           <div className={`grid ${gridColsClass} divide-x divide-hairline`} onWheel={handleHeaderWheel}>
-            {secondaryTimezone && <div className="bg-app" />}
             <div className="flex items-center justify-center bg-app">
               {showWeekNumbers && (
                 <button
@@ -251,7 +250,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
             {/* Background: per-day click/drag targets - always full height, so there's
                 room below the busiest lane to click and add another all-day event. */}
             <div className={`absolute inset-0 grid ${gridColsClass} divide-x divide-hairline bg-app`} onWheel={handleHeaderWheel}>
-              {secondaryTimezone && <div />}
               <div />
               {weekDays.map((day) => {
                 const dayStr = day.toFormat('yyyy-MM-dd')
@@ -337,41 +335,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
             className={`relative grid min-w-0 ${gridColsClass} divide-x divide-hairline`}
             style={{ minHeight: `${24 * HOUR_HEIGHT}px` }}
           >
-            {secondaryTimezone && (
-              <div className="bg-app pr-1.5 text-right select-none min-w-0">
-                {hours.map((hour) => {
-                  const secondaryLabel = weekDays[0]
-                    .startOf('day')
-                    .plus({ hours: hour })
-                    .setZone(secondaryTimezone)
-                    .toFormat('HH:mm')
-                  return (
-                    <div
-                      key={hour}
-                      style={{ height: `${HOUR_HEIGHT}px` }}
-                      className={`font-mono text-[10px] text-muted/70 truncate ${
-                        hour === 0 ? 'pt-0.5' : '-translate-y-2'
-                      }`}
-                    >
-                      {secondaryLabel}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            <div className="bg-app pr-2 text-right select-none min-w-0">
-              {hours.map((hour) => (
-                <div
-                  key={hour}
-                  style={{ height: `${HOUR_HEIGHT}px` }}
-                  className={`font-mono text-[11px] text-muted truncate ${
-                    hour === 0 ? 'pt-0.5' : '-translate-y-2'
-                  }`}
-                >
-                  {hour.toString().padStart(2, '0')}:00
-                </div>
-              ))}
-            </div>
+            <HourGutter hours={hours} hourHeight={HOUR_HEIGHT} referenceDay={weekDays[0]} />
 
             {weekDays.map((day) => {
               const isToday = day.hasSame(today, 'day')

@@ -20,7 +20,10 @@ function buildInstanceTimes(
 ): Record<string, unknown> {
   const startIso = exception.dtStartUtc || exception.originalStartUtc
   const endIso = exception.dtEndUtc || master.dtEndUtc
-  if (master.allDay) {
+  // The override decides: converting one occurrence of an all-day series to a
+  // timed one (or back) must reach Google as that shape, not the series'.
+  const allDay = exception.allDay !== undefined ? exception.allDay : master.allDay
+  if (allDay) {
     return {
       start: { date: startIso.split('T')[0] },
       end: { date: endIso.split('T')[0] }
@@ -181,9 +184,9 @@ export class GoogleSyncEngine {
             .prepare(
               `INSERT INTO event_exceptions (
                 id, master_event_id, original_start_utc, is_cancelled,
-                title, notes, location, dtstart_utc, dtend_utc, tzid, color,
+                title, notes, location, dtstart_utc, dtend_utc, tzid, all_day, color,
                 created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(master_event_id, original_start_utc) DO UPDATE SET
                 is_cancelled = excluded.is_cancelled,
                 title = excluded.title,
@@ -192,6 +195,7 @@ export class GoogleSyncEngine {
                 dtstart_utc = excluded.dtstart_utc,
                 dtend_utc = excluded.dtend_utc,
                 tzid = excluded.tzid,
+                all_day = excluded.all_day,
                 color = excluded.color,
                 updated_at = excluded.updated_at
               WHERE event_exceptions.dirty = 0`
@@ -207,6 +211,7 @@ export class GoogleSyncEngine {
               exc.dtStartUtc || null,
               exc.dtEndUtc || null,
               exc.tzid || null,
+              exc.allDay === undefined ? null : exc.allDay ? 1 : 0,
               exc.color || null,
               now,
               now

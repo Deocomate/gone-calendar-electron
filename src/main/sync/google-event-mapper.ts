@@ -148,6 +148,8 @@ export function mapGoogleEventToDomain(
         dtStartUtc: startInfo.iso,
         dtEndUtc: normaliseEnd(startInfo, endInfo),
         tzid: startInfo.tzid,
+        // An occurrence can be timed while its series is all-day (and back).
+        allDay: startInfo.allDay,
         color
       }
     }

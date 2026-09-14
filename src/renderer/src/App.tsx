@@ -206,7 +206,9 @@ export const App: React.FC = () => {
       targetStart: DateTime,
       targetEnd: DateTime,
       isCopy: boolean,
-      kind: 'move' | 'resize' = 'move'
+      kind: 'move' | 'resize' = 'move',
+      /** Undefined keeps the occurrence's current all-day-ness. */
+      targetAllDay?: boolean
     ) => {
       if (!window.gone?.events) return
 
@@ -243,6 +245,9 @@ export const App: React.FC = () => {
               dtStartUtc: targetStart.toUTC().toISO()!,
               dtEndUtc: targetEnd.toUTC().toISO()!,
               tzid: occ.tzid,
+              // Dropping one occurrence of an all-day series onto the hourly grid
+              // detaches just that occurrence as a timed event, like Google does.
+              allDay: targetAllDay === undefined ? occ.allDay : targetAllDay,
               notes: occ.notes,
               location: occ.location,
               meetingUrl: occ.meetingUrl
@@ -256,7 +261,8 @@ export const App: React.FC = () => {
             eventId: occ.eventId,
             dtStartUtc: targetStart.toUTC().toISO()!,
             dtEndUtc: targetEnd.toUTC().toISO()!,
-            targetCalendarId: occ.calendarId
+            targetCalendarId: occ.calendarId,
+            allDay: targetAllDay === undefined ? occ.allDay : targetAllDay
           })
           toast.success(kind === 'resize' ? t('toast.eventTimeUpdated') : t('toast.eventMoved'), {
             description: t('toast.movedDetail', { title: occ.title, when })
@@ -281,7 +287,19 @@ export const App: React.FC = () => {
     handleDragOverTarget,
     handleDropOnDate,
     markPointerBusyEnd
-  } = useEventDnD(handleDirectMove)
+  } = useEventDnD(
+    useCallback(
+      (
+        occ: ExpandedOccurrence,
+        start: DateTime,
+        end: DateTime,
+        isCopy: boolean,
+        droppedOnTimeGrid?: boolean
+      ) =>
+        void handleDirectMove(occ, start, end, isCopy, 'move', droppedOnTimeGrid ? false : undefined),
+      [handleDirectMove]
+    )
+  )
 
   const handleResizeCommit = useCallback(
     (occ: ExpandedOccurrence, start: DateTime, end: DateTime) => {

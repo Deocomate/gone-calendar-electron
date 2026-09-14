@@ -107,7 +107,9 @@ export function mapGraphEventToDomain(
         location: gEvent.location?.displayName || undefined,
         dtStartUtc: startInfo.iso,
         dtEndUtc: normaliseEnd(isAllDay, startInfo, endInfo),
-        tzid: startInfo.tzid
+        tzid: startInfo.tzid,
+        // An occurrence can be timed while its series is all-day (and back).
+        allDay: isAllDay
       }
     }
   }

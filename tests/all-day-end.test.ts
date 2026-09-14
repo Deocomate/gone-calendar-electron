@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createSqliteDriver } from '../src/main/db/sqlite-driver'
-import { runMigrations, seedDefaultData } from '../src/main/db/database'
+import { runMigrations, seedDefaultData, MIGRATION_010_SQL } from '../src/main/db/database'
 import { exclusiveEndToInclusive, inclusiveEndToExclusiveDate } from '../src/shared/all-day'
 
 /**
@@ -91,9 +91,10 @@ describe('migration 010 (repair already-imported all-day ends)', () => {
     // A timed event that happens to end at midnight must not be touched.
     insert('timed', '2026-09-14T22:00:00.000Z', '2026-09-15T00:00:00.000Z', 0)
 
-    // Rewind past 010 and re-run it as an upgrade would.
-    db.prepare('DELETE FROM schema_migrations WHERE version >= 10').run()
-    runMigrations(db)
+    // Apply the migration's own SQL directly. Rewinding the version table and
+    // re-running every later migration is brittle - ALTER TABLE ADD COLUMN is
+    // not idempotent, so a newer migration would fail on the second pass.
+    db.exec(MIGRATION_010_SQL)
 
     const get = (id: string): string =>
       db.prepare('SELECT dtend_utc FROM events WHERE id = ?').get<{ dtend_utc: string }>(id)!

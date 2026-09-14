@@ -96,6 +96,8 @@ export interface EventException {
   dtStartUtc?: string
   dtEndUtc?: string
   tzid?: string
+  /** Overrides the master's all-day flag for this occurrence only; undefined inherits it. */
+  allDay?: boolean
   color?: string
   createdAt: string
   updatedAt: string
@@ -173,6 +175,8 @@ export interface MoveEventInput {
   dtStartUtc: string
   dtEndUtc: string
   targetCalendarId?: string
+  /** Set when the move also changes all-day-ness (dropping onto the time grid). */
+  allDay?: boolean
 }
 
 export interface CopyEventInput {

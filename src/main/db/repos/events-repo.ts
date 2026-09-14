@@ -81,6 +81,7 @@ interface ExceptionRow {
   dtstart_utc: string | null
   dtend_utc: string | null
   tzid: string | null
+  all_day: number | null
   color: string | null
   created_at: string
   updated_at: string
@@ -126,6 +127,8 @@ function mapRowToException(row: ExceptionRow): EventException {
     dtStartUtc: row.dtstart_utc || undefined,
     dtEndUtc: row.dtend_utc || undefined,
     tzid: row.tzid || undefined,
+    // NULL means "inherit the master's all-day flag".
+    allDay: row.all_day === null ? undefined : row.all_day === 1,
     color: row.color || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -373,7 +376,7 @@ export class EventsRepo {
         .prepare(
           `UPDATE event_exceptions SET
             is_cancelled = ?, title = ?, notes = ?, location = ?,
-            dtstart_utc = ?, dtend_utc = ?, tzid = ?, color = ?, updated_at = ?,
+            dtstart_utc = ?, dtend_utc = ?, tzid = ?, all_day = ?, color = ?, updated_at = ?,
             dirty = 1
            WHERE id = ?`
         )
@@ -385,6 +388,7 @@ export class EventsRepo {
           exception.dtStartUtc || null,
           exception.dtEndUtc || null,
           exception.tzid || null,
+          exception.allDay === undefined ? null : exception.allDay ? 1 : 0,
           exception.color || null,
           now,
           id
@@ -394,9 +398,9 @@ export class EventsRepo {
         .prepare(
           `INSERT INTO event_exceptions (
             id, master_event_id, original_start_utc, is_cancelled,
-            title, notes, location, dtstart_utc, dtend_utc, tzid, color, created_at, updated_at,
-            dirty
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
+            title, notes, location, dtstart_utc, dtend_utc, tzid, all_day, color,
+            created_at, updated_at, dirty
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
         )
         .run(
           id,
@@ -409,6 +413,7 @@ export class EventsRepo {
           exception.dtStartUtc || null,
           exception.dtEndUtc || null,
           exception.tzid || null,
+          exception.allDay === undefined ? null : exception.allDay ? 1 : 0,
           exception.color || null,
           now,
           now
@@ -674,11 +679,20 @@ export class EventsRepo {
     this.db
       .prepare(
         `UPDATE events SET
-          calendar_id = ?, dtstart_utc = ?, dtend_utc = ?,
+          calendar_id = ?, dtstart_utc = ?, dtend_utc = ?, all_day = ?,
           dirty = 1, updated_at = ?
          WHERE id = ?`
       )
-      .run(targetCalendarId, input.dtStartUtc, input.dtEndUtc, now, input.eventId)
+      .run(
+        targetCalendarId,
+        input.dtStartUtc,
+        input.dtEndUtc,
+        // Dropping onto the hourly grid turns an all-day event into a timed one;
+        // an unspecified allDay leaves the existing flag alone.
+        input.allDay === undefined ? (existing.event.allDay ? 1 : 0) : input.allDay ? 1 : 0,
+        now,
+        input.eventId
+      )
 
     const updated = this.getEventById(input.eventId)
     return updated!.event
@@ -755,6 +769,9 @@ export class EventsRepo {
         dtStartUtc: input.updateInput.dtStartUtc,
         dtEndUtc: input.updateInput.dtEndUtc,
         tzid: input.updateInput.tzid,
+        // Dropping one occurrence of an all-day series onto the time grid (or
+        // vice versa) changes only that occurrence's all-day-ness.
+        allDay: input.updateInput.allDay,
         color: input.updateInput.color
       })
       return true

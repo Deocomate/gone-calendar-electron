@@ -16,7 +16,10 @@ export function useEventDnD(
     occ: ExpandedOccurrence,
     targetStart: DateTime,
     targetEnd: DateTime,
-    isCopy: boolean
+    isCopy: boolean,
+    /** true when the drop landed on the hourly time grid, so the occurrence
+     *  should become timed; undefined leaves its all-day-ness unchanged. */
+    droppedOnTimeGrid?: boolean
   ) => void
 ) {
   const [draggedOccurrence, setDraggedOccurrence] = useState<ExpandedOccurrence | null>(null)
@@ -145,7 +148,7 @@ export function useEventDnD(
 
       // Execute direct move/copy immediately without modal interruption
       if (onDirectMove) {
-        onDirectMove(occ, newStart, newEnd, isCopy)
+        onDirectMove(occ, newStart, newEnd, isCopy, targetMinutes !== undefined)
         return
       }
 

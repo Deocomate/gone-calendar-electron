@@ -248,12 +248,39 @@ CREATE UNIQUE INDEX idx_event_exceptions_master
  * midnight, and an end strictly after the start. Locally created rows already
  * end at 23:59:59.999 and are left alone, as are any zero-length oddities.
  */
-const MIGRATION_010_SQL = `
+export const MIGRATION_010_SQL = `
 UPDATE events
 SET dtend_utc = strftime('%Y-%m-%dT23:59:59.999Z', datetime(dtend_utc, '-1 day'))
 WHERE all_day = 1
   AND dtend_utc LIKE '%T00:00:00.000Z'
   AND dtend_utc > dtstart_utc;
+`
+
+/**
+ * An occurrence override can differ from its series in whether it is all-day:
+ * Google and Outlook both let you convert a single occurrence of an all-day
+ * series into a timed one (and back). `event_exceptions` had no way to express
+ * that, so expand-occurrences fell back to the master's flag and such
+ * occurrences kept rendering in the all-day bar despite carrying real times.
+ *
+ * NULL means "inherit from the master", which is what every existing row does.
+ */
+export const MIGRATION_011_SQL = `
+ALTER TABLE event_exceptions ADD COLUMN all_day INTEGER;
+
+-- Backfill overrides already imported from a provider. Calendars now hold sync
+-- tokens, so an incremental pull will never revisit these rows and they would
+-- otherwise keep inheriting the series' all-day flag forever. An override of an
+-- all-day series whose stored times are not a whole-day span (midnight to
+-- 23:59:59.999) is a timed occurrence.
+UPDATE event_exceptions
+SET all_day = 0
+WHERE all_day IS NULL
+  AND is_cancelled = 0
+  AND dtstart_utc IS NOT NULL
+  AND dtend_utc IS NOT NULL
+  AND master_event_id IN (SELECT id FROM events WHERE all_day = 1)
+  AND NOT (dtstart_utc LIKE '%T00:00:00.000Z' AND dtend_utc LIKE '%T23:59:59.999Z');
 `
 
 /**
@@ -347,6 +374,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_010_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       10,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 11) {
+    db.exec(MIGRATION_011_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      11,
       new Date().toISOString()
     )
   }

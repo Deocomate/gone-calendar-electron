@@ -231,7 +231,10 @@ function expandRruleOccurrences(
             startUtc: effectiveStartIso,
             endUtc: effectiveEndIso,
             tzid: exception.tzid || event.tzid,
-            allDay: event.allDay,
+            // An override may flip all-day-ness for this occurrence alone -
+            // Google and Outlook both allow converting a single occurrence of an
+            // all-day series into a timed one. undefined inherits the master.
+            allDay: exception.allDay !== undefined ? exception.allDay : event.allDay,
             color: exception.color || event.color,
             meetingUrl: event.meetingUrl,
             isRecurring: true,

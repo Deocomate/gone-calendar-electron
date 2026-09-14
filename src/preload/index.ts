@@ -8,7 +8,8 @@ const goneApi: GoneAPI = {
     getLocale: () => ipcRenderer.invoke(IPC_CHANNELS.APP.GET_LOCALE),
     setLocale: (locale: AppLocale) => ipcRenderer.invoke(IPC_CHANNELS.APP.SET_LOCALE, locale),
     getPlatform: () => ipcRenderer.invoke(IPC_CHANNELS.APP.GET_PLATFORM),
-    pickBackgroundImage: () => ipcRenderer.invoke(IPC_CHANNELS.APP.PICK_BACKGROUND_IMAGE)
+    pickBackgroundImage: () => ipcRenderer.invoke(IPC_CHANNELS.APP.PICK_BACKGROUND_IMAGE),
+    backupDatabase: () => ipcRenderer.invoke(IPC_CHANNELS.APP.BACKUP_DATABASE)
   },
   settings: {
     getAll: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.GET_ALL),
@@ -22,7 +23,9 @@ const goneApi: GoneAPI = {
     disconnectMicrosoft: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_MICROSOFT, accountId),
     connectCalDav: (input) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.CONNECT_CALDAV, input),
     disconnectCalDav: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_CALDAV, accountId),
-    listAccounts: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.LIST_ACCOUNTS)
+    listAccounts: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.LIST_ACCOUNTS),
+    detachAccount: (accountId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTH.DETACH_ACCOUNT, accountId)
   },
   sync: {
     triggerNow: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC.TRIGGER_NOW),

@@ -14,12 +14,13 @@ import {
   Sun,
   Moon,
   Monitor,
-  Globe
+  Globe,
+  HardDriveDownload
 } from 'lucide-react'
 import type { Calendar } from '@shared/event-model'
 import type { ThemeConfig, ThemeMode } from '@shared/theme-mode'
 import type { DisplayPreferences } from '../context/DisplayPreferencesContext'
-import { NumberInput, CustomSelect } from './ui'
+import { NumberInput, CustomSelect, toast } from './ui'
 import AppearanceSettings from './AppearanceSettings'
 import HolidayCalendarToggle from './HolidayCalendarToggle'
 import { CALENDAR_COLOR_PALETTE } from '../lib/calendar-colors'
@@ -224,6 +225,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
               >
                 <Keyboard className="h-4 w-4 shrink-0 text-muted" />
                 <span className="flex-1 truncate">{t('actions.keyboard')}</span>
+              </button>
+
+              <button
+                type="button"
+                className="flex w-full items-center gap-2.5 rounded-[3px] px-2.5 py-2.5 text-left text-sm text-primary transition-colors hover:bg-hover"
+                onClick={async () => {
+                  const result = await window.gone?.app?.backupDatabase?.()
+                  if (!result) return
+                  if (result.success) {
+                    toast.success(t('settings.backupDone'), { description: result.filePath })
+                  } else if (result.message && result.message !== 'cancelled') {
+                    toast.error(t('settings.backupFailed'), { description: result.message })
+                  }
+                }}
+              >
+                <HardDriveDownload className="h-4 w-4 shrink-0 text-muted" />
+                <span className="flex-1 truncate">{t('settings.backup')}</span>
               </button>
 
               <div className="px-2.5 pt-3 pb-1 font-mono text-[11px] text-muted">

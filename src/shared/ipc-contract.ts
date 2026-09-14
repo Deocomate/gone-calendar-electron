@@ -28,7 +28,8 @@ export const IPC_CHANNELS = {
     GET_LOCALE: 'gone:app:get-locale',
     SET_LOCALE: 'gone:app:set-locale',
     GET_PLATFORM: 'gone:app:get-platform',
-    PICK_BACKGROUND_IMAGE: 'gone:app:pick-background-image'
+    PICK_BACKGROUND_IMAGE: 'gone:app:pick-background-image',
+    BACKUP_DATABASE: 'gone:app:backup-database'
   },
   SETTINGS: {
     GET_ALL: 'gone:settings:get-all',
@@ -42,7 +43,8 @@ export const IPC_CHANNELS = {
     DISCONNECT_MICROSOFT: 'gone:auth:disconnect-microsoft',
     CONNECT_CALDAV: 'gone:auth:connect-caldav',
     DISCONNECT_CALDAV: 'gone:auth:disconnect-caldav',
-    LIST_ACCOUNTS: 'gone:auth:list-accounts'
+    LIST_ACCOUNTS: 'gone:auth:list-accounts',
+    DETACH_ACCOUNT: 'gone:auth:detach-account'
   },
   SYNC: {
     TRIGGER_NOW: 'gone:sync:trigger-now',
@@ -96,6 +98,24 @@ export interface AppInfo {
   platform: NodeJS.Platform
 }
 
+export interface DetachAccountResult {
+  success: boolean
+  /** Calendars converted to local ownership. */
+  calendarCount: number
+  /** Events kept (none are deleted by detaching). */
+  eventCount: number
+  message?: string
+}
+
+export interface BackupResult {
+  success: boolean
+  /** Absolute path of the snapshot that was written. */
+  filePath?: string
+  /** Size of the snapshot in bytes. */
+  byteSize?: number
+  message?: string
+}
+
 export interface IcsImportResult {
   success: boolean
   importedCount: number
@@ -118,6 +138,8 @@ export interface GoneAPI {
     setLocale: (locale: AppLocale) => Promise<boolean>
     getPlatform: () => Promise<string>
     pickBackgroundImage: () => Promise<{ dataUrl: string } | null>
+    /** Write a consistent snapshot of the whole database to a file the user picks. */
+    backupDatabase: () => Promise<BackupResult>
   }
   settings: {
     getAll: () => Promise<AppSettings>
@@ -132,6 +154,9 @@ export interface GoneAPI {
     connectCalDav: (input: ConnectCalDavInput) => Promise<{ success: boolean; account?: CalendarAccount; message?: string }>
     disconnectCalDav: (accountId: string) => Promise<boolean>
     listAccounts: () => Promise<CalendarAccount[]>
+    /** Keep this account's calendars and events but sever the provider link,
+     *  turning them into ordinary local data. */
+    detachAccount: (accountId: string) => Promise<DetachAccountResult>
   }
   sync: {
     triggerNow: () => Promise<SyncResult>

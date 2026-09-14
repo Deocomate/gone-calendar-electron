@@ -35,7 +35,8 @@ describe('IPC Channels and Contracts', () => {
           return false
         },
         getPlatform: async () => 'win32',
-        pickBackgroundImage: async () => null
+        pickBackgroundImage: async () => null,
+      backupDatabase: async () => ({ success: true })
       },
       settings: {
         getAll: async () => ({
@@ -61,7 +62,8 @@ describe('IPC Channels and Contracts', () => {
         disconnectMicrosoft: async () => true,
         connectCalDav: async () => ({ success: true }),
         disconnectCalDav: async () => true,
-        listAccounts: async () => []
+        listAccounts: async () => [],
+      detachAccount: async () => ({ success: true, calendarCount: 0, eventCount: 0 })
       },
       sync: {
         triggerNow: async () => ({ success: true, pulledCount: 0, pushedCount: 0, errorCount: 0 }),

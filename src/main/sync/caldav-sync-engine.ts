@@ -43,13 +43,14 @@ export class CalDavSyncEngine {
       } else {
         this.db
           .prepare(
+            // Colour is local-only: the provider seeds it when the calendar is
+            // first discovered and never overwrites it again, so what you pick
+            // here stays picked.
             `UPDATE calendars
-             SET name = ?,
-                 color = CASE WHEN color_is_custom = 1 THEN color ELSE ? END,
-                 is_read_only = ?, updated_at = ?
+             SET name = ?, is_read_only = ?, updated_at = ?
              WHERE id = ?`
           )
-          .run(name, color, isReadOnly ? 1 : 0, now, calId)
+          .run(name, isReadOnly ? 1 : 0, now, calId)
       }
 
       syncedCalIds.push(calId)

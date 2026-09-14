@@ -10,6 +10,10 @@ import { GoogleSyncEngine } from '../src/main/sync/google-sync-engine'
  * colour the user picked was reverted almost immediately, and because the whole
  * list is rewritten in one pass every other customisation went with it, so
  * changing one calendar looked like it changed them all.
+ *
+ * Colour is now local-only: the provider seeds it when a calendar is first
+ * discovered and never writes it again. Names and read-only state still track
+ * the provider.
  */
 describe('calendar colour ownership', () => {
   let db: ISqliteDatabase
@@ -81,11 +85,21 @@ describe('calendar colour ownership', () => {
 
     await new GoogleSyncEngine(db).syncCalendarList('acc_g', 'token')
 
-    // The untouched calendar still tracks the provider.
-    expect(colorOf(OTHER_CAL)).toBe('#bbbbbb')
+    expect(colorOf(GOOGLE_CAL)).toBe('#ff0000')
+    expect(colorOf(OTHER_CAL)).toBe('#111111')
   })
 
-  it('still tracks the provider colour for calendars the user has not customised', async () => {
+  it('leaves an uncustomised colour alone too - colour is local, not synced', async () => {
+    stubCalendarList()
+    await new GoogleSyncEngine(db).syncCalendarList('acc_g', 'token')
+
+    // Seeded '#111111' at discovery; the provider's colour does not overwrite it.
+    expect(colorOf(GOOGLE_CAL)).toBe('#111111')
+    expect(colorOf(OTHER_CAL)).toBe('#111111')
+  })
+
+  it('seeds the provider colour when a calendar is first discovered', async () => {
+    db.prepare('DELETE FROM calendars WHERE id IN (?, ?)').run(GOOGLE_CAL, OTHER_CAL)
     stubCalendarList()
     await new GoogleSyncEngine(db).syncCalendarList('acc_g', 'token')
 
@@ -104,14 +118,9 @@ describe('calendar colour ownership', () => {
     )
   })
 
-  it('does not mark a colour custom when only visibility changes', async () => {
+  it('does not mark a colour custom when only visibility changes', () => {
     repo.updateCalendar(GOOGLE_CAL, { isVisible: false })
-    stubCalendarList()
-
-    await new GoogleSyncEngine(db).syncCalendarList('acc_g', 'token')
-
-    // Toggling visibility is not a colour choice, so the provider still wins.
-    expect(colorOf(GOOGLE_CAL)).toBe('#aaaaaa')
+    expect(repo.getCalendarById(GOOGLE_CAL)!.colorIsCustom).toBe(false)
   })
 
   it('keeps the flag set across further non-colour edits', () => {

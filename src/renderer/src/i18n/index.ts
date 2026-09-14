@@ -9,10 +9,8 @@ export const resources = {
         cancel: 'Cancel',
         close: 'Close',
         back: 'Back',
-        save: 'Save',
         delete: 'Delete',
         add: 'Add',
-        ok: 'OK',
         gotIt: 'Got it',
         on: 'ON',
         off: 'OFF',
@@ -34,18 +32,10 @@ export const resources = {
       actions: {
         newEvent: 'Create',
         openDay: 'Open this day',
-        settings: 'Settings',
-        refresh: 'Refresh',
         search: 'Search',
-        more: 'More',
         toggleSidebar: 'Toggle sidebar',
-        accounts: 'Accounts & sync',
-        importIcs: 'Import sample ICS',
         keyboard: 'Keyboard shortcuts',
         appearance: 'Appearance'
-      },
-      sidebar: {
-        miniCalendar: 'Mini calendar'
       },
       ui: {
         selectPlaceholder: 'Select an item…',
@@ -82,9 +72,6 @@ export const resources = {
         tabCalendars: 'Calendars & accounts',
         language: 'Language',
         theme: 'Theme',
-        themeSystem: 'System',
-        themeDark: 'Dark',
-        themeLight: 'Light',
         themeModeSystem: 'System',
         themeModeLight: 'Light',
         themeModeDark: 'Dark',
@@ -107,7 +94,6 @@ export const resources = {
         backup: 'Back up database…',
         backupDone: 'Backup saved',
         backupFailed: 'Backup failed',
-        version: 'Version',
         myCalendars: 'My calendars',
         manageAccounts: 'Manage accounts & sync…',
         noCalendars: 'No calendars yet',
@@ -115,8 +101,6 @@ export const resources = {
         colorInUse: 'already used by another calendar'
       },
       status: {
-        ready: 'Ready',
-        syncing: 'Syncing…',
         offline: 'Offline mode'
       },
       editor: {
@@ -315,9 +299,6 @@ export const resources = {
         searching: 'Searching…',
         empty: 'Type a keyword to search across your whole calendar',
         noResults: 'No matching events for "{{q}}"',
-        navHint: 'to navigate',
-        openHint: 'to open',
-        closeHint: 'to close',
         attendees: '{{count}} guest(s)',
         allDaySuffix: 'All day'
       },
@@ -384,8 +365,7 @@ export const resources = {
         lunarRemoveFailed: 'Failed to remove synced copies',
         icsCreated: 'Event .ics file created',
         shareFailed: 'Share failed',
-        shareError: 'Failed to share event',
-        importFailed: 'Import failed: {{msg}}'
+        shareError: 'Failed to share event'
       }
     }
   },
@@ -396,10 +376,8 @@ export const resources = {
         cancel: 'Hủy',
         close: 'Đóng',
         back: 'Quay lại',
-        save: 'Lưu',
         delete: 'Xóa',
         add: 'Thêm',
-        ok: 'OK',
         gotIt: 'Đã hiểu',
         on: 'BẬT',
         off: 'TẮT',
@@ -421,18 +399,10 @@ export const resources = {
       actions: {
         newEvent: 'Tạo',
         openDay: 'Mở ngày này',
-        settings: 'Cài đặt',
-        refresh: 'Làm mới',
         search: 'Tìm kiếm',
-        more: 'Thêm',
         toggleSidebar: 'Thu gọn thanh bên',
-        accounts: 'Tài khoản & đồng bộ',
-        importIcs: 'Nhập ICS mẫu',
         keyboard: 'Phím tắt',
         appearance: 'Giao diện nâng cao'
-      },
-      sidebar: {
-        miniCalendar: 'Lịch nhỏ'
       },
       ui: {
         selectPlaceholder: 'Chọn một mục…',
@@ -469,9 +439,6 @@ export const resources = {
         tabCalendars: 'Lịch & tài khoản',
         language: 'Ngôn ngữ',
         theme: 'Giao diện',
-        themeSystem: 'Hệ thống',
-        themeDark: 'Tối',
-        themeLight: 'Sáng',
         themeModeSystem: 'Hệ thống',
         themeModeLight: 'Sáng',
         themeModeDark: 'Tối',
@@ -494,7 +461,6 @@ export const resources = {
         backup: 'Sao lưu dữ liệu…',
         backupDone: 'Đã lưu bản sao',
         backupFailed: 'Sao lưu thất bại',
-        version: 'Phiên bản',
         myCalendars: 'Lịch của tôi',
         manageAccounts: 'Quản lý tài khoản & đồng bộ…',
         noCalendars: 'Chưa có lịch nào',
@@ -502,8 +468,6 @@ export const resources = {
         colorInUse: 'đã dùng cho lịch khác'
       },
       status: {
-        ready: 'Sẵn sàng',
-        syncing: 'Đang đồng bộ…',
         offline: 'Chế độ ngoại tuyến'
       },
       editor: {
@@ -702,9 +666,6 @@ export const resources = {
         searching: 'Đang tìm kiếm…',
         empty: 'Gõ từ khóa để tìm kiếm nhanh trong toàn bộ lịch',
         noResults: 'Không tìm thấy sự kiện nào khớp với "{{q}}"',
-        navHint: 'để chuyển',
-        openHint: 'để mở',
-        closeHint: 'để đóng',
         attendees: '{{count}} người tham gia',
         allDaySuffix: 'Cả ngày'
       },
@@ -771,8 +732,7 @@ export const resources = {
         lunarRemoveFailed: 'Xóa bản đã đồng bộ thất bại',
         icsCreated: 'Đã tạo tệp .ics của sự kiện',
         shareFailed: 'Chia sẻ thất bại',
-        shareError: 'Chia sẻ sự kiện thất bại',
-        importFailed: 'Nhập thất bại: {{msg}}'
+        shareError: 'Chia sẻ sự kiện thất bại'
       }
     }
   }

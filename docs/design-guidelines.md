@@ -75,7 +75,7 @@ Font: Inter. Hierarchy:
 
 ### Header Rules
 - **Task Launcher Button:** `gc-icon-btn` with `text-muted hover:text-primary`, counter badge `rounded-[3px] bg-accent text-[8px] font-bold text-white`.
-- **Controls & Buttons:** `gc-btn`, `gc-btn-primary`, `ViewSwitcher`, `OverflowMenu` all follow `var(--radius-control)`.
+- **Controls & Buttons:** `gc-btn`, `gc-btn-primary`, `ViewSwitcher`, `SettingsPanel` all follow `var(--radius-control)`.
 
 ## Motion & Interaction
 

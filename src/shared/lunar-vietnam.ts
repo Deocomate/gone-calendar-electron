@@ -22,7 +22,7 @@ const PI = Math.PI
 /**
  * Calculate Julian Day Number from solar date (dd/mm/yyyy)
  */
-export function jdFromDate(dd: number, mm: number, yy: number): number {
+function jdFromDate(dd: number, mm: number, yy: number): number {
   const a = Math.floor((14 - mm) / 12)
   const y = yy + 4800 - a
   const m = mm + 12 * a - 3
@@ -43,7 +43,7 @@ export function jdFromDate(dd: number, mm: number, yy: number): number {
 /**
  * Convert Julian Day Number back to solar date
  */
-export function jdToDate(jd: number): { day: number; month: number; year: number } {
+function jdToDate(jd: number): { day: number; month: number; year: number } {
   let a: number
   let m: number
 
@@ -77,7 +77,7 @@ export function jdToDate(jd: number): { day: number; month: number; year: number
 /**
  * Calculate k-th new moon day (Sóc) after 1900-01-01
  */
-export function getNewMoonDay(k: number, timeZone: number = 7): number {
+function getNewMoonDay(k: number, timeZone: number = 7): number {
   const T = k / 1236.85
   const T2 = T * T
   const T3 = T2 * T
@@ -121,7 +121,7 @@ export function getNewMoonDay(k: number, timeZone: number = 7): number {
 /**
  * Calculate solar longitude (Tiết khí) for a given Julian Day Number (0..11)
  */
-export function getSunLongitude(jdn: number, timeZone: number = 7): number {
+function getSunLongitude(jdn: number, timeZone: number = 7): number {
   const T = (jdn - 2451545.0 + 0.5 - timeZone / 24) / 36525
   const T2 = T * T
   const dr = PI / 180

@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-31  
 **Version:** 0.1.0  
-**Build status:** All 10 phases complete, 100/100 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
+**Build status:** All 10 phases complete, 213/213 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
 
 ---
 
@@ -59,22 +59,24 @@ gone-calendar/
 │   │       │   ├── YearView.tsx
 │   │       │   └── ListView.tsx
 │   │       ├── components/      # UI components
-│   │       │   ├── shell/       # AppHeader.tsx, ViewSwitcher.tsx
-│   │       │   ├── ui/          # Primitives: NumberInput, TextInput, TextArea, ToggleSwitch, Checkbox, index.ts
+│   │       │   ├── shell/       # AppHeader.tsx, AppSidebar.tsx, ViewSwitcher.tsx
+│   │       │   ├── ui/          # Primitives: TextInput, TextArea, NumberInput, CustomSelect, DatePicker, TimePicker, ToggleSwitch, Checkbox, FormRow, toast, index.ts
 │   │       │   ├── MiniCalendar.tsx
 │   │       │   ├── EventPill.tsx
-│   │       │   ├── EventHoverFlyout.tsx
+│   │       │   ├── TimedEventBlock.tsx
+│   │       │   ├── HourGutter.tsx       # Merged primary + secondary clock gutter
+│   │       │   ├── DayPeekPopover.tsx   # Month-view day peek
+│   │       │   ├── SettingsPanel.tsx    # Right-side settings drawer (root list + one level)
+│   │       │   ├── AppearanceSettings.tsx
 │   │       │   ├── LunarLabel.tsx
 │   │       │   ├── WeekNumber.tsx
-│   │       │   ├── TaskPane.tsx
-│   │       │   ├── TaskModal.tsx
+│   │       │   ├── ResizeTimeTooltip.tsx
 │   │       │   ├── AccountManagerModal.tsx
 │   │       │   ├── CalDavConnectModal.tsx
+│   │       │   ├── SyncConflictsModal.tsx
 │   │       │   ├── HolidayCalendarToggle.tsx
 │   │       │   ├── KeyboardShortcutsModal.tsx
 │   │       │   ├── SearchPaletteModal.tsx
-│   │       │   ├── ThemeSettingsModal.tsx
-│   │       │   ├── AttendeeInput.tsx
 │   │       │   └── ErrorBoundary.tsx
 │   │       ├── editor/          # Event editor components
 │   │       ├── dnd/             # Drag and drop: use-event-dnd.ts, drop-target.ts, DropActionPopover.tsx
@@ -84,13 +86,20 @@ gone-calendar/
 │   │       └── styles/          # index.css: design tokens, Tailwind layers
 │   └── shared/                  # Shared contracts (used by both main and renderer)
 │       ├── event-model.ts       # CalendarAccount, Calendar, CalendarEvent, ExpandedOccurrence, etc.
-│       ├── task-model.ts        # TaskItem, CreateTaskInput, UpdateTaskInput, ThemeConfig
+│       ├── all-day.ts           # Floating-date vs instant: inclusive/exclusive ends, day keys
+│       ├── occurrence-order.ts  # Within-day ordering (all-day first, then by time)
+│       ├── expand-occurrences.ts # RRULE + exception expansion
+│       ├── lunar-vietnam.ts     # Vietnamese lunar calendar conversion
+│       ├── timed-event-segments.ts # Splits multi-day timed occurrences per day
+│       ├── day-highlight.ts     # Today / selection highlight rules
+│       ├── holiday-calendars.ts # Built-in holiday subscription definitions
+│       ├── time-format.ts       # 12h/24h formatting helpers
 │       ├── settings-contract.ts # Settings keys and value types
 │       ├── theme-mode.ts        # ThemeMode enum
 │       ├── mini-calendar-grid.ts # Grid computation utilities
 │       ├── visible-range.ts     # Visible date range helpers
 │       └── ipc-contract.ts      # IPC_CHANNELS constants and GoneAPI interface
-├── tests/                       # Vitest unit tests (100 tests / 22 files)
+├── tests/                       # Vitest unit tests (213 tests / 36 files)
 │   └── stubs/electron.ts        # `electron` module stub for main-process tests
 ├── docs/
 │   ├── urd.md                   # User Requirements Document
@@ -155,7 +164,7 @@ Entry: `main.tsx` detects `#mini` URL hash to route to `MiniApp` (companion widg
 - Active view routing (Day/Week/Month/Year/List)
 - Global keyboard shortcuts listener (T=today, 1–5=views, N/C=new event, /=search, ?/F1=shortcuts modal)
 - Sidebar tabs (Calendar vs Tasks)
-- Theme background layer and ThemeSettingsModal
+- Theme background layer and the `SettingsPanel` drawer
 - Holiday toggle in sidebar
 
 **Views:** All five calendar layouts are custom React components with no third-party calendar shell.
@@ -196,17 +205,30 @@ tests/
 ├── lunar-vietnam.test.ts          # Lunar ↔ solar conversion accuracy
 ├── expand-occurrences.test.ts     # RRULE expansion correctness
 ├── recurring-scope.test.ts        # this / this-and-future / all scope edits
+├── occurrence-all-day-override.test.ts # Per-occurrence all-day detach (drag onto the hour grid)
+├── occurrence-order.test.ts       # Within-day ordering: all-day first, then by time
 ├── copy-instance.test.ts          # Recurring single-instance copy
 ├── event-copy-uid.test.ts         # UID handling on event copy
+├── all-day-end.test.ts            # Provider exclusive end ↔ app inclusive end
+├── all-day-covers-date.test.ts    # Which days a multi-day all-day event marks
+├── layout-allday-events.test.ts   # All-day lane layout (integer day arithmetic)
 ├── ics-roundtrip.test.ts          # ical.js import + RFC 5545 export round-trips
 ├── database-repos.test.ts         # SQLite calendars / events / settings repos
-├── tasks-repo.test.ts             # Task CRUD, completion toggle, due date sort
+├── migration-007.test.ts          # Migration SQL applied directly, not by rewinding
+├── exception-upsert.test.ts       # event_exceptions upsert needs its UNIQUE index
+├── exception-sync.test.ts         # Occurrence exceptions push to Google / Graph
+├── calendar-color-ownership.test.ts # A local colour edit touches one calendar only
+├── detach-account.test.ts         # Detach keeps calendars, events and exceptions
+├── backup.test.ts                 # VACUUM INTO snapshot, WAL-safe
 ├── fts-search.test.ts             # FTS5 search over cached events
 ├── google-event-mapper.test.ts    # Google → canonical mapping
 ├── microsoft-event-mapper.test.ts # Graph → canonical mapping
 ├── graph-recurrence-map.test.ts   # Graph recurrence ↔ RRULE
-├── caldav-discover-url.test.ts     # RFC 6764 server discovery
+├── sync-pagination.test.ts        # nextPageToken / @odata.nextLink paging
+├── http-timeout.test.ts           # fetchWithTimeout aborts a stalled request
+├── caldav-discover-url.test.ts    # RFC 6764 server discovery
 ├── secure-store.test.ts           # safeStorage fail-closed behavior
+├── external-url-guard.test.ts     # will-navigate / window-open guards
 ├── holiday-calendars.test.ts      # Holiday generation and lunar-to-solar
 ├── visible-range.test.ts          # Date range utilities
 ├── mini-calendar-grid.test.ts     # Mini-window month grid computation
@@ -214,10 +236,11 @@ tests/
 ├── drop-target.test.ts            # DnD drop target math (renderer)
 ├── resize-math.test.ts            # Event edge-resize math (renderer)
 ├── ui-components.test.ts          # UI primitive + editor SSR smoke (renderer)
+├── i18n-parity.test.ts            # vi and en keep the same key set
 └── ipc-contract.test.ts           # IPC channel and API surface contract
 ```
 
-**Total: 100 tests across 22 files. All passing.**
+**Total: 213 tests across 36 files. All passing.**
 
 Main-process tests run in plain Node; the `electron` module is aliased to
 `tests/stubs/electron.ts` in `vitest.config.ts` so they do not need the Electron

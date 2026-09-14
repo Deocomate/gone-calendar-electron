@@ -33,6 +33,7 @@ export const resources = {
       },
       actions: {
         newEvent: 'Create',
+        openDay: 'Open this day',
         settings: 'Settings',
         refresh: 'Refresh',
         search: 'Search',
@@ -312,6 +313,10 @@ export const resources = {
         attendees: '{{count}} guest(s)',
         allDaySuffix: 'All day'
       },
+      month: {
+        moreCount_one: '+{{count}} more',
+        moreCount_other: '+{{count}} more'
+      },
       list: {
         empty: 'No events in this period.',
         addEvent: 'Create event',
@@ -407,6 +412,7 @@ export const resources = {
       },
       actions: {
         newEvent: 'Tạo',
+        openDay: 'Mở ngày này',
         settings: 'Cài đặt',
         refresh: 'Làm mới',
         search: 'Tìm kiếm',
@@ -685,6 +691,10 @@ export const resources = {
         closeHint: 'để đóng',
         attendees: '{{count}} người tham gia',
         allDaySuffix: 'Cả ngày'
+      },
+      month: {
+        moreCount_one: 'thêm {{count}}',
+        moreCount_other: 'thêm {{count}}'
       },
       list: {
         empty: 'Không có sự kiện nào trong khoảng thời gian này.',

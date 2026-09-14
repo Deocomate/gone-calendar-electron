@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react'
+import { sortOccurrencesWithinDay } from '@shared/occurrence-order'
 import { occurrenceDateKey } from '@shared/all-day'
 import { DateTime } from 'luxon'
 import { useTranslation } from 'react-i18next'
@@ -55,7 +56,8 @@ export const ListView: React.FC<ListViewProps> = ({
     for (const key of sortedKeys) {
       groups.push({
         date: DateTime.fromFormat(key, 'yyyy-MM-dd'),
-        items: map.get(key)!
+        // Same ordering rule as the month grid: all-day first, then by start.
+        items: sortOccurrencesWithinDay(map.get(key)!)
       })
     }
 

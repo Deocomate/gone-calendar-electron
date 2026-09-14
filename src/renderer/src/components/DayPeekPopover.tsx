@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { sortOccurrencesWithinDay } from '@shared/occurrence-order'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
@@ -99,10 +100,9 @@ export const DayPeekPopover: React.FC<DayPeekPopoverProps> = ({
   if (!data || typeof document === 'undefined' || draggedOccurrenceId) return null
 
   const { day, occurrences } = data
-  const allDay = occurrences.filter((o) => o.allDay)
-  const timed = occurrences
-    .filter((o) => !o.allDay)
-    .sort((a, b) => a.startUtc.localeCompare(b.startUtc))
+  const ordered = sortOccurrencesWithinDay(occurrences)
+  const allDay = ordered.filter((o) => o.allDay)
+  const timed = ordered.filter((o) => !o.allDay)
 
   const renderPill = (occ: ExpandedOccurrence): React.ReactNode => (
     <EventPill

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { compareOccurrencesWithinDay } from '@shared/occurrence-order'
 import { occurrenceDateKey } from '@shared/all-day'
 import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
@@ -259,6 +260,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
         addTo(occurrenceDateKey(false, occ.startUtc), occ)
       }
     }
+    // The incoming list is globally ordered by startUtc, which mixes floating
+    // all-day dates with real instants; each day needs its own ordering.
+    for (const [key, list] of map) map.set(key, list.sort(compareOccurrencesWithinDay))
     return map
   }, [occurrences])
 

@@ -22,6 +22,9 @@ export interface Calendar {
   isVisible: boolean
   isReadOnly: boolean
   isDefault: boolean
+  /** True once the user has picked this calendar's colour themselves; provider
+   *  syncs then stop overwriting it. */
+  colorIsCustom?: boolean
   syncToken?: string
   createdAt: string
   updatedAt: string

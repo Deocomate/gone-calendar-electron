@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createSqliteDriver } from '../src/main/db/sqlite-driver'
-import { runMigrations, seedDefaultData } from '../src/main/db/database'
+import { runMigrations, seedDefaultData, MIGRATION_007_SQL } from '../src/main/db/database'
 
 /**
  * Migration 007 ALTERs a table that already exists in every installed copy of
@@ -39,15 +39,23 @@ describe('migration 007 (exception sync columns)', () => {
     expect(after).toEqual([...Array(first.length)].map((_, i) => i + 1))
   })
 
-  it('upgrades a database left at version 6 without losing rows', () => {
+  it('adds its columns to a pre-007 table without disturbing existing rows', () => {
     const db = createSqliteDriver(':memory:')
     runMigrations(db)
     seedDefaultData(db)
 
-    // Rewind to the pre-007 state: drop the new columns by rebuilding the table
-    // the way version 6 defined it, then re-run migrations as an upgrade would.
-    // Every version at or above 7 is cleared - leaving a later one behind would
-    // keep MAX(version) high enough that 007 never re-applies.
+    const calId = db.prepare('SELECT id FROM calendars LIMIT 1').get<{ id: string }>()!.id
+    db.prepare(
+      `INSERT INTO events (id, calendar_id, uid, title, dtstart_utc, dtend_utc, tzid, all_day,
+                           dirty, is_deleted, created_at, updated_at)
+       VALUES ('evt_legacy', ?, 'legacy@test', 'Legacy', '2026-01-01T00:00:00.000Z',
+               '2026-01-01T01:00:00.000Z', 'UTC', 0, 0, 0, '', '')`
+    ).run(calId)
+
+    // Rebuild event_exceptions exactly as version 6 defined it, then apply 007's
+    // own SQL. Rewinding schema_migrations and replaying every later migration
+    // is brittle - ALTER TABLE ADD COLUMN is not idempotent, so each migration
+    // added after this one would break the test.
     db.exec(`
       DROP TABLE event_exceptions;
       CREATE TABLE event_exceptions (
@@ -59,21 +67,13 @@ describe('migration 007 (exception sync columns)', () => {
         dtstart_utc TEXT, dtend_utc TEXT, tzid TEXT, color TEXT,
         created_at TEXT NOT NULL, updated_at TEXT NOT NULL
       );
-      DELETE FROM schema_migrations WHERE version >= 7;
     `)
-    const calId = db.prepare('SELECT id FROM calendars LIMIT 1').get<{ id: string }>()!.id
-    db.prepare(
-      `INSERT INTO events (id, calendar_id, uid, title, dtstart_utc, dtend_utc, tzid, all_day,
-                           dirty, is_deleted, created_at, updated_at)
-       VALUES ('evt_legacy', ?, 'legacy@test', 'Legacy', '2026-01-01T00:00:00.000Z',
-               '2026-01-01T01:00:00.000Z', 'UTC', 0, 0, 0, '', '')`
-    ).run(calId)
     db.prepare(
       `INSERT INTO event_exceptions (id, master_event_id, original_start_utc, is_cancelled, created_at, updated_at)
        VALUES ('x1', 'evt_legacy', '2026-01-01T00:00:00.000Z', 1, '', '')`
     ).run()
 
-    runMigrations(db)
+    db.exec(MIGRATION_007_SQL)
 
     const row = db
       .prepare('SELECT id, dirty, provider_instance_id FROM event_exceptions WHERE id = ?')

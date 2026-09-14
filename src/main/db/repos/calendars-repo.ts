@@ -27,6 +27,7 @@ interface CalendarRow {
   is_visible: number
   is_read_only: number
   is_default: number
+  color_is_custom: number | null
   sync_token: string | null
   created_at: string
   updated_at: string
@@ -41,6 +42,7 @@ function mapRowToCalendar(row: CalendarRow): Calendar {
     isVisible: row.is_visible === 1,
     isReadOnly: row.is_read_only === 1,
     isDefault: row.is_default === 1,
+    colorIsCustom: row.color_is_custom === 1,
     syncToken: row.sync_token || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -102,10 +104,22 @@ export class CalendarsRepo {
     this.db
       .prepare(
         `UPDATE calendars
-         SET name = ?, color = ?, is_visible = ?, is_read_only = ?, is_default = ?, updated_at = ?
+         SET name = ?, color = ?, is_visible = ?, is_read_only = ?, is_default = ?,
+             color_is_custom = ?, updated_at = ?
          WHERE id = ?`
       )
-      .run(name, color, isVisible, isReadOnly, isDefault, now, id)
+      .run(
+        name,
+        color,
+        isVisible,
+        isReadOnly,
+        isDefault,
+        // Picking a colour here makes it the user's; provider syncs stop
+        // overwriting it from then on.
+        params.color !== undefined ? 1 : existing.colorIsCustom ? 1 : 0,
+        now,
+        id
+      )
 
     return this.getCalendarById(id)!
   }

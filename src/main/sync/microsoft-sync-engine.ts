@@ -64,7 +64,11 @@ export class MicrosoftSyncEngine {
       } else {
         this.db
           .prepare(
-            `UPDATE calendars SET name = ?, color = ?, is_read_only = ?, updated_at = ? WHERE id = ?`
+            `UPDATE calendars
+             SET name = ?,
+                 color = CASE WHEN color_is_custom = 1 THEN color ELSE ? END,
+                 is_read_only = ?, updated_at = ?
+             WHERE id = ?`
           )
           .run(name, color, isReadOnly ? 1 : 0, now, item.id)
       }

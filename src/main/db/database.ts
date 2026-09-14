@@ -174,7 +174,7 @@ CREATE INDEX IF NOT EXISTS idx_events_has_conflict ON events (has_conflict) WHER
  * use it; `provider_instance_id` caches the provider's id for the instance so a
  * repeat push does not have to re-resolve it.
  */
-const MIGRATION_007_SQL = `
+export const MIGRATION_007_SQL = `
 ALTER TABLE event_exceptions ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE event_exceptions ADD COLUMN etag TEXT;
 ALTER TABLE event_exceptions ADD COLUMN provider_instance_id TEXT;
@@ -284,6 +284,20 @@ WHERE all_day IS NULL
 `
 
 /**
+ * Every provider's calendar-list sync rewrites name/colour/read-only for all of
+ * its calendars on every poll - 20 seconds apart while the window is focused.
+ * A colour the user picked was therefore reverted almost immediately, and
+ * because the sync rewrites the whole list at once, every other customisation
+ * went with it: changing one calendar appeared to change them all.
+ *
+ * This flag marks a colour as user-owned. The pull leaves those alone and keeps
+ * refreshing everything else, so renames on the provider still come through.
+ */
+const MIGRATION_012_SQL = `
+ALTER TABLE calendars ADD COLUMN color_is_custom INTEGER NOT NULL DEFAULT 0;
+`
+
+/**
  * Execute all schema migrations in order
  */
 export function runMigrations(db: ISqliteDatabase): void {
@@ -382,6 +396,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_011_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       11,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 12) {
+    db.exec(MIGRATION_012_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      12,
       new Date().toISOString()
     )
   }

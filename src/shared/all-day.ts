@@ -101,3 +101,36 @@ export function occurrenceDateKey(allDay: boolean, isoUtc: string): string {
 export function allDayCoversDate(startUtc: string, endUtc: string, dayKey: string): boolean {
   return startUtc.slice(0, 10) <= dayKey && dayKey <= endUtc.slice(0, 10)
 }
+
+/**
+ * Cap on how many days one occurrence may be walked across. A corrupt or absurd
+ * end date should not spin a render loop for years.
+ */
+const MAX_SPAN_DAYS = 366
+
+/**
+ * Every calendar date (`yyyy-MM-dd`) an occurrence appears on.
+ *
+ * A multi-day event belongs to each day it covers, not just the one it starts
+ * on. All-day spans are floating dates walked directly; timed ones are real
+ * instants, so their local dates are used and an event running past midnight
+ * lands on both days.
+ */
+export function occurrenceDateKeys(
+  allDay: boolean,
+  startUtc: string,
+  endUtc: string
+): string[] {
+  const first = occurrenceDateKey(allDay, startUtc)
+  const last = occurrenceDateKey(allDay, endUtc)
+  if (last <= first) return [first]
+
+  const keys: string[] = []
+  let cursor = DateTime.fromISO(first, { zone: 'utc' })
+  const end = DateTime.fromISO(last, { zone: 'utc' })
+  while (cursor <= end && keys.length < MAX_SPAN_DAYS) {
+    keys.push(cursor.toFormat('yyyy-MM-dd'))
+    cursor = cursor.plus({ days: 1 })
+  }
+  return keys
+}

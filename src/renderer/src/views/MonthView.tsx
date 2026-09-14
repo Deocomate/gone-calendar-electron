@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { compareOccurrencesWithinDay } from '@shared/occurrence-order'
-import { occurrenceDateKey } from '@shared/all-day'
+import { occurrenceDateKeys } from '@shared/all-day'
 import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
 import { Layers } from 'lucide-react'
@@ -240,24 +240,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
       map.set(dayKey, list)
     }
     for (const occ of occurrences) {
-      if (occ.allDay) {
-        // All-day end is inclusive - a multi-day event must land in every day it
-        // spans, not just its start day. Walk the stored (floating) dates rather
-        // than local instants: converting an all-day date to local shifts it by
-        // the zone offset. Capped so a malformed event with an absurd end date
-        // can't spin this loop for years and stall rendering.
-        const MAX_SPAN_DAYS = 366
-        const first = DateTime.fromISO(occurrenceDateKey(true, occ.startUtc), { zone: 'utc' })
-        const last = DateTime.fromISO(occurrenceDateKey(true, occ.endUtc), { zone: 'utc' })
-        let cursor = first
-        let daysWalked = 0
-        while (cursor <= last && daysWalked < MAX_SPAN_DAYS) {
-          addTo(cursor.toFormat('yyyy-MM-dd'), occ)
-          cursor = cursor.plus({ days: 1 })
-          daysWalked++
-        }
-      } else {
-        addTo(occurrenceDateKey(false, occ.startUtc), occ)
+      // A multi-day event belongs to every day it covers, not just its first.
+      for (const key of occurrenceDateKeys(occ.allDay, occ.startUtc, occ.endUtc)) {
+        addTo(key, occ)
       }
     }
     // The incoming list is globally ordered by startUtc, which mixes floating

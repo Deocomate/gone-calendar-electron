@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { occurrenceDateKeys } from '@shared/all-day'
 import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
@@ -241,15 +242,15 @@ export const YearView: React.FC<YearViewProps> = ({
   const colorsByDay = useMemo(() => {
     const map = new Map<string, string[]>()
     for (const occ of occurrences) {
-      // All-day occurrences are stored as a bare calendar date; running those
-      // through a UTC->local conversion would shift them a day west of GMT.
-      const key = occ.allDay
-        ? occ.startUtc.slice(0, 10)
-        : DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local').toFormat('yyyy-MM-dd')
-      const list = map.get(key)
       const color = occ.color || DEFAULT_EVENT_COLOR
-      if (!list) map.set(key, [color])
-      else if (list.length < 3 && !list.includes(color)) list.push(color)
+      // A multi-day event is marked on every day it covers, not just its first.
+      // occurrenceDateKeys reads all-day spans as the floating dates they are,
+      // so they are not shifted by a UTC->local conversion.
+      for (const key of occurrenceDateKeys(occ.allDay, occ.startUtc, occ.endUtc)) {
+        const list = map.get(key)
+        if (!list) map.set(key, [color])
+        else if (list.length < 3 && !list.includes(color)) list.push(color)
+      }
     }
     return map
   }, [occurrences])

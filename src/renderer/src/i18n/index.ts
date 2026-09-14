@@ -8,6 +8,7 @@ export const resources = {
       common: {
         cancel: 'Cancel',
         close: 'Close',
+        back: 'Back',
         save: 'Save',
         delete: 'Delete',
         add: 'Add',
@@ -381,6 +382,7 @@ export const resources = {
       common: {
         cancel: 'Hủy',
         close: 'Đóng',
+        back: 'Quay lại',
         save: 'Lưu',
         delete: 'Xóa',
         add: 'Thêm',

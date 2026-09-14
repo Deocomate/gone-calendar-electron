@@ -50,8 +50,10 @@ export const HourGutter: React.FC<HourGutterProps> = ({
               hour === 0 ? 'pt-1' : '-translate-y-2'
             }`}
           >
+            {/* The hour ruler is a primary reading aid, so it sits at full text
+                colour rather than the muted grey used for secondary chrome. */}
             <span
-              className={`font-mono tabular-nums text-muted truncate ${
+              className={`font-medium font-mono tabular-nums text-primary/85 truncate ${
                 dense ? 'text-xs' : 'text-[11px]'
               }`}
             >

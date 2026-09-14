@@ -2,46 +2,32 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight, Menu, Search } from 'lucide-react'
 import type { CalendarViewType } from '@shared/visible-range'
-import type { ThemeMode } from '@shared/theme-mode'
 import ViewSwitcher from './ViewSwitcher'
-import OverflowMenu from './OverflowMenu'
 
 interface AppHeaderProps {
+  onOpenMenu: () => void
   title: string
   currentView: CalendarViewType
-  language: string
-  themeMode: ThemeMode
   showSidebarToggle?: boolean
   onToggleSidebar: () => void
   onPrev: () => void
   onNext: () => void
   onChangeView: (view: CalendarViewType) => void
   onSearch: () => void
-  onOpenSettings: () => void
-  onOpenShortcuts: () => void
-  onToggleLanguage: () => void
-  onSetThemeMode: (mode: ThemeMode) => void
   conflictCount?: number
-  onOpenConflicts?: () => void
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
+  onOpenMenu,
   title,
   currentView,
-  language,
-  themeMode,
   showSidebarToggle = true,
   onToggleSidebar,
   onPrev,
   onNext,
   onChangeView,
   onSearch,
-  onOpenSettings,
-  onOpenShortcuts,
-  onToggleLanguage,
-  onSetThemeMode,
   conflictCount,
-  onOpenConflicts
 }) => {
   const { t } = useTranslation()
 
@@ -92,16 +78,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </button>
 
         <ViewSwitcher currentView={currentView} onChange={onChangeView} />
-        <OverflowMenu
-          language={language}
-          themeMode={themeMode}
-          conflictCount={conflictCount}
-          onOpenSettings={onOpenSettings}
-          onOpenShortcuts={onOpenShortcuts}
-          onOpenConflicts={onOpenConflicts}
-          onToggleLanguage={onToggleLanguage}
-          onSetThemeMode={onSetThemeMode}
-        />
+        <button
+          type="button"
+          onClick={onOpenMenu}
+          className="gc-icon-btn relative"
+          title={t('settings.title')}
+        >
+          <Menu className="h-4 w-4" />
+          {conflictCount ? (
+            <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-today" />
+          ) : null}
+        </button>
       </div>
     </header>
   )

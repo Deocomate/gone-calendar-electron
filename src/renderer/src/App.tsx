@@ -27,7 +27,7 @@ import RecurringScopeDialog from './editor/RecurringScopeDialog'
 import DropActionPopover, { type PendingDropAction } from './dnd/DropActionPopover'
 import AccountManagerModal from './components/AccountManagerModal'
 import SearchPaletteModal from './components/SearchPaletteModal'
-import SettingsDialog, { type SettingsTab } from './components/SettingsDialog'
+import SettingsPanel, { type SettingsSection } from './components/SettingsPanel'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
 import SyncConflictsModal from './components/SyncConflictsModal'
 import AppHeader from './components/shell/AppHeader'
@@ -55,7 +55,7 @@ export const App: React.FC = () => {
   const [appVersion, setAppVersion] = useState<string>('0.1.0')
   const [platform, setPlatform] = useState<string>('win32')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>('general')
+  const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null)
   const [colorPickerCalId, setColorPickerCalId] = useState<string | null>(null)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
   const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState(false)
@@ -748,23 +748,17 @@ export const App: React.FC = () => {
             <AppHeader
               title={currentView === 'week' || currentView === 'year' ? '' : visibleRange.label}
               currentView={currentView}
-              language={i18n.language}
-              themeMode={mode}
               showSidebarToggle={showMiniCalendar}
               onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
               onPrev={handlePrev}
               onNext={handleNext}
               onChangeView={setCurrentView}
               onSearch={() => setIsSearchPaletteOpen(true)}
-              onOpenSettings={() => {
-                setSettingsTab('general')
+              onOpenMenu={() => {
+                setSettingsSection(null)
                 setIsSettingsOpen(true)
               }}
-              onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
-              onToggleLanguage={toggleLanguage}
-              onSetThemeMode={persistMode}
               conflictCount={conflicts.length}
-              onOpenConflicts={() => setIsConflictsModalOpen(true)}
             />
           )
 
@@ -976,10 +970,10 @@ export const App: React.FC = () => {
         onAccountsChanged={() => loadCalendarsAndEvents()}
       />
 
-      <SettingsDialog
+      <SettingsPanel
         isOpen={isSettingsOpen}
-        tab={settingsTab}
-        onTabChange={setSettingsTab}
+        section={settingsSection}
+        onSectionChange={setSettingsSection}
         onClose={() => setIsSettingsOpen(false)}
         language={i18n.language}
         onToggleLanguage={toggleLanguage}
@@ -1013,6 +1007,9 @@ export const App: React.FC = () => {
           setIsSettingsOpen(false)
           setIsAccountModalOpen(true)
         }}
+        onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
+        conflictCount={conflicts.length}
+        onOpenConflicts={() => setIsConflictsModalOpen(true)}
         appVersion={appVersion}
         platform={platform}
       />

@@ -137,7 +137,7 @@ export const DayView: React.FC<DayViewProps> = ({
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-surface select-none relative">
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-hairline px-6 py-3.5 bg-app/40">
+      <div className="flex shrink-0 items-center border-b border-hairline bg-app/40 px-6 py-3.5">
         <div className="flex items-center gap-3.5 min-w-0">
           <span
             className={`flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold shrink-0 ${
@@ -172,7 +172,18 @@ export const DayView: React.FC<DayViewProps> = ({
             )}
           </div>
         </div>
+      </div>
 
+      {/* All-day lane - same grid columns as the hour grid below, so the label
+          lines up with the hour gutter and the events sit under the day column.
+          It previously lived inside the header row, floating beside the date and
+          aligned with nothing. */}
+      <div
+        className={`grid ${gridColsClass} shrink-0 items-start border-b border-hairline bg-app/40`}
+      >
+        <div className="py-2 pr-3 text-right text-[11px] font-medium text-muted select-none">
+          {t('list.allDay')}
+        </div>
         <div
           onDragOver={(e) => {
             prepareDropEvent(e)
@@ -183,31 +194,25 @@ export const DayView: React.FC<DayViewProps> = ({
             const dayStart = anchorDate.startOf('day')
             onSelectSlot?.(dayStart, dayStart, { clientX: e.clientX, allDay: true })
           }}
-          // Wraps instead of scrolling sideways in a 448px strip: the day view
-          // has the whole window, and a hidden all-day event is a missed one.
-          className={`gc-cell flex min-h-[2.25rem] min-w-0 cursor-pointer flex-wrap content-start items-start gap-1 rounded-lg p-1.5 ${
+          className={`gc-cell flex min-h-[2.5rem] min-w-0 cursor-pointer flex-wrap content-start items-start gap-1 p-1.5 ${
             dropTarget?.dateKey === dayKey && dropTarget.hour === undefined ? 'is-drop-target' : ''
           }`}
         >
-          {allDayOccurrences.length === 0 ? (
-            <span className="px-1 py-0.5 text-xs text-muted">{t('list.allDay')}</span>
-          ) : (
-            allDayOccurrences.map((occ) => (
-              <EventPill
-                key={occ.id}
-                draggable
-                isDragging={draggedOccurrenceId === occ.id}
-                title={occ.title}
-                color={occ.color}
-                onDragStart={(e) => onDragStart?.(e, occ)}
-                onDragEnd={onDragEnd}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onSelectOccurrence?.(occ)
-                }}
-              />
-            ))
-          )}
+          {allDayOccurrences.map((occ) => (
+            <EventPill
+              key={occ.id}
+              draggable
+              isDragging={draggedOccurrenceId === occ.id}
+              title={occ.title}
+              color={occ.color}
+              onDragStart={(e) => onDragStart?.(e, occ)}
+              onDragEnd={onDragEnd}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelectOccurrence?.(occ)
+              }}
+            />
+          ))}
         </div>
       </div>
 

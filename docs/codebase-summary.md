@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-31  
 **Version:** 0.1.0  
-**Build status:** All 10 phases complete, 213/213 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
+**Build status:** All 10 phases complete, 256/256 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
 
 ---
 
@@ -78,7 +78,7 @@ gone-calendar/
 │   │       │   ├── KeyboardShortcutsModal.tsx
 │   │       │   ├── SearchPaletteModal.tsx
 │   │       │   └── ErrorBoundary.tsx
-│   │       ├── editor/          # Event editor components
+│   │       ├── editor/          # EventEditorDialog, RecurringScopeDialog, TitleSuggestInput
 │   │       ├── dnd/             # Drag and drop: use-event-dnd.ts, drop-target.ts, DropActionPopover.tsx
 │   │       ├── mini/            # MiniApp.tsx (companion window renderer)
 │   │       ├── hooks/           # use-theme.ts, use-visible-range.ts
@@ -88,6 +88,7 @@ gone-calendar/
 │       ├── event-model.ts       # CalendarAccount, Calendar, CalendarEvent, ExpandedOccurrence, etc.
 │       ├── all-day.ts           # Floating-date vs instant: inclusive/exclusive ends, day keys
 │       ├── occurrence-order.ts  # Within-day ordering (all-day first, then by time)
+│       ├── title-suggestions.ts # Ranking for the event-title autocomplete
 │       ├── expand-occurrences.ts # RRULE + exception expansion
 │       ├── lunar-vietnam.ts     # Vietnamese lunar calendar conversion
 │       ├── timed-event-segments.ts # Splits multi-day timed occurrences per day
@@ -99,7 +100,7 @@ gone-calendar/
 │       ├── mini-calendar-grid.ts # Grid computation utilities
 │       ├── visible-range.ts     # Visible date range helpers
 │       └── ipc-contract.ts      # IPC_CHANNELS constants and GoneAPI interface
-├── tests/                       # Vitest unit tests (213 tests / 36 files)
+├── tests/                       # Vitest unit tests (256 tests / 38 files)
 │   └── stubs/electron.ts        # `electron` module stub for main-process tests
 ├── docs/
 │   ├── urd.md                   # User Requirements Document
@@ -207,6 +208,8 @@ tests/
 ├── recurring-scope.test.ts        # this / this-and-future / all scope edits
 ├── occurrence-all-day-override.test.ts # Per-occurrence all-day detach (drag onto the hour grid)
 ├── occurrence-order.test.ts       # Within-day ordering: all-day first, then by time
+├── title-suggestions.test.ts      # Title autocomplete ranking: frequency, recency, time and day fit
+├── title-samples-repo.test.ts     # Which rows reach that ranking
 ├── copy-instance.test.ts          # Recurring single-instance copy
 ├── event-copy-uid.test.ts         # UID handling on event copy
 ├── all-day-end.test.ts            # Provider exclusive end ↔ app inclusive end
@@ -240,7 +243,7 @@ tests/
 └── ipc-contract.test.ts           # IPC channel and API surface contract
 ```
 
-**Total: 213 tests across 36 files. All passing.**
+**Total: 256 tests across 38 files. All passing.**
 
 Main-process tests run in plain Node; the `electron` module is aliased to
 `tests/stubs/electron.ts` in `vitest.config.ts` so they do not need the Electron

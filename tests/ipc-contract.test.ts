@@ -168,6 +168,7 @@ describe('IPC Channels and Contracts', () => {
         materializeLunar: async () => ({ count: 0 }),
         detachLunar: async () => ({ count: 0 }),
         search: async () => [],
+        suggestTitles: async () => [],
         shareIcs: async () => ({ success: true }),
         listConflicts: async () => [],
         resolveConflict: async () => true

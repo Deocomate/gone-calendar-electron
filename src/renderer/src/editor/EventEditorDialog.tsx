@@ -11,6 +11,7 @@ import type {
   UpdateEventInput,
   LunarRecurrenceSpec
 } from '@shared/event-model'
+import type { TitleSuggestion } from '@shared/title-suggestions'
 import { convertSolarToLunar, resolveLunarOccurrence } from '@shared/lunar-vietnam'
 import { DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
 import {
@@ -25,6 +26,7 @@ import {
   toast,
   showFriendlyError
 } from '../components/ui'
+import { TitleSuggestInput } from './TitleSuggestInput'
 
 export interface EventEditorInitialData {
   occurrence?: ExpandedOccurrence
@@ -284,6 +286,19 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, isDirty, onClose])
 
+  /**
+   * The slot the title suggestions are being asked about, in the same shape the
+   * database stores: an all-day start is a floating date pinned to midnight UTC,
+   * a timed one is a real instant. Getting this wrong would rank against the
+   * wrong hour of the day west of GMT.
+   */
+  const suggestionTargetStartUtc = useMemo(() => {
+    if (!startDateStr) return ''
+    if (allDay || recurrencePreset === 'lunar-yearly') return `${startDateStr}T00:00:00.000Z`
+    const dt = DateTime.fromISO(`${startDateStr}T${startTimeStr}:00`, { zone: 'local' })
+    return dt.isValid ? dt.toUTC().toISO()! : ''
+  }, [startDateStr, startTimeStr, allDay, recurrencePreset])
+
   const calendarOptions = useMemo(
     () =>
       (calendars || []).map((cal) => ({
@@ -366,6 +381,20 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
   const handleFieldChange = (setter: React.Dispatch<React.SetStateAction<any>>, val: any) => {
     setter(val)
+    setIsDirty(true)
+  }
+
+  /**
+   * Accepting a suggestion also moves the event onto the calendar that title
+   * normally lives on - the whole point of ranking by past events rather than
+   * just completing the text. A read-only calendar never reaches the list, so
+   * the switch cannot land somewhere nothing can be created.
+   */
+  const handlePickSuggestion = (suggestion: TitleSuggestion) => {
+    setTitle(suggestion.title)
+    if ((calendars || []).some((c) => c.id === suggestion.calendarId && !c.isReadOnly)) {
+      setCalendarId(suggestion.calendarId)
+    }
     setIsDirty(true)
   }
 
@@ -639,13 +668,16 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
           className="px-6 py-3.5 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-1 text-xs space-y-0"
         >
           <div className="pb-2 mb-1 border-b border-hairline/60">
-            <input
-              type="text"
+            <TitleSuggestInput
               value={title}
-              onChange={(e) => handleFieldChange(setTitle, e.target.value)}
+              onChange={(val) => handleFieldChange(setTitle, val)}
+              onPick={handlePickSuggestion}
+              targetStartUtc={suggestionTargetStartUtc}
+              targetAllDay={allDay || isLunarYearly}
+              calendars={calendars || []}
               placeholder={t('editor.titlePlaceholder')}
               autoFocus
-              className="w-full bg-transparent text-[20px] font-semibold text-primary placeholder:text-muted/60 border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none tracking-tight"
+              enabled={!isEditing}
             />
           </div>
 

@@ -15,6 +15,7 @@ import type {
   DetachLunarInput,
   SyncConflict
 } from '@shared/event-model'
+import type { TitleSample } from '@shared/title-suggestions'
 import { resolveLunarOccurrence } from '@shared/lunar-vietnam'
 import { expandOccurrences } from '@shared/expand-occurrences'
 import { DateTime } from 'luxon'
@@ -963,6 +964,51 @@ export class EventsRepo {
       event.attendees = this.getAttendeesForEvent(r.id)
       return event
     })
+  }
+
+  /**
+   * Recent events flattened for the title autocomplete.
+   *
+   * Read-only calendars are left out: a suggestion carries the calendar to
+   * create on, and nothing can be created on a holiday subscription.
+   *
+   * Recurring masters deliberately skip the date window. A weekly standup that
+   * started two years ago is the single most relevant thing this list can
+   * offer, and its `dtstart_utc` sits outside every window worth using -
+   * filtering on it would hide exactly the habits the feature exists to learn.
+   */
+  listTitleSamples(windowStartUtc: string, windowEndUtc: string, limit = 1500): TitleSample[] {
+    const rows = this.db
+      .prepare(
+        `SELECT e.title, e.calendar_id, e.dtstart_utc, e.dtend_utc, e.all_day, e.location, e.rrule
+         FROM events e
+         JOIN calendars c ON c.id = e.calendar_id
+         WHERE e.is_deleted = 0
+           AND c.is_read_only = 0
+           AND TRIM(e.title) <> ''
+           AND (e.rrule IS NOT NULL OR (e.dtstart_utc >= ? AND e.dtstart_utc <= ?))
+         ORDER BY e.dtstart_utc DESC
+         LIMIT ?`
+      )
+      .all<{
+        title: string
+        calendar_id: string
+        dtstart_utc: string
+        dtend_utc: string
+        all_day: number
+        location: string | null
+        rrule: string | null
+      }>(windowStartUtc, windowEndUtc, limit)
+
+    return rows.map((r) => ({
+      title: r.title,
+      calendarId: r.calendar_id,
+      startUtc: r.dtstart_utc,
+      endUtc: r.dtend_utc,
+      allDay: r.all_day === 1,
+      location: r.location,
+      rrule: r.rrule
+    }))
   }
 
   queryEventsByCalendar(calendarId: string): CalendarEvent[] {

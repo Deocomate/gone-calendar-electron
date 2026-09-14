@@ -20,6 +20,7 @@ import type {
   SyncResult,
   SyncConflict
 } from './event-model'
+import type { SuggestTitlesOptions, TitleSuggestion } from './title-suggestions'
 import type { AppSettings } from './settings-contract'
 
 export const IPC_CHANNELS = {
@@ -70,6 +71,7 @@ export const IPC_CHANNELS = {
     MATERIALIZE_LUNAR: 'gone:event:materialize-lunar',
     DETACH_LUNAR: 'gone:event:detach-lunar',
     SEARCH: 'gone:event:search',
+    SUGGEST_TITLES: 'gone:event:suggest-titles',
     SHARE_ICS: 'gone:event:share-ics',
     LIST_CONFLICTS: 'gone:event:list-conflicts',
     RESOLVE_CONFLICT: 'gone:event:resolve-conflict'
@@ -182,6 +184,9 @@ export interface GoneAPI {
     materializeLunar: (input: MaterializeLunarInput) => Promise<{ count: number }>
     detachLunar: (input: DetachLunarInput) => Promise<{ count: number }>
     search: (query: string, limit?: number) => Promise<CalendarEvent[]>
+    /** Ranked title autocomplete for the event editor, with the calendar each
+     *  title normally lives on. */
+    suggestTitles: (options: SuggestTitlesOptions) => Promise<TitleSuggestion[]>
     shareIcs: (eventId: string) => Promise<{ success: boolean; filePath?: string; icsContent?: string; message?: string }>
     listConflicts: () => Promise<SyncConflict[]>
     resolveConflict: (eventId: string, resolution: 'keepMine' | 'keepTheirs') => Promise<boolean>

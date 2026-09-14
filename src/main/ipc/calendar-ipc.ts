@@ -13,6 +13,9 @@ import type {
   MaterializeLunarInput,
   DetachLunarInput
 } from '@shared/event-model'
+import type { SuggestTitlesOptions, TitleSuggestion } from '@shared/title-suggestions'
+import { rankTitleSuggestions } from '@shared/title-suggestions'
+import { DateTime } from 'luxon'
 import { CalendarsRepo } from '../db/repos/calendars-repo'
 import { EventsRepo, ReadOnlyCalendarError } from '../db/repos/events-repo'
 import { getDatabase } from '../db/database'
@@ -49,6 +52,7 @@ export function registerCalendarIpcHandlers(): void {
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.MATERIALIZE_LUNAR)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.DETACH_LUNAR)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.SEARCH)
+  ipcMain.removeHandler(IPC_CHANNELS.EVENT.SUGGEST_TITLES)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.SHARE_ICS)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.LIST_CONFLICTS)
   ipcMain.removeHandler(IPC_CHANNELS.EVENT.RESOLVE_CONFLICT)
@@ -226,6 +230,21 @@ export function registerCalendarIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.EVENT.SEARCH, (_event, query: string, limit?: number) => {
     return eventsRepo.searchEvents(query, limit)
   })
+
+  ipcMain.handle(
+    IPC_CHANNELS.EVENT.SUGGEST_TITLES,
+    (_event, options: SuggestTitlesOptions): TitleSuggestion[] => {
+      // The window is wide on the past side so a yearly event still registers,
+      // and short on the future side so a calendar full of scheduled work does
+      // not crowd out what was actually done recently.
+      const now = DateTime.utc()
+      const samples = eventsRepo.listTitleSamples(
+        now.minus({ days: 365 }).toISO()!,
+        now.plus({ days: 90 }).toISO()!
+      )
+      return rankTitleSuggestions(samples, { ...options, now })
+    }
+  )
 
   ipcMain.handle(IPC_CHANNELS.EVENT.SHARE_ICS, async (_event, eventId: string) => {
     try {

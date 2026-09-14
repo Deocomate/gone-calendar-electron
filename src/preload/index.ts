@@ -57,6 +57,7 @@ const goneApi: GoneAPI = {
     detachLunar: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.DETACH_LUNAR, input),
     search: (query: string, limit?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.EVENT.SEARCH, query, limit),
+    suggestTitles: (options) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.SUGGEST_TITLES, options),
     shareIcs: (eventId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.EVENT.SHARE_ICS, eventId),
     listConflicts: () => ipcRenderer.invoke(IPC_CHANNELS.EVENT.LIST_CONFLICTS),

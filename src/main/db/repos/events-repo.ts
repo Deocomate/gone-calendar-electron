@@ -499,6 +499,63 @@ export class EventsRepo {
       .run(masterEventId)
   }
 
+  /** SQLite's default parameter ceiling is 999; stay well inside it. */
+  private static readonly ID_CHUNK = 500
+
+  private static chunk<T>(items: T[], size = EventsRepo.ID_CHUNK): T[][] {
+    const out: T[][] = []
+    for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+    return out
+  }
+
+  /** All exceptions for the given masters, grouped by master id. */
+  private getExceptionsForEvents(masterIds: string[]): Map<string, EventException[]> {
+    const byMaster = new Map<string, EventException[]>()
+    if (masterIds.length === 0) return byMaster
+
+    for (const ids of EventsRepo.chunk(masterIds)) {
+      const placeholders = ids.map(() => '?').join(',')
+      const rows = this.db
+        .prepare(
+          `SELECT * FROM event_exceptions
+           WHERE master_event_id IN (${placeholders})
+           ORDER BY original_start_utc ASC`
+        )
+        .all<ExceptionRow>(...ids)
+      for (const row of rows) {
+        const list = byMaster.get(row.master_event_id)
+        if (list) list.push(mapRowToException(row))
+        else byMaster.set(row.master_event_id, [mapRowToException(row)])
+      }
+    }
+    return byMaster
+  }
+
+  /** Gregorian years already materialized, grouped by lunar master id. */
+  private getMaterializedYearsFor(masterIds: string[]): Map<string, Set<number>> {
+    const byMaster = new Map<string, Set<number>>()
+    if (masterIds.length === 0) return byMaster
+
+    for (const ids of EventsRepo.chunk(masterIds)) {
+      const placeholders = ids.map(() => '?').join(',')
+      const rows = this.db
+        .prepare(
+          `SELECT lunar_source_event_id AS master_id, dtstart_utc
+           FROM events
+           WHERE lunar_source_event_id IN (${placeholders}) AND is_deleted = 0`
+        )
+        .all<{ master_id: string; dtstart_utc: string }>(...ids)
+      for (const row of rows) {
+        const year = Number(row.dtstart_utc.slice(0, 4))
+        if (!Number.isFinite(year)) continue
+        const set = byMaster.get(row.master_id)
+        if (set) set.add(year)
+        else byMaster.set(row.master_id, new Set([year]))
+      }
+    }
+    return byMaster
+  }
+
   queryEventsByRange(
     calendarIds: string[],
     startUtc: string,
@@ -534,19 +591,30 @@ export class EventsRepo {
 
     const occurrences: ExpandedOccurrence[] = []
 
+    // Exceptions and materialized-lunar years used to be fetched per master
+    // inside the loop below. With a few hundred recurring series that is a few
+    // hundred round trips for a view that may show a dozen occurrences - a plain
+    // week query measured 201 prepared statements. Both are now loaded in one
+    // query each and grouped in memory.
+    const seriesIds = rows
+      .filter((row) => row.rrule !== null || row.lunar_rule !== null)
+      .map((row) => row.id)
+    const exceptionsByMaster = this.getExceptionsForEvents(seriesIds)
+    const lunarIds = rows.filter((row) => row.lunar_rule !== null).map((row) => row.id)
+    const coveredYearsByMaster = this.getMaterializedYearsFor(lunarIds)
+    const noExceptions: EventException[] = []
+
     for (const row of rows) {
       const event = mapRowToEvent(row)
+      const exceptions = exceptionsByMaster.get(event.id) ?? noExceptions
       if (event.lunarRule) {
-        const exceptions = this.getExceptionsForEvent(event.id)
-        const coveredYears = this.getMaterializedYears(event.id)
+        const coveredYears = coveredYearsByMaster.get(event.id) ?? new Set<number>()
         occurrences.push(
           ...expandOccurrences(event, exceptions, startUtc, endUtc, coveredYears)
         )
         continue
       }
-      const exceptions = event.rrule ? this.getExceptionsForEvent(event.id) : []
-      const expanded = expandOccurrences(event, exceptions, startUtc, endUtc)
-      occurrences.push(...expanded)
+      occurrences.push(...expandOccurrences(event, exceptions, startUtc, endUtc))
     }
 
     // Sort chronologically by startUtc

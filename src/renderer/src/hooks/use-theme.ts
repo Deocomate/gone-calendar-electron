@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ThemeConfig } from '@shared/theme-mode'
 import {
+  applyCustomBackground,
   applyDocumentTheme,
   shouldUseDarkClass,
   type ThemeMode
@@ -29,6 +30,12 @@ export function useTheme() {
   useEffect(() => {
     applyDocumentTheme(isDark)
   }, [isDark])
+
+  // Chrome goes translucent only while a background image is set.
+  useEffect(() => {
+    applyCustomBackground(Boolean(themeConfig.customBgUrl))
+    return () => applyCustomBackground(false)
+  }, [themeConfig.customBgUrl])
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')

@@ -18,7 +18,6 @@ interface AppHeaderProps {
   onChangeView: (view: CalendarViewType) => void
   onSearch: () => void
   onOpenSettings: () => void
-  onOpenTheme: () => void
   onOpenShortcuts: () => void
   onToggleLanguage: () => void
   onSetThemeMode: (mode: ThemeMode) => void
@@ -38,7 +37,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onChangeView,
   onSearch,
   onOpenSettings,
-  onOpenTheme,
   onOpenShortcuts,
   onToggleLanguage,
   onSetThemeMode,
@@ -99,7 +97,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           themeMode={themeMode}
           conflictCount={conflictCount}
           onOpenSettings={onOpenSettings}
-          onOpenTheme={onOpenTheme}
           onOpenShortcuts={onOpenShortcuts}
           onOpenConflicts={onOpenConflicts}
           onToggleLanguage={onToggleLanguage}

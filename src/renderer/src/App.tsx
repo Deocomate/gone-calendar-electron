@@ -28,7 +28,7 @@ import RecurringScopeDialog from './editor/RecurringScopeDialog'
 import DropActionPopover, { type PendingDropAction } from './dnd/DropActionPopover'
 import AccountManagerModal from './components/AccountManagerModal'
 import SearchPaletteModal from './components/SearchPaletteModal'
-import ThemeSettingsModal from './components/ThemeSettingsModal'
+import AppearanceSettings from './components/AppearanceSettings'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
 import SyncConflictsModal from './components/SyncConflictsModal'
 import HolidayCalendarToggle from './components/HolidayCalendarToggle'
@@ -51,18 +51,18 @@ const TIMEZONE_NAMES: string[] = (() => {
 
 export const App: React.FC = () => {
   const { t, i18n } = useTranslation()
-  const { mode, isDark, themeConfig, setThemeConfig, persistMode, loadFromSettings } = useTheme()
+  const { mode, themeConfig, setThemeConfig, persistMode, loadFromSettings } = useTheme()
   const [currentView, setCurrentView] = useState<CalendarViewType>('week')
   const [anchorDate, setAnchorDate] = useState<DateTime>(() => DateTime.local())
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('0.1.0')
   const [platform, setPlatform] = useState<string>('win32')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<'general' | 'calendars'>('general')
+  const [settingsTab, setSettingsTab] =
+    useState<'general' | 'appearance' | 'view' | 'calendars'>('general')
   const [colorPickerCalId, setColorPickerCalId] = useState<string | null>(null)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
   const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState(false)
-  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false)
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false)
   const [isConflictsModalOpen, setIsConflictsModalOpen] = useState(false)
   const [conflicts, setConflicts] = useState<SyncConflict[]>([])
@@ -738,8 +738,11 @@ export const App: React.FC = () => {
             }}
           />
           <div
-            className="pointer-events-none fixed inset-0 z-0 bg-app"
-            style={{ opacity: themeConfig.bgOverlayOpacity }}
+            className="pointer-events-none fixed inset-0 z-0"
+            style={{
+              background: 'var(--gc-overlay-color)',
+              opacity: themeConfig.bgOverlayOpacity
+            }}
           />
         </>
       )}
@@ -761,7 +764,6 @@ export const App: React.FC = () => {
                 setSettingsTab('general')
                 setIsSettingsOpen(true)
               }}
-              onOpenTheme={() => setIsThemeModalOpen(true)}
               onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
               onToggleLanguage={toggleLanguage}
               onSetThemeMode={persistMode}
@@ -946,12 +948,6 @@ export const App: React.FC = () => {
         onResolve={handleResolveConflict}
       />
 
-      <ThemeSettingsModal
-        isOpen={isThemeModalOpen}
-        onClose={() => setIsThemeModalOpen(false)}
-        onThemeChanged={(theme) => setThemeConfig(theme)}
-      />
-
       <EventEditorDialog
         isOpen={isEditorOpen}
         calendars={calendars}
@@ -1001,7 +997,7 @@ export const App: React.FC = () => {
             </h3>
 
             <div className="mb-4 flex gap-1 border-b border-hairline">
-              {(['general', 'calendars'] as const).map((tab) => (
+              {(['general', 'appearance', 'view', 'calendars'] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -1012,7 +1008,7 @@ export const App: React.FC = () => {
                       : 'border-transparent text-muted hover:text-primary'
                   }`}
                 >
-                  {tab === 'general' ? t('settings.tabGeneral') : t('settings.tabCalendars')}
+                  {t(`settings.tab${tab[0].toUpperCase()}${tab.slice(1)}`)}
                 </button>
               ))}
             </div>
@@ -1024,12 +1020,6 @@ export const App: React.FC = () => {
                   <button type="button" className="gc-btn" onClick={toggleLanguage}>
                     {i18n.language === 'vi' ? 'Tiếng Việt' : 'English'}
                   </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.theme')}</span>
-                  <span className="text-xs text-muted">
-                    {isDark ? t('settings.themeDark') : t('settings.themeLight')}
-                  </span>
                 </div>
                 <div className="flex items-center justify-between border-b border-hairline py-2">
                   <span className="text-sm">{t('settings.lunar')}</span>
@@ -1052,16 +1042,6 @@ export const App: React.FC = () => {
                   </button>
                 </div>
                 <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.autoHideHeader')}</span>
-                  <button
-                    type="button"
-                    className={autoHideHeader ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleAutoHideHeader(!autoHideHeader)}
-                  >
-                    {autoHideHeader ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
                   <span className="text-sm">{t('settings.timeFormat')}</span>
                   <div className="flex gap-1">
                     {(['24h', '12h'] as const).map((opt) => (
@@ -1076,6 +1056,35 @@ export const App: React.FC = () => {
                     ))}
                   </div>
                 </div>
+                <div className="flex items-center justify-between border-b border-hairline py-2">
+                  <span className="text-sm">{t('settings.showMiniCalendar')}</span>
+                  <button
+                    type="button"
+                    className={showMiniCalendar ? 'gc-btn-primary' : 'gc-btn'}
+                    onClick={() => toggleMiniCalendar(!showMiniCalendar)}
+                  >
+                    {showMiniCalendar ? t('common.on') : t('common.off')}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm">{t('settings.version')}</span>
+                  <span className="font-mono text-xs text-muted">
+                    v{appVersion} ({platform})
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {settingsTab === 'appearance' && (
+              <AppearanceSettings
+                mode={mode}
+                onSetMode={persistMode}
+                onThemeChanged={(theme) => setThemeConfig(theme)}
+              />
+            )}
+
+            {settingsTab === 'view' && (
+              <div className="space-y-1">
                 <div className="flex items-center justify-between border-b border-hairline py-2">
                   <span className="text-sm">{t('settings.dayStartHour')}</span>
                   <NumberInput
@@ -1116,34 +1125,15 @@ export const App: React.FC = () => {
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.showMiniCalendar')}</span>
-                  <button
-                    type="button"
-                    className={showMiniCalendar ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleMiniCalendar(!showMiniCalendar)}
-                  >
-                    {showMiniCalendar ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.advancedAppearance')}</span>
-                  <button
-                    type="button"
-                    className="gc-btn"
-                    onClick={() => {
-                      setIsSettingsOpen(false)
-                      setIsThemeModalOpen(true)
-                    }}
-                  >
-                    {t('actions.appearance')}
-                  </button>
-                </div>
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm">{t('settings.version')}</span>
-                  <span className="font-mono text-xs text-muted">
-                    v{appVersion} ({platform})
-                  </span>
+                  <span className="text-sm">{t('settings.autoHideHeader')}</span>
+                  <button
+                    type="button"
+                    className={autoHideHeader ? 'gc-btn-primary' : 'gc-btn'}
+                    onClick={() => toggleAutoHideHeader(!autoHideHeader)}
+                  >
+                    {autoHideHeader ? t('common.on') : t('common.off')}
+                  </button>
                 </div>
               </div>
             )}

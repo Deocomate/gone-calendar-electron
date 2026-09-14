@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import {
   MoreHorizontal,
   Settings,
-  Palette,
   Globe,
   Keyboard,
   Sun,
@@ -18,7 +17,6 @@ interface OverflowMenuProps {
   themeMode: ThemeMode
   conflictCount?: number
   onOpenSettings: () => void
-  onOpenTheme: () => void
   onOpenShortcuts: () => void
   onOpenConflicts?: () => void
   onToggleLanguage: () => void
@@ -30,7 +28,6 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
   themeMode,
   conflictCount = 0,
   onOpenSettings,
-  onOpenTheme,
   onOpenShortcuts,
   onOpenConflicts,
   onToggleLanguage,
@@ -83,18 +80,6 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
               <div className="my-1 border-t border-hairline" />
             </>
           )}
-          <button
-            type="button"
-            className="gc-menu-item"
-            onClick={() => {
-              onOpenShortcuts()
-              close()
-            }}
-          >
-            <Keyboard className="h-4 w-4 text-muted" />
-            <span>{t('actions.keyboard')}</span>
-          </button>
-          <div className="my-1 border-t border-hairline" />
           <div className="flex items-center gap-1 px-3 py-1.5">
             <span className="mr-auto text-xs text-muted">{t('settings.theme')}</span>
             {(
@@ -119,17 +104,6 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
             type="button"
             className="gc-menu-item"
             onClick={() => {
-              onOpenTheme()
-              close()
-            }}
-          >
-            <Palette className="h-4 w-4 text-muted" />
-            <span>{t('actions.appearance')}</span>
-          </button>
-          <button
-            type="button"
-            className="gc-menu-item"
-            onClick={() => {
               onToggleLanguage()
               close()
             }}
@@ -139,6 +113,7 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
               {t('settings.language')} ({language.toUpperCase()})
             </span>
           </button>
+          <div className="my-1 border-t border-hairline" />
           <button
             type="button"
             className="gc-menu-item"
@@ -149,6 +124,17 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
           >
             <Settings className="h-4 w-4 text-muted" />
             <span>{t('actions.settings')}</span>
+          </button>
+          <button
+            type="button"
+            className="gc-menu-item"
+            onClick={() => {
+              onOpenShortcuts()
+              close()
+            }}
+          >
+            <Keyboard className="h-4 w-4 text-muted" />
+            <span>{t('actions.keyboard')}</span>
           </button>
         </div>
       )}

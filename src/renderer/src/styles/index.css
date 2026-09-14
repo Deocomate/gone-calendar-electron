@@ -26,6 +26,10 @@
   --color-today-mark: #eb5757;
   --color-accent-mark: #2383e2;
   --color-hover-fill: #efefee;
+  /* Opaque canvas colour used by the custom-background overlay. Kept separate
+     from --color-bg-app because that token goes translucent when a background
+     image is active, which would make the overlay itself see-through. */
+  --gc-overlay-color: #f7f6f3;
   --color-event-green: #52b788;
   --color-event-blue: #529cca;
   --color-event-orange: #ea9a5f;
@@ -50,9 +54,29 @@
   --color-today-mark: #f0616d;  /* red, slightly softened for dark ground */
   --color-accent-mark: #5865f2; /* blurple: focus, drop targets, primary button */
   --color-hover-fill: #35373d;
+  --gc-overlay-color: #2b2d31;
   /* Form & chrome radius tokens */
   --radius-control: 3px;
   --radius-dialog: 4px;
+}
+
+/* A custom background image is painted behind everything, but the app chrome is
+   normally opaque, so the image was completely covered and setting one appeared
+   to do nothing. While `gc-custom-bg` is on <html>, the surface tokens go
+   translucent so the image reads through. `.dark.gc-custom-bg` outranks `.dark`,
+   so each theme keeps its own tint. */
+.gc-custom-bg {
+  --color-bg-app: transparent;
+  --color-bg-surface: color-mix(in srgb, #ffffff 74%, transparent);
+  --color-bg-sidebar: color-mix(in srgb, #fbfbfa 70%, transparent);
+  --color-hover-fill: color-mix(in srgb, #efefee 80%, transparent);
+}
+
+.dark.gc-custom-bg {
+  --color-bg-app: transparent;
+  --color-bg-surface: color-mix(in srgb, #313338 74%, transparent);
+  --color-bg-sidebar: color-mix(in srgb, #232428 70%, transparent);
+  --color-hover-fill: color-mix(in srgb, #35373d 80%, transparent);
 }
 
 @layer base {

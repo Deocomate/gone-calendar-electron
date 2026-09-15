@@ -589,11 +589,39 @@ export const App: React.FC = () => {
   const handleDeleteEvent = async (
     eventId: string,
     occurrenceStartUtc?: string,
-    isRecurring?: boolean
+    isRecurring?: boolean,
+    /** Middle-click asks for no prompt: the gesture is already the decision. */
+    options?: { confirm?: boolean; title?: string }
   ) => {
     if (!window.gone?.events) return
 
+    const shouldPrompt = options?.confirm !== false
+    const done = async () => {
+      setIsEditorOpen(false)
+      await loadCalendarsAndEvents()
+      // With no confirmation this toast is the only feedback the gesture gives,
+      // so it names what went.
+      toast.success(t('toast.eventDeleted'), { description: options?.title })
+    }
+
     if (isRecurring && occurrenceStartUtc) {
+      if (!shouldPrompt) {
+        // Middle-clicking picks out one occurrence, so that is what it removes.
+        // The scope prompt asks a question the gesture has already answered, and
+        // 'this' is both the literal reading and the least destructive one.
+        try {
+          await window.gone.events.deleteScope({
+            masterEventId: eventId,
+            originalStartUtc: occurrenceStartUtc,
+            scope: 'this'
+          })
+          await done()
+        } catch (err: any) {
+          showFriendlyError(err, t('toast.deleteFailed'))
+        }
+        return
+      }
+
       setIsEditorOpen(false)
       setPendingRecurringScope({
         action: 'delete',
@@ -601,15 +629,16 @@ export const App: React.FC = () => {
         eventId,
         occurrenceStartUtc
       })
-    } else if (confirm(t('toast.confirmDelete'))) {
-      try {
-        await window.gone.events.delete(eventId)
-        setIsEditorOpen(false)
-        await loadCalendarsAndEvents()
-        toast.success(t('toast.eventDeleted'))
-      } catch (err: any) {
-        showFriendlyError(err, t('toast.deleteFailed'))
-      }
+      return
+    }
+
+    if (shouldPrompt && !confirm(t('toast.confirmDelete'))) return
+
+    try {
+      await window.gone.events.delete(eventId)
+      await done()
+    } catch (err: any) {
+      showFriendlyError(err, t('toast.deleteFailed'))
     }
   }
 
@@ -658,7 +687,10 @@ export const App: React.FC = () => {
         toast.error(t('toast.readOnlyTitle'), { description: t('toast.readOnlyDelete') })
         return
       }
-      void handleDeleteEvent(occ.eventId, occ.originalStartUtc || occ.startUtc, occ.isRecurring)
+      void handleDeleteEvent(occ.eventId, occ.originalStartUtc || occ.startUtc, occ.isRecurring, {
+        confirm: false,
+        title: occ.title
+      })
     },
     [calendars, wasJustDragging] // eslint-disable-line react-hooks/exhaustive-deps
   )

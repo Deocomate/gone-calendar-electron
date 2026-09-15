@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-31  
 **Version:** 0.1.0  
-**Build status:** All 10 phases complete, 333/333 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
+**Build status:** All 10 phases complete, 336/336 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
 
 ---
 
@@ -100,7 +100,7 @@ gone-calendar/
 │       ├── mini-calendar-grid.ts # Grid computation utilities
 │       ├── visible-range.ts     # Visible date range helpers
 │       └── ipc-contract.ts      # IPC_CHANNELS constants and GoneAPI interface
-├── tests/                       # Vitest unit tests (333 tests / 41 files)
+├── tests/                       # Vitest unit tests (336 tests / 41 files)
 │   └── stubs/electron.ts        # `electron` module stub for main-process tests
 ├── docs/
 │   ├── urd.md                   # User Requirements Document
@@ -179,9 +179,12 @@ it timed at the cursor for an hour, a plain day cell keeps its time and changes
 the date, and anything else shifts by the drag delta with its span intact. The
 start is always snapped onto the grid afterwards, because the delta is measured
 from the dragged slice and would otherwise carry the event's own odd minutes
-through. Alt-drag copies, and a copy keeps only the title, calendar and length.
-On drop via the popover: `DropActionPopover` renders Move / Copy (full series) /
-Copy (this instance only) / Cancel.
+through. A timed occurrence that stays timed is the only ambiguous drop, so it is the only
+one that stops to ask: `DropActionPopover` offers Move / Copy (and, for a series,
+Copy this one / Copy whole series). Crossing the lanes is a conversion the gesture
+already performed, and an all-day event landing on another day is an unambiguous
+move, so both go straight through. Alt-drag copies outright. Every copy except
+"whole series" is bare - title, calendar and length only.
 
 Edge resize (`use-event-resize.ts`) is **vertical only** - north and south change
 the time on the same snap grid. East/west used to stretch an event across whole
@@ -263,7 +266,7 @@ tests/
 └── ipc-contract.test.ts           # IPC channel and API surface contract
 ```
 
-**Total: 333 tests across 41 files. All passing.**
+**Total: 336 tests across 41 files. All passing.**
 
 Main-process tests run in plain Node; the `electron` module is aliased to
 `tests/stubs/electron.ts` in `vitest.config.ts` so they do not need the Electron

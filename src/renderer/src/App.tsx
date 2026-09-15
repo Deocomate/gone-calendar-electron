@@ -809,12 +809,21 @@ export const App: React.FC = () => {
   const handleDropCopy = async (drop: PendingDropAction, copyInstanceOnly?: boolean) => {
     if (!window.gone?.events) return
     try {
+      // "Copy whole series" is asking for a duplicate, so it keeps everything.
+      // Every other copy is a new event that shares a name: no recurrence, no
+      // multi-day span, and none of the original's notes, location or link.
+      const bare = copyInstanceOnly === true || !drop.occurrence.isRecurring
+      const range = bare
+        ? singleDayRange(drop.targetStart, drop.targetEnd, dragSnapMinutes)
+        : { start: drop.targetStart, end: drop.targetEnd }
+
       await window.gone.events.copy({
         sourceEventId: drop.occurrence.eventId,
-        dtStartUtc: drop.targetStart.toUTC().toISO()!,
-        dtEndUtc: drop.targetEnd.toUTC().toISO()!,
+        dtStartUtc: range.start.toUTC().toISO()!,
+        dtEndUtc: range.end.toUTC().toISO()!,
         targetCalendarId: drop.targetCalendarId,
-        copyInstanceOnly
+        copyInstanceOnly: copyInstanceOnly ?? bare,
+        bare
       })
       setPendingDrop(null)
       await loadCalendarsAndEvents()

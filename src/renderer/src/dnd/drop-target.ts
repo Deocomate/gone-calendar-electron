@@ -266,3 +266,20 @@ export function singleDayRange(
   const minutes = Math.max(snapStepMinutes, Math.floor(remaining / snapStepMinutes) * snapStepMinutes)
   return { start, end: start.plus({ minutes }) }
 }
+
+/**
+ * Should this drop stop and ask whether to move or copy?
+ *
+ * Only a timed occurrence that stays timed is genuinely ambiguous. Everything
+ * else is a decision the gesture already made: dragging across the lanes is a
+ * conversion between all-day and timed, and an all-day event landing on another
+ * day is an unambiguous move. Prompting for those is noise.
+ */
+export function dropNeedsMoveOrCopyChoice(args: {
+  sourceAllDay: boolean
+  /** What the drop makes it: true all-day, false timed, undefined unchanged. */
+  targetAllDay?: boolean
+}): boolean {
+  if (args.sourceAllDay) return false
+  return args.targetAllDay !== true
+}

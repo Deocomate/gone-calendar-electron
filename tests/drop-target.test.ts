@@ -13,7 +13,8 @@ import {
   ALL_DAY_TO_TIMED_MINUTES,
   resolveDropRange,
   grabOffsetMinutes,
-  singleDayRange
+  singleDayRange,
+  dropNeedsMoveOrCopyChoice
 } from '../src/renderer/src/dnd/drop-target'
 import MonthView from '../src/renderer/src/views/MonthView'
 
@@ -532,4 +533,25 @@ describe('dropping a timed event onto the all-day lane', () => {
       }
     })
   }
+})
+
+describe('dropNeedsMoveOrCopyChoice', () => {
+  it('asks when a timed event stays timed - the only ambiguous case', () => {
+    // Dropped on the hourly grid.
+    expect(dropNeedsMoveOrCopyChoice({ sourceAllDay: false, targetAllDay: false })).toBe(true)
+    // Dropped on a Month view day cell, which changes the date and keeps the time.
+    expect(dropNeedsMoveOrCopyChoice({ sourceAllDay: false, targetAllDay: undefined })).toBe(true)
+  })
+
+  it('does not ask when the drop converts between all-day and timed', () => {
+    // Timed onto the all-day lane, and all-day onto the hourly grid. Both are
+    // conversions the gesture already performed.
+    expect(dropNeedsMoveOrCopyChoice({ sourceAllDay: false, targetAllDay: true })).toBe(false)
+    expect(dropNeedsMoveOrCopyChoice({ sourceAllDay: true, targetAllDay: false })).toBe(false)
+  })
+
+  it('does not ask when an all-day event moves to another day', () => {
+    expect(dropNeedsMoveOrCopyChoice({ sourceAllDay: true, targetAllDay: true })).toBe(false)
+    expect(dropNeedsMoveOrCopyChoice({ sourceAllDay: true, targetAllDay: undefined })).toBe(false)
+  })
 })

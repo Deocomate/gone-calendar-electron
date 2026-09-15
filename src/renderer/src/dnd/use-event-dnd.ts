@@ -4,6 +4,7 @@ import type { ExpandedOccurrence } from '@shared/event-model'
 import type { TimedSegment } from '@shared/timed-event-segments'
 import type { PendingDropAction } from './DropActionPopover'
 import {
+  dropNeedsMoveOrCopyChoice,
   grabOffsetMinutes,
   resolveDropRange,
   sameDropTarget,
@@ -160,8 +161,19 @@ export function useEventDnD(
       const targetAllDay =
         options?.toAllDayLane === true ? true : targetMinutes !== undefined ? false : undefined
 
-      // Execute direct move/copy immediately without modal interruption
-      if (onDirectMove) {
+      // Only a timed drop that stays timed is genuinely ambiguous between moving
+      // and copying, so only that one asks. Anything crossing the lanes is a
+      // conversion the user just performed, and an all-day event landing on
+      // another day is an unambiguous move - a prompt there is noise.
+      //
+      // Alt still copies outright; the drag has been showing the copy cursor the
+      // whole way, so stopping to ask would contradict it.
+      const isAmbiguous = dropNeedsMoveOrCopyChoice({
+        sourceAllDay: Boolean(occ.allDay),
+        targetAllDay
+      })
+
+      if (onDirectMove && (isCopy || !isAmbiguous)) {
         onDirectMove(occ, newStart, newEnd, isCopy, targetAllDay)
         return
       }

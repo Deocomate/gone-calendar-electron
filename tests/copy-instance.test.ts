@@ -75,3 +75,56 @@ describe('Copy instance only from recurring event', () => {
     expect(copiedSeries.rrule).toBe('FREQ=WEEKLY;INTERVAL=2;BYDAY=WE')
   })
 })
+
+describe('copyEvent all-day override', () => {
+  let db: ISqliteDatabase
+  let repo: EventsRepo
+  let calendarId: string
+
+  beforeEach(() => {
+    db = initDatabase(':memory:')
+    repo = new EventsRepo(db)
+    calendarId = new CalendarsRepo(db).createCalendar({ name: 'Work', color: '#6366f1' }).id
+  })
+
+  afterEach(() => {
+    closeDatabase()
+  })
+
+  function allDaySource() {
+    return repo.createEvent({
+      calendarId,
+      title: 'Public holiday',
+      dtStartUtc: '2026-09-20T00:00:00.000Z',
+      dtEndUtc: '2026-09-20T23:59:59.999Z',
+      allDay: true
+    })
+  }
+
+  it('keeps the source all-day-ness when nothing is asked for', () => {
+    const src = allDaySource()
+    const copy = repo.copyEvent({
+      sourceEventId: src.id,
+      dtStartUtc: '2026-09-27T00:00:00.000Z',
+      dtEndUtc: '2026-09-27T23:59:59.999Z'
+    })
+    expect(copy.allDay).toBe(true)
+  })
+
+  it('turns the copy into a timed event when alt-dragged onto the hourly grid', () => {
+    // Without this the copy kept all_day = 1 while carrying an hour-long range,
+    // so it drew in the all-day lane and ignored the time it was dropped at.
+    const src = allDaySource()
+    const copy = repo.copyEvent({
+      sourceEventId: src.id,
+      dtStartUtc: '2026-09-27T04:00:00.000Z',
+      dtEndUtc: '2026-09-27T05:00:00.000Z',
+      copyInstanceOnly: true,
+      allDay: false
+    })
+
+    expect(copy.allDay).toBe(false)
+    expect(copy.dtStartUtc).toBe('2026-09-27T04:00:00.000Z')
+    expect(copy.dtEndUtc).toBe('2026-09-27T05:00:00.000Z')
+  })
+})

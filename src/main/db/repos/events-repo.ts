@@ -802,7 +802,7 @@ export class EventsRepo {
         input.dtStartUtc,
         input.dtEndUtc,
         existing.event.tzid,
-        existing.event.allDay ? 1 : 0,
+        (input.allDay ?? existing.event.allDay) ? 1 : 0,
         rrule,
         exdate,
         existing.event.color || null,

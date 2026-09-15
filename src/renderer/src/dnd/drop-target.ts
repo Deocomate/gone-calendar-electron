@@ -63,6 +63,40 @@ export function dropRangeFromPointer(args: {
  * Move a timed occurrence by the delta between the dragged slice and the drop point.
  * Keeps overnight / multi-day span instead of rebuilding end from full duration.
  */
+/**
+ * Length an all-day event becomes when it is dropped onto the hourly grid.
+ * Google uses an hour for the same gesture and it is the least surprising
+ * default: the point of the drag is "give this a time", not "keep its span".
+ */
+export const ALL_DAY_TO_TIMED_MINUTES = 60
+
+/**
+ * Where an all-day occurrence lands when it is dropped on the time grid.
+ *
+ * Deliberately not `shiftOccurrenceByDrop`. That one moves an event by the delta
+ * between the slice you grabbed and where you let go, which needs the dragged
+ * thing to occupy real vertical space on the same scale as the drop target. An
+ * all-day pill does not: it is a ~20px bar whose stored span is a full 24 hours,
+ * so the shift maths read a mid-pill grab as a 12-hour grab offset and dropped
+ * the event at 02:00 when you aimed at 14:00 - then gave it a 24-hour block.
+ *
+ * Placing it outright from the pointer is both correct and what the gesture
+ * means. `grabOffsetMinutes` is intentionally absent; there is nothing sensible
+ * to subtract.
+ */
+export function timedRangeForAllDayDrop(args: {
+  targetDate: DateTime
+  pointerMinutes: number
+  durationMinutes?: number
+}): { start: DateTime; end: DateTime } {
+  return dropRangeFromPointer({
+    targetDate: args.targetDate,
+    pointerMinutes: args.pointerMinutes,
+    durationMinutes: args.durationMinutes ?? ALL_DAY_TO_TIMED_MINUTES,
+    grabOffsetMinutes: 0
+  })
+}
+
 export function shiftOccurrenceByDrop(args: {
   origStart: DateTime
   origEnd: DateTime
@@ -87,4 +121,57 @@ export function shiftOccurrenceByDrop(args: {
 export function prepareDropEvent(e: DragEvent): void {
   e.preventDefault()
   e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move'
+}
+
+/**
+ * The one decision a drop has to make: which range does this gesture produce?
+ *
+ * Three cases, and picking the wrong one is what broke all-day drops:
+ *
+ * - all-day onto the hourly grid -> place it at the pointer, an hour long
+ * - anything else onto the hourly grid -> shift by the drag delta, keeping span
+ * - onto a day cell with no time -> keep the time of day, change the date
+ *
+ * Kept here rather than inside the hook so the choice is testable without a
+ * DragEvent.
+ */
+export function resolveDropRange(args: {
+  allDay: boolean
+  origStart: DateTime
+  origEnd: DateTime
+  segmentStart: DateTime
+  targetDate: DateTime
+  /** Minutes from midnight when the drop landed on the hourly grid. */
+  targetMinutes?: number
+  grabOffsetMinutes?: number
+}): { start: DateTime; end: DateTime } {
+  if (args.targetMinutes === undefined) {
+    const durationMinutes = Math.max(
+      RESIZE_SNAP_MINUTES,
+      args.origEnd.diff(args.origStart, 'minutes').minutes
+    )
+    const start = args.targetDate.set({
+      hour: args.origStart.hour,
+      minute: args.origStart.minute,
+      second: 0,
+      millisecond: 0
+    })
+    return { start, end: start.plus({ minutes: durationMinutes }) }
+  }
+
+  if (args.allDay) {
+    return timedRangeForAllDayDrop({
+      targetDate: args.targetDate,
+      pointerMinutes: args.targetMinutes
+    })
+  }
+
+  return shiftOccurrenceByDrop({
+    origStart: args.origStart,
+    origEnd: args.origEnd,
+    segmentStart: args.segmentStart,
+    targetDate: args.targetDate,
+    pointerMinutes: args.targetMinutes,
+    grabOffsetMinutes: args.grabOffsetMinutes
+  })
 }

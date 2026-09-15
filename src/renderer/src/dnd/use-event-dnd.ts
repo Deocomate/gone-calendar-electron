@@ -5,8 +5,8 @@ import type { TimedSegment } from '@shared/timed-event-segments'
 import type { PendingDropAction } from './DropActionPopover'
 import {
   grabOffsetMinutes,
+  resolveDropRange,
   sameDropTarget,
-  shiftOccurrenceByDrop,
   type CalendarDropTarget
 } from './drop-target'
 import { RESIZE_SNAP_MINUTES, snapMinutes } from './resize-math'
@@ -45,7 +45,12 @@ export function useEventDnD(
         : Math.max(RESIZE_SNAP_MINUTES, origEnd.diff(origStart, 'minutes').minutes)
       segmentStartRef.current = segment?.startLocal ?? origStart
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-      grabOffsetRef.current = grabOffsetMinutes(e.clientY, rect.top, rect.height, visualDuration)
+      // An all-day pill is a short bar with a 24-hour span, so where you grabbed
+      // it says nothing about a time of day. Measuring an offset from it put the
+      // drop preview - and the drop - hours away from the cursor.
+      grabOffsetRef.current = occ.allDay
+        ? 0
+        : grabOffsetMinutes(e.clientY, rect.top, rect.height, visualDuration)
     },
     []
   )
@@ -111,34 +116,16 @@ export function useEventDnD(
 
       const origStart = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
       const origEnd = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local')
-      const durationMinutes = Math.max(
-        RESIZE_SNAP_MINUTES,
-        origEnd.diff(origStart, 'minutes').minutes
-      )
 
-      let newStart: DateTime
-      let newEnd: DateTime
-
-      if (targetMinutes !== undefined) {
-        const shifted = shiftOccurrenceByDrop({
-          origStart,
-          origEnd,
-          segmentStart: segmentStart ?? origStart,
-          targetDate,
-          pointerMinutes: targetMinutes,
-          grabOffsetMinutes: grabOffsetMinutesValue
-        })
-        newStart = shifted.start
-        newEnd = shifted.end
-      } else {
-        newStart = targetDate.set({
-          hour: origStart.hour,
-          minute: origStart.minute,
-          second: 0,
-          millisecond: 0
-        })
-        newEnd = newStart.plus({ minutes: durationMinutes })
-      }
+      const { start: newStart, end: newEnd } = resolveDropRange({
+        allDay: Boolean(occ.allDay),
+        origStart,
+        origEnd,
+        segmentStart: segmentStart ?? origStart,
+        targetDate,
+        targetMinutes,
+        grabOffsetMinutes: grabOffsetMinutesValue
+      })
 
       if (newStart.toMillis() === origStart.toMillis() && newEnd.toMillis() === origEnd.toMillis()) {
         return

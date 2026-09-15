@@ -188,6 +188,9 @@ export interface CopyEventInput {
   dtEndUtc: string
   targetCalendarId?: string
   copyInstanceOnly?: boolean
+  /** Override the source's all-day-ness - set when an all-day event is
+   *  alt-dragged onto the hourly grid. Omitted keeps the source's. */
+  allDay?: boolean
 }
 
 export interface UpdateRecurringScopeInput {

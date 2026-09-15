@@ -224,7 +224,10 @@ export const App: React.FC = () => {
             dtStartUtc: targetStart.toUTC().toISO()!,
             dtEndUtc: targetEnd.toUTC().toISO()!,
             targetCalendarId: occ.calendarId,
-            copyInstanceOnly: true
+            copyInstanceOnly: true,
+            // Alt-dragging an all-day event onto the grid has to produce a timed
+            // copy too, or the copy keeps its all-day flag with an hour's range.
+            allDay: targetAllDay === undefined ? occ.allDay : targetAllDay
           })
           toast.success(t('toast.eventCopied'), {
             description: t('toast.copiedTo', {

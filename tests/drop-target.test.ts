@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 import React from 'react'
 import { renderToString } from 'react-dom/server'
 import { DateTime } from 'luxon'
-import { clampHour, dropRangeFromPointer, hourFromPointer, minutesFromPointer, sameDropTarget, shiftOccurrenceByDrop } from '../src/renderer/src/dnd/drop-target'
+import {
+  clampHour,
+  dropRangeFromPointer,
+  hourFromPointer,
+  minutesFromPointer,
+  sameDropTarget,
+  shiftOccurrenceByDrop,
+  timedRangeForAllDayDrop,
+  ALL_DAY_TO_TIMED_MINUTES,
+  resolveDropRange
+} from '../src/renderer/src/dnd/drop-target'
 import MonthView from '../src/renderer/src/views/MonthView'
 
 describe('calendar drop target helpers', () => {
@@ -101,5 +111,151 @@ describe('MonthView drop highlight', () => {
 
     expect(html).toContain('gc-cell')
     expect(html).toContain('is-drop-target')
+  })
+})
+
+describe('dropping an all-day event onto the hourly grid', () => {
+  const targetDate = DateTime.fromISO('2026-09-20T00:00:00', { zone: 'utc' })
+
+  /**
+   * Regression. An all-day pill is a ~20px bar whose stored span is a full 24
+   * hours. Routing it through shiftOccurrenceByDrop read a mid-pill grab as a
+   * 12-hour grab offset, so a drop aimed at 14:00 landed at 02:00 - and the
+   * result kept the 24-hour span instead of becoming an hour block.
+   */
+  it('starts exactly where the pointer was, with no grab offset applied', () => {
+    const { start } = timedRangeForAllDayDrop({ targetDate, pointerMinutes: 14 * 60 })
+
+    expect(start.toFormat('HH:mm')).toBe('14:00')
+    expect(start.toISODate()).toBe('2026-09-20')
+  })
+
+  it('becomes an hour long rather than keeping the all-day span', () => {
+    const { start, end } = timedRangeForAllDayDrop({ targetDate, pointerMinutes: 14 * 60 })
+
+    expect(end.diff(start, 'minutes').minutes).toBe(ALL_DAY_TO_TIMED_MINUTES)
+    expect(ALL_DAY_TO_TIMED_MINUTES).toBe(60)
+  })
+
+  it('snaps to the same 15-minute grid as every other timed drop', () => {
+    const { start } = timedRangeForAllDayDrop({ targetDate, pointerMinutes: 9 * 60 + 7 })
+    expect(start.toFormat('HH:mm')).toBe('09:00')
+
+    const later = timedRangeForAllDayDrop({ targetDate, pointerMinutes: 9 * 60 + 8 })
+    expect(later.start.toFormat('HH:mm')).toBe('09:15')
+  })
+
+  it('handles a drop at the very top and very bottom of the grid', () => {
+    expect(timedRangeForAllDayDrop({ targetDate, pointerMinutes: 0 }).start.toFormat('HH:mm')).toBe(
+      '00:00'
+    )
+
+    const late = timedRangeForAllDayDrop({ targetDate, pointerMinutes: 23 * 60 + 45 })
+    expect(late.start.toFormat('HH:mm')).toBe('23:45')
+    // Spilling into the next day is correct - the grid ends, the event need not.
+    expect(late.end.toISODate()).toBe('2026-09-21')
+  })
+
+  it('accepts an explicit duration when a caller wants one', () => {
+    const { start, end } = timedRangeForAllDayDrop({
+      targetDate,
+      pointerMinutes: 10 * 60,
+      durationMinutes: 30
+    })
+    expect(end.diff(start, 'minutes').minutes).toBe(30)
+  })
+
+  it('lands where the old shift maths did not', () => {
+    // The exact failure: a 1-day all-day event (00:00 -> 23:59:59.999) grabbed in
+    // the middle of its pill and dropped at 14:00.
+    const origStart = targetDate.startOf('day')
+    const origEnd = origStart.endOf('day')
+    const shifted = shiftOccurrenceByDrop({
+      origStart,
+      origEnd,
+      segmentStart: origStart,
+      targetDate,
+      pointerMinutes: 14 * 60,
+      grabOffsetMinutes: 720 // what grabOffsetMinutes() returns for a mid-pill grab
+    })
+    expect(shifted.start.toFormat('HH:mm')).toBe('02:00')
+    expect(Math.round(shifted.end.diff(shifted.start, 'hours').hours)).toBe(24)
+
+    const placed = timedRangeForAllDayDrop({ targetDate, pointerMinutes: 14 * 60 })
+    expect(placed.start.toFormat('HH:mm')).toBe('14:00')
+    expect(placed.end.diff(placed.start, 'hours').hours).toBe(1)
+  })
+})
+
+describe('resolveDropRange', () => {
+  const targetDate = DateTime.fromISO('2026-09-20T00:00:00', { zone: 'utc' })
+  const allDayStart = DateTime.fromISO('2026-09-13T00:00:00', { zone: 'utc' })
+  const allDayEnd = allDayStart.endOf('day')
+
+  it('places an all-day event at the pointer when it lands on the hourly grid', () => {
+    const { start, end } = resolveDropRange({
+      allDay: true,
+      origStart: allDayStart,
+      origEnd: allDayEnd,
+      segmentStart: allDayStart,
+      targetDate,
+      targetMinutes: 14 * 60,
+      // A grab offset is still measured by the caller; for an all-day drag it
+      // must be ignored, which is the half of the bug that moved the drop.
+      grabOffsetMinutes: 720
+    })
+
+    expect(start.toFormat('HH:mm')).toBe('14:00')
+    expect(end.diff(start, 'hours').hours).toBe(1)
+  })
+
+  it('still shifts a timed event by the drag delta, span intact', () => {
+    // An overnight event must not collapse to its duration on the target day.
+    const origStart = DateTime.fromISO('2026-09-13T22:00:00', { zone: 'utc' })
+    const origEnd = DateTime.fromISO('2026-09-14T06:00:00', { zone: 'utc' })
+
+    const { start, end } = resolveDropRange({
+      allDay: false,
+      origStart,
+      origEnd,
+      segmentStart: origStart,
+      targetDate,
+      targetMinutes: 20 * 60,
+      grabOffsetMinutes: 0
+    })
+
+    expect(start.toFormat('yyyy-MM-dd HH:mm')).toBe('2026-09-20 20:00')
+    expect(end.diff(start, 'hours').hours).toBe(8)
+  })
+
+  it('keeps the time of day when the drop has no time at all', () => {
+    const origStart = DateTime.fromISO('2026-09-13T09:30:00', { zone: 'utc' })
+    const origEnd = DateTime.fromISO('2026-09-13T10:30:00', { zone: 'utc' })
+
+    const { start, end } = resolveDropRange({
+      allDay: false,
+      origStart,
+      origEnd,
+      segmentStart: origStart,
+      targetDate
+    })
+
+    expect(start.toFormat('yyyy-MM-dd HH:mm')).toBe('2026-09-20 09:30')
+    expect(end.diff(start, 'minutes').minutes).toBe(60)
+  })
+
+  it('leaves an all-day event all-day-shaped when it is dropped on a day cell', () => {
+    // Dropping onto another day's all-day lane is a date change, not a
+    // conversion: the hour branch must not fire without a pointer time.
+    const { start, end } = resolveDropRange({
+      allDay: true,
+      origStart: allDayStart,
+      origEnd: allDayEnd,
+      segmentStart: allDayStart,
+      targetDate
+    })
+
+    expect(start.toFormat('HH:mm')).toBe('00:00')
+    expect(Math.round(end.diff(start, 'hours').hours)).toBe(24)
   })
 })

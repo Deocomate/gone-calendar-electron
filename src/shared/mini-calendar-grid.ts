@@ -1,7 +1,6 @@
 import { DateTime } from 'luxon'
 
 /** 0 = Sunday, 1 = Monday (matches AppSettings.firstDayOfWeek). */
-export type FirstDayOfWeek = 0 | 1
 
 const WEEKDAY_LABELS_MON: string[] = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const WEEKDAY_LABELS_SUN: string[] = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']

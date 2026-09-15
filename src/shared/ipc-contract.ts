@@ -97,12 +97,6 @@ export const IPC_CHANNELS = {
 
 export type AppLocale = 'vi' | 'en'
 
-export interface AppInfo {
-  version: string
-  locale: AppLocale
-  platform: NodeJS.Platform
-}
-
 export interface DetachAccountResult {
   success: boolean
   /** Calendars converted to local ownership. */

@@ -350,9 +350,8 @@ export const App: React.FC = () => {
         start: DateTime,
         end: DateTime,
         isCopy: boolean,
-        droppedOnTimeGrid?: boolean
-      ) =>
-        void handleDirectMove(occ, start, end, isCopy, 'move', droppedOnTimeGrid ? false : undefined),
+        targetAllDay?: boolean
+      ) => void handleDirectMove(occ, start, end, isCopy, 'move', targetAllDay),
       [handleDirectMove]
     )
   )
@@ -364,10 +363,11 @@ export const App: React.FC = () => {
     [handleDirectMove]
   )
 
-  // Week view: dragging an event drops a copy rather than moving the original.
-  const handleWeekDrop = useCallback(
-    (e: React.DragEvent, targetDate: DateTime, minutes?: number) => {
-      handleDropOnDate(e, targetDate, minutes, true)
+  // Week view drops onto the all-day lane, which turns a timed event into an
+  // all-day one - the mirror of dragging an all-day event onto the hourly grid.
+  const handleWeekAllDayDrop = useCallback(
+    (e: React.DragEvent, targetDate: DateTime) => {
+      handleDropOnDate(e, targetDate, undefined, { toAllDayLane: true })
     },
     [handleDropOnDate]
   )
@@ -969,7 +969,8 @@ export const App: React.FC = () => {
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               onDragOverTarget={handleDragOverTarget}
-              onDropOnDate={handleWeekDrop}
+              onDropOnDate={handleDropOnDate}
+              onDropOnAllDayLane={handleWeekAllDayDrop}
               onResizeCommit={handleResizeCommit}
               onResizeBusyEnd={markPointerBusyEnd}
             />

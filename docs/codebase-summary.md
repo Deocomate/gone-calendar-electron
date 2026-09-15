@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-31  
 **Version:** 0.1.0  
-**Build status:** All 10 phases complete, 327/327 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
+**Build status:** All 10 phases complete, 333/333 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
 
 ---
 
@@ -100,7 +100,7 @@ gone-calendar/
 │       ├── mini-calendar-grid.ts # Grid computation utilities
 │       ├── visible-range.ts     # Visible date range helpers
 │       └── ipc-contract.ts      # IPC_CHANNELS constants and GoneAPI interface
-├── tests/                       # Vitest unit tests (327 tests / 41 files)
+├── tests/                       # Vitest unit tests (333 tests / 41 files)
 │   └── stubs/electron.ts        # `electron` module stub for main-process tests
 ├── docs/
 │   ├── urd.md                   # User Requirements Document
@@ -170,7 +170,24 @@ Entry: `main.tsx` detects `#mini` URL hash to route to `MiniApp` (companion widg
 
 **Views:** All five calendar layouts are custom React components with no third-party calendar shell.
 
-**DnD:** `use-event-dnd.ts` + `drop-target.ts` implement pointer-based drag. Timed Week/Day drops snap to 15 minutes (not whole hours), keep the grab point under the cursor, and shift multi-day timed events as a whole so a resized 2-day slice does not collapse to one hour. On drop: `DropActionPopover` renders Move / Copy (full series) / Copy (this instance only) / Cancel. Timed blocks on Week/Day also support edge resize (`use-event-resize.ts`): N/S changes time (15-min snap), E/W on Week stretches across days. Multi-day timed occurrences are split in `timed-event-segments.ts`.
+**DnD:** `use-event-dnd.ts` + `drop-target.ts` implement pointer-based drag.
+Drops snap to the `dragSnapMinutes` setting (15 / 30 / 60), which is passed in
+rather than read from context - `useEventDnD` is called from App's own body,
+above the provider App renders. `resolveDropRange` makes the one decision a drop
+has to make: the all-day lane makes an occurrence all-day, the hourly grid makes
+it timed at the cursor for an hour, a plain day cell keeps its time and changes
+the date, and anything else shifts by the drag delta with its span intact. The
+start is always snapped onto the grid afterwards, because the delta is measured
+from the dragged slice and would otherwise carry the event's own odd minutes
+through. Alt-drag copies, and a copy keeps only the title, calendar and length.
+On drop via the popover: `DropActionPopover` renders Move / Copy (full series) /
+Copy (this instance only) / Cancel.
+
+Edge resize (`use-event-resize.ts`) is **vertical only** - north and south change
+the time on the same snap grid. East/west used to stretch an event across whole
+days; it was easy to catch while aiming to drag a block, turned one-hour events
+into 25-hour ones, and was removed. Multi-day timed occurrences are still split
+for display in `timed-event-segments.ts`.
 
 ### `src/shared`
 
@@ -246,7 +263,7 @@ tests/
 └── ipc-contract.test.ts           # IPC channel and API surface contract
 ```
 
-**Total: 327 tests across 41 files. All passing.**
+**Total: 333 tests across 41 files. All passing.**
 
 Main-process tests run in plain Node; the `electron` module is aliased to
 `tests/stubs/electron.ts` in `vitest.config.ts` so they do not need the Electron

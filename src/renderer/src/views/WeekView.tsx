@@ -37,6 +37,8 @@ interface WeekViewProps {
   onDragEnd?: () => void
   onDragOverTarget?: (target: CalendarDropTarget) => void
   onDropOnDate?: (e: React.DragEvent, targetDate: DateTime, minutes?: number) => void
+  /** Drop onto the all-day lane - makes the occurrence all-day. */
+  onDropOnAllDayLane?: (e: React.DragEvent, targetDate: DateTime) => void
   onResizeCommit?: (occ: ExpandedOccurrence, start: DateTime, end: DateTime) => void
   onResizeBusyEnd?: () => void
 }
@@ -72,13 +74,13 @@ export const WeekView: React.FC<WeekViewProps> = ({
   onDragEnd,
   onDragOverTarget,
   onDropOnDate,
+  onDropOnAllDayLane,
   onResizeCommit,
   onResizeBusyEnd
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastWheelNavRef = useRef(0)
   const gridRef = useRef<HTMLDivElement>(null)
-  const columnRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const { hourBlockSize, dayStartHour, dragSnapMinutes } = useDisplayPreferences()
   const HOUR_HEIGHT = HOUR_HEIGHT_BY_SIZE[hourBlockSize]
@@ -92,18 +94,13 @@ export const WeekView: React.FC<WeekViewProps> = ({
     return Array.from({ length: 7 }, (_, i) => start.plus({ days: i }))
   }, [weekStartKey])
 
-  const getGeometry = useCallback(() => {
-    const columns = weekDays.map((day) => {
-      const el = columnRefs.current.get(day.toFormat('yyyy-MM-dd'))
-      const rect = el?.getBoundingClientRect()
-      return { left: rect?.left ?? 0, right: rect?.right ?? 0, day }
-    })
-    return {
+  const getGeometry = useCallback(
+    () => ({
       gridTop: gridRef.current?.getBoundingClientRect().top ?? 0,
-      hourHeight: HOUR_HEIGHT,
-      columns
-    }
-  }, [weekDays, HOUR_HEIGHT])
+      hourHeight: HOUR_HEIGHT
+    }),
+    [HOUR_HEIGHT]
+  )
 
   const { preview, startResize, isResizing } = useEventResize({
     getGeometry,
@@ -261,7 +258,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                       prepareDropEvent(e)
                       onDragOverTarget?.({ dateKey: dayStr })
                     }}
-                    onDrop={(e) => onDropOnDate?.(e, day)}
+                    onDrop={(e) => onDropOnAllDayLane?.(e, day)}
                     onClick={(e) => {
                       const dayStart = day.startOf('day')
                       onSelectSlot?.(dayStart, dayStart, { clientX: e.clientX, allDay: true })
@@ -346,10 +343,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
               return (
                 <div
                   key={dayKey}
-                  ref={(el) => {
-                    if (el) columnRefs.current.set(dayKey, el)
-                    else columnRefs.current.delete(dayKey)
-                  }}
                   className={`relative min-w-0 cursor-pointer overflow-visible ${
                     isToday ? 'bg-today/5' : ''
                   }`}
@@ -429,7 +422,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
                       layout={layout}
                       segment={layout.segment}
                       minHeight={24}
-                      allowHorizontal
                       isDragging={draggedOccurrenceId === layout.occ.id}
                       isResizing={preview?.occId === layout.occ.id}
                       onSelect={(occ) => onSelectOccurrence?.(occ)}

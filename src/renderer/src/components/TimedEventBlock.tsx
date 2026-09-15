@@ -12,7 +12,6 @@ interface TimedEventBlockProps {
   layout: TimedLayout
   segment: TimedSegment
   minHeight: number
-  allowHorizontal: boolean
   isDragging: boolean
   isResizing: boolean
   onSelect: (occ: ExpandedOccurrence) => void
@@ -51,7 +50,6 @@ export const TimedEventBlock: React.FC<TimedEventBlockProps> = ({
   layout,
   segment,
   minHeight,
-  allowHorizontal,
   isDragging,
   isResizing,
   onSelect,
@@ -67,8 +65,6 @@ export const TimedEventBlock: React.FC<TimedEventBlockProps> = ({
   const durationMin = endDt.diff(startDt, 'minutes').minutes
   const showNorth = segment.isFirst
   const showSouth = segment.isLast
-  const showWest = allowHorizontal && segment.isFirst
-  const showEast = allowHorizontal && segment.isLast
 
   return (
     <div
@@ -146,26 +142,6 @@ export const TimedEventBlock: React.FC<TimedEventBlockProps> = ({
           className="absolute inset-x-0 bottom-0 z-20 h-2 cursor-ns-resize"
           onMouseDown={(e) => e.preventDefault()}
           onPointerDown={(e) => onResizeStart(e, occ, 's')}
-        />
-      )}
-      {/* East/west stretch the event across whole days, which turns a one-hour
-          event into a 25-hour one. These ran the full height of the block and sat
-          after the north/south handles in the DOM, so they also won the corners -
-          aiming to drag a block to the next day and catching its edge silently
-          stretched it instead. Confined to the middle band, they stay reachable
-          on purpose and hard to hit by accident. */}
-      {showWest && (
-        <div
-          className="absolute inset-y-4 left-0 z-20 w-1.5 cursor-ew-resize"
-          onMouseDown={(e) => e.preventDefault()}
-          onPointerDown={(e) => onResizeStart(e, occ, 'w')}
-        />
-      )}
-      {showEast && (
-        <div
-          className="absolute inset-y-4 right-0 z-20 w-1.5 cursor-ew-resize"
-          onMouseDown={(e) => e.preventDefault()}
-          onPointerDown={(e) => onResizeStart(e, occ, 'e')}
         />
       )}
     </div>

@@ -27,9 +27,9 @@ export function useEventDnD(
     targetStart: DateTime,
     targetEnd: DateTime,
     isCopy: boolean,
-    /** true when the drop landed on the hourly time grid, so the occurrence
-     *  should become timed; undefined leaves its all-day-ness unchanged. */
-    droppedOnTimeGrid?: boolean
+    /** What the drop should make the occurrence: false = timed, true = all-day,
+     *  undefined = leave it as it is. */
+    targetAllDay?: boolean
   ) => void
 ) {
   const dragSnapMinutes = snapStepMinutes
@@ -107,7 +107,12 @@ export function useEventDnD(
   }, [])
 
   const handleDropOnDate = useCallback(
-    (e: DragEvent, targetDate: DateTime, targetMinutes?: number, forceCopy = false) => {
+    (
+      e: DragEvent,
+      targetDate: DateTime,
+      targetMinutes?: number,
+      options?: { forceCopy?: boolean; toAllDayLane?: boolean }
+    ) => {
       e.preventDefault()
       e.stopPropagation()
 
@@ -139,18 +144,25 @@ export function useEventDnD(
         targetDate,
         targetMinutes,
         grabOffsetMinutes: grabOffsetMinutesValue,
-        snapStepMinutes: dragSnapMinutes
+        snapStepMinutes: dragSnapMinutes,
+        toAllDayLane: options?.toAllDayLane
       })
 
       if (newStart.toMillis() === origStart.toMillis() && newEnd.toMillis() === origEnd.toMillis()) {
         return
       }
 
-      const isCopy = forceCopy || e.altKey
+      const isCopy = options?.forceCopy === true || e.altKey
+
+      // The lane a drop lands in decides what the occurrence becomes: the hourly
+      // grid makes it timed, the all-day lane makes it all-day, and a plain day
+      // cell (Month view) leaves it as it was.
+      const targetAllDay =
+        options?.toAllDayLane === true ? true : targetMinutes !== undefined ? false : undefined
 
       // Execute direct move/copy immediately without modal interruption
       if (onDirectMove) {
-        onDirectMove(occ, newStart, newEnd, isCopy, targetMinutes !== undefined)
+        onDirectMove(occ, newStart, newEnd, isCopy, targetAllDay)
         return
       }
 

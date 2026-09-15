@@ -3,8 +3,6 @@ import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
 import {
   applyResizeEdge,
-  averageColumnWidth,
-  daysDeltaFromPointer,
   formatResizeTooltip,
   type ResizeEdge
 } from './resize-math'
@@ -13,7 +11,6 @@ import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 export interface ResizeGeometry {
   gridTop: number
   hourHeight: number
-  columns: Array<{ left: number; right: number; day: DateTime }>
 }
 
 export interface ResizePreview {
@@ -45,8 +42,6 @@ export function useEventResize(options: {
     edge: ResizeEdge
     originStart: DateTime
     originEnd: DateTime
-    originX: number
-    columnWidth: number
   } | null>(null)
   const previewRef = useRef<ResizePreview | null>(null)
   const getGeometryRef = useRef(getGeometry)
@@ -88,7 +83,6 @@ export function useEventResize(options: {
         clientY: e.clientY,
         gridTop: geometry.gridTop,
         hourHeight: geometry.hourHeight,
-        daysDelta: daysDeltaFromPointer(session.originX, e.clientX, session.columnWidth),
         snapStepMinutes: snapStepRef.current
       })
       const nextPreview: ResizePreview = {
@@ -149,8 +143,6 @@ export function useEventResize(options: {
       edge,
       originStart,
       originEnd,
-      originX: e.clientX,
-      columnWidth: averageColumnWidth(geometry.columns)
     }
     const next = applyResizeEdge({
       edge,
@@ -160,7 +152,6 @@ export function useEventResize(options: {
       clientY: e.clientY,
       gridTop: geometry.gridTop,
       hourHeight: geometry.hourHeight,
-      daysDelta: 0,
       snapStepMinutes: snapStepRef.current
     })
     const nextPreview: ResizePreview = {

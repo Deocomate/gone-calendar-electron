@@ -174,8 +174,15 @@ export function resolveDropRange(args: {
   targetMinutes?: number
   grabOffsetMinutes?: number
   snapStepMinutes?: number
+  /** The drop landed on the all-day lane rather than a plain day cell. */
+  toAllDayLane?: boolean
 }): { start: DateTime; end: DateTime } {
   const step = args.snapStepMinutes ?? RESIZE_SNAP_MINUTES
+
+  if (args.toAllDayLane) {
+    return allDayRangeForDrop(args.targetDate, args.origStart, args.origEnd)
+  }
+
   if (args.targetMinutes === undefined) {
     const durationMinutes = Math.max(
       step,
@@ -207,6 +214,31 @@ export function resolveDropRange(args: {
     grabOffsetMinutes: args.grabOffsetMinutes,
     snapStepMinutes: step
   })
+}
+
+/**
+ * What a timed occurrence becomes when it is dropped on the all-day lane.
+ *
+ * The mirror of `timedRangeForAllDayDrop`. All-day events are floating dates, so
+ * this deliberately builds the range in UTC from the target's calendar date
+ * rather than converting a local midnight - the stored convention is midnight
+ * UTC to 23:59:59.999 UTC, and converting a local midnight lands a day out west
+ * of GMT.
+ *
+ * An event that covered several days keeps that many days; a normal one-day
+ * event becomes a single all-day event.
+ */
+export function allDayRangeForDrop(
+  targetDate: DateTime,
+  origStart: DateTime,
+  origEnd: DateTime
+): { start: DateTime; end: DateTime } {
+  const dayCount = Math.max(
+    1,
+    Math.round(origEnd.startOf('day').diff(origStart.startOf('day'), 'days').days) + 1
+  )
+  const start = DateTime.fromISO(`${targetDate.toISODate()}T00:00:00.000`, { zone: 'utc' })
+  return { start, end: start.plus({ days: dayCount - 1 }).endOf('day') }
 }
 
 /**

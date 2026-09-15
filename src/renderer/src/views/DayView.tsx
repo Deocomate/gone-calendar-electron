@@ -69,10 +69,9 @@ export const DayView: React.FC<DayViewProps> = ({
     const rect = columnRef.current?.getBoundingClientRect()
     return {
       gridTop: rect?.top ?? 0,
-      hourHeight: HOUR_HEIGHT,
-      columns: rect ? [{ left: rect.left, right: rect.right, day: anchorDate }] : []
+      hourHeight: HOUR_HEIGHT
     }
-  }, [anchorDate, HOUR_HEIGHT])
+  }, [HOUR_HEIGHT])
 
   const { preview, startResize, isResizing } = useEventResize({
     getGeometry,
@@ -292,7 +291,6 @@ export const DayView: React.FC<DayViewProps> = ({
                 layout={layout}
                 segment={layout.segment}
                 minHeight={26}
-                allowHorizontal={false}
                 isDragging={draggedOccurrenceId === layout.occ.id}
                 isResizing={preview?.occId === layout.occ.id}
                 onSelect={(occ) => onSelectOccurrence?.(occ)}

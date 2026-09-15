@@ -471,3 +471,65 @@ describe('the configured step survives a real timezone', () => {
     })
   }
 })
+
+describe('dropping a timed event onto the all-day lane', () => {
+  const targetDate = DateTime.fromISO('2026-09-20T00:00:00', { zone: 'utc' })
+
+  function dropOnLane(startISO: string, endISO: string) {
+    return resolveDropRange({
+      allDay: false,
+      origStart: DateTime.fromISO(startISO, { zone: 'utc' }),
+      origEnd: DateTime.fromISO(endISO, { zone: 'utc' }),
+      segmentStart: DateTime.fromISO(startISO, { zone: 'utc' }),
+      targetDate,
+      toAllDayLane: true
+    })
+  }
+
+  it('becomes a whole day rather than keeping its clock times', () => {
+    const { start, end } = dropOnLane('2026-09-13T09:00:00', '2026-09-13T10:00:00')
+
+    expect(start.toISO()).toBe('2026-09-20T00:00:00.000Z')
+    expect(end.toISO()).toBe('2026-09-20T23:59:59.999Z')
+  })
+
+  it('keeps the number of days an event already covered', () => {
+    const { start, end } = dropOnLane('2026-09-13T09:00:00', '2026-09-15T10:00:00')
+
+    expect(start.toISODate()).toBe('2026-09-20')
+    expect(end.toISODate()).toBe('2026-09-22')
+  })
+
+  it('is the exact mirror of dragging an all-day event onto the grid', () => {
+    const toTimed = timedRangeForAllDayDrop({ targetDate, pointerMinutes: 9 * 60 })
+    expect(toTimed.start.toFormat('HH:mm')).toBe('09:00')
+
+    const backToAllDay = dropOnLane('2026-09-20T09:00:00', '2026-09-20T10:00:00')
+    expect(backToAllDay.start.hour).toBe(0)
+  })
+
+  for (const zone of ['UTC', 'Australia/Sydney', 'Asia/Ho_Chi_Minh', 'America/Los_Angeles']) {
+    it(`stores a floating date, not a converted local midnight, in ${zone}`, () => {
+      const previous = Settings.defaultZone
+      Settings.defaultZone = zone
+      try {
+        // All-day events are floating dates pinned to midnight UTC. Building the
+        // range from a local midnight and converting would land a day early west
+        // of GMT - the bug that once made every Sunday event vanish.
+        const { start, end } = resolveDropRange({
+          allDay: false,
+          origStart: DateTime.fromISO('2026-09-13T09:00', { zone }),
+          origEnd: DateTime.fromISO('2026-09-13T10:00', { zone }),
+          segmentStart: DateTime.fromISO('2026-09-13T09:00', { zone }),
+          targetDate: DateTime.fromISO('2026-09-20T00:00', { zone }),
+          toAllDayLane: true
+        })
+
+        expect(start.toUTC().toISO(), zone).toBe('2026-09-20T00:00:00.000Z')
+        expect(end.toUTC().toISO(), zone).toBe('2026-09-20T23:59:59.999Z')
+      } finally {
+        Settings.defaultZone = previous
+      }
+    })
+  }
+})

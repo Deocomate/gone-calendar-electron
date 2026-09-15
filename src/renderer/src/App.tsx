@@ -343,6 +343,7 @@ export const App: React.FC = () => {
     handleDropOnDate,
     markPointerBusyEnd
   } = useEventDnD(
+    dragSnapMinutes,
     useCallback(
       (
         occ: ExpandedOccurrence,

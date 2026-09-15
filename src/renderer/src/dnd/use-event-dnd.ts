@@ -10,9 +10,18 @@ import {
   type CalendarDropTarget
 } from './drop-target'
 import { snapMinutes } from './resize-math'
-import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 
+/**
+ * `snapStepMinutes` is a required argument rather than a read of
+ * DisplayPreferencesContext, which is what this hook used to do. App calls it
+ * from its own body, above the provider it renders in its JSX, so the context
+ * read silently returned the default 15 no matter what the setting said -
+ * dragging snapped to quarter hours while resizing, done from inside the views,
+ * correctly used the configured step. Taking it as an argument makes the
+ * mismatch impossible: there is no default to fall back to.
+ */
 export function useEventDnD(
+  snapStepMinutes: number,
   onDirectMove?: (
     occ: ExpandedOccurrence,
     targetStart: DateTime,
@@ -23,7 +32,7 @@ export function useEventDnD(
     droppedOnTimeGrid?: boolean
   ) => void
 ) {
-  const { dragSnapMinutes } = useDisplayPreferences()
+  const dragSnapMinutes = snapStepMinutes
   const [draggedOccurrence, setDraggedOccurrence] = useState<ExpandedOccurrence | null>(null)
   const [dropTarget, setDropTarget] = useState<CalendarDropTarget | null>(null)
   const [pendingDrop, setPendingDrop] = useState<PendingDropAction | null>(null)

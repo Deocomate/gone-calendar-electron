@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import React from 'react'
 import { renderToString } from 'react-dom/server'
-import { DateTime } from 'luxon'
+import { DateTime, Settings } from 'luxon'
 import {
   clampHour,
   dropRangeFromPointer,
@@ -424,4 +424,50 @@ describe('singleDayRange', () => {
     const { start: s, end } = singleDayRange(late, late.plus({ days: 2 }), 15)
     expect(end.diff(s, 'minutes').minutes).toBeGreaterThanOrEqual(15)
   })
+})
+
+describe('the configured step survives a real timezone', () => {
+  function withZone<T>(zone: string, fn: () => T): T {
+    const previous = Settings.defaultZone
+    Settings.defaultZone = zone
+    try {
+      return fn()
+    } finally {
+      Settings.defaultZone = previous
+    }
+  }
+
+  /**
+   * The snap correction is computed from the *local* wall clock, because that is
+   * the grid the user sees. Events are stored in UTC, so in a zone with a
+   * non-zero offset a drop that looks snapped in UTC can be off-grid on screen.
+   * Sydney is +10/+11, which keeps whole hours aligned; Kathmandu is +05:45,
+   * which does not - if anything ever reads the UTC clock instead of the local
+   * one, that zone is where it shows up.
+   */
+  for (const zone of ['UTC', 'Australia/Sydney', 'Asia/Kathmandu', 'America/Los_Angeles']) {
+    it(`lands on the half hour in ${zone}`, () => {
+      withZone(zone, () => {
+        const origStart = DateTime.fromISO('2026-09-13T09:07', { zone }).toUTC().setZone(zone)
+        const origEnd = origStart.plus({ minutes: 60 })
+        const targetDate = DateTime.fromISO('2026-09-20T00:00', { zone })
+
+        for (let py = 540; py <= 720; py += 7) {
+          const pointer = minutesFromPointer(py, 0, 60, 30)
+          const { start, end } = resolveDropRange({
+            allDay: false,
+            origStart,
+            origEnd,
+            segmentStart: origStart,
+            targetDate,
+            targetMinutes: pointer,
+            grabOffsetMinutes: grabOffsetMinutes(20, 0, 60, 60, 30),
+            snapStepMinutes: 30
+          })
+          expect(start.minute % 30, `${zone} @ ${start.toISO()}`).toBe(0)
+          expect(end.diff(start, 'minutes').minutes).toBe(60)
+        }
+      })
+    })
+  }
 })

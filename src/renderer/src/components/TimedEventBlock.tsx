@@ -148,16 +148,22 @@ export const TimedEventBlock: React.FC<TimedEventBlockProps> = ({
           onPointerDown={(e) => onResizeStart(e, occ, 's')}
         />
       )}
+      {/* East/west stretch the event across whole days, which turns a one-hour
+          event into a 25-hour one. These ran the full height of the block and sat
+          after the north/south handles in the DOM, so they also won the corners -
+          aiming to drag a block to the next day and catching its edge silently
+          stretched it instead. Confined to the middle band, they stay reachable
+          on purpose and hard to hit by accident. */}
       {showWest && (
         <div
-          className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize"
+          className="absolute inset-y-4 left-0 z-20 w-1.5 cursor-ew-resize"
           onMouseDown={(e) => e.preventDefault()}
           onPointerDown={(e) => onResizeStart(e, occ, 'w')}
         />
       )}
       {showEast && (
         <div
-          className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize"
+          className="absolute inset-y-4 right-0 z-20 w-1.5 cursor-ew-resize"
           onMouseDown={(e) => e.preventDefault()}
           onPointerDown={(e) => onResizeStart(e, occ, 'e')}
         />

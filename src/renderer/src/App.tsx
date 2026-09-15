@@ -204,11 +204,39 @@ export const App: React.FC = () => {
   // an event that has just been pushed for the first time, which the provider
   // assigns. Reloading on that signal is what keeps a drag or resize from acting
   // on an occurrence that no longer exists.
+  //
+  // Never mid-gesture, though. The poll runs every 20s while the window is
+  // focused, so reloading the moment the signal arrives yanks the view out from
+  // under a drag that is still in the user's hand - the blocks re-render, the
+  // occurrence being dragged is replaced, and the drop lands somewhere nobody
+  // asked for. Both gesture hooks mark `is-dnd-active` on <body> for exactly as
+  // long as a drag or resize is live, so the reload waits for it to clear.
   useEffect(() => {
     if (!window.gone?.sync?.onChanged) return
-    return window.gone.sync.onChanged(() => {
+
+    let pending = false
+    const isGestureActive = (): boolean => document.body.classList.contains('is-dnd-active')
+
+    const drain = (): void => {
+      if (!pending || isGestureActive()) return
+      pending = false
       void loadCalendarsAndEvents()
+    }
+
+    // Attribute changes on <body> are the signal that a gesture ended; watching
+    // them beats polling for a class that is usually not there.
+    const observer = new MutationObserver(drain)
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+
+    const unsubscribe = window.gone.sync.onChanged(() => {
+      pending = true
+      drain()
     })
+
+    return () => {
+      observer.disconnect()
+      unsubscribe()
+    }
   }, [loadCalendarsAndEvents])
 
   const handleDirectMove = useCallback(

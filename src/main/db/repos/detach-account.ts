@@ -67,7 +67,8 @@ export function detachAccount(db: ISqliteDatabase, accountId: string): DetachAcc
       // otherwise sit in a push queue for a provider that is gone.
       db.prepare(
         `UPDATE events
-         SET etag = NULL, dirty = 0, has_conflict = 0
+         SET etag = NULL, dirty = 0, has_conflict = 0,
+             provider_event_id = NULL, moved_from_calendar_id = NULL
          WHERE calendar_id IN (${placeholders})`
       ).run(...calendarIds)
 

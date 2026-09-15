@@ -175,6 +175,14 @@ export class GoogleSyncEngine {
 
     // Database transaction to apply batch updates
     this.db.transaction(() => {
+      // A locally created event keeps its own id, so the provider's id no longer
+      // finds it by primary key. Without this the next pull would not recognise
+      // the event it had just accepted and would insert a second copy.
+      const localIdFor = (providerId: string): string =>
+        this.db
+          .prepare('SELECT id FROM events WHERE calendar_id = ? AND provider_event_id = ?')
+          .get<{ id: string }>(calendarId, providerId)?.id ?? providerId
+
       for (const gEvent of items) {
         const mapped = mapGoogleEventToDomain(gEvent, calendarId)
 
@@ -182,7 +190,9 @@ export class GoogleSyncEngine {
           // Occurrence exception
           const now = new Date().toISOString()
           const exc = mapped.exception
-          const excId = `exc_${exc.masterEventId}_${exc.originalStartUtc.replace(/[:.]/g, '')}`
+          // `recurringEventId` names the master the provider's way.
+          const masterLocalId = localIdFor(exc.masterEventId)
+          const excId = `exc_${masterLocalId}_${exc.originalStartUtc.replace(/[:.]/g, '')}`
 
           this.db
             .prepare(
@@ -206,7 +216,7 @@ export class GoogleSyncEngine {
             )
             .run(
               excId,
-              exc.masterEventId,
+              masterLocalId,
               exc.originalStartUtc,
               exc.isCancelled ? 1 : 0,
               exc.title || null,
@@ -229,11 +239,12 @@ export class GoogleSyncEngine {
           this.db
             .prepare(
               `INSERT INTO events (
-                id, calendar_id, uid, title, notes, location,
+                id, provider_event_id, calendar_id, uid, title, notes, location,
                 dtstart_utc, dtend_utc, tzid, all_day, rrule, color,
                 meeting_url, etag, dirty, is_deleted, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
               ON CONFLICT(id) DO UPDATE SET
+                provider_event_id = excluded.provider_event_id,
                 title = excluded.title,
                 notes = excluded.notes,
                 location = excluded.location,
@@ -251,6 +262,7 @@ export class GoogleSyncEngine {
               WHERE events.dirty = 0 AND events.has_conflict = 0`
             )
             .run(
+              localIdFor(evt.id),
               evt.id,
               evt.calendarId,
               evt.uid || `${evt.id}@google.com`,
@@ -301,7 +313,10 @@ export class GoogleSyncEngine {
     for (const row of dirtyRows) {
       try {
         const isDeleted = row.is_deleted === 1
-        const googleEventId = row.id
+        // Ours is `evt_...` until the first push; the provider's is what every
+        // URL below needs. They are the same string only for rows that synced
+        // before the two were separated.
+        const googleEventId = row.provider_event_id || row.id
 
         if (isDeleted) {
           // DELETE
@@ -422,20 +437,16 @@ export class GoogleSyncEngine {
           if (putRes.ok) {
             const resJson = await putRes.json()
             const now = new Date().toISOString()
-            if (resJson.id && resJson.id !== row.id) {
-              this.db
-                .prepare('UPDATE event_exceptions SET master_event_id = ? WHERE master_event_id = ?')
-                .run(resJson.id, row.id)
-              this.db
-                .prepare(
-                  `UPDATE events SET id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?`
-                )
-                .run(resJson.id, resJson.etag, now, row.id)
-            } else {
-              this.db
-                .prepare(`UPDATE events SET etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?`)
-                .run(resJson.etag || row.etag, now, row.id)
-            }
+            // The row keeps its own id. Rewriting it to whatever the provider
+            // assigned is what used to break the renderer mid-edit, and it took
+            // `event_exceptions.master_event_id` along with it.
+            this.db
+              .prepare(
+                `UPDATE events
+                 SET provider_event_id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ?
+                 WHERE id = ?`
+              )
+              .run(resJson.id || googleEventId, resJson.etag || row.etag, now, row.id)
             pushedCount++
           } else if (putRes.status === 412) {
             // Precondition failed (ETag conflict): preserve local dirty row, surface it
@@ -488,7 +499,9 @@ export class GoogleSyncEngine {
         if (!instanceId) {
           instanceId = await this.findInstanceId(
             calendarId,
-            master.id,
+            // The /instances collection is the provider's, so it wants the
+            // provider's id for the series.
+            master.providerEventId || master.id,
             exception.originalStartUtc,
             accessToken
           )

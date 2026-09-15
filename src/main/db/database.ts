@@ -313,6 +313,40 @@ ALTER TABLE events ADD COLUMN moved_from_calendar_id TEXT;
 `
 
 /**
+ * Stop a provider's id from becoming the local primary key.
+ *
+ * An event created here gets `evt_...`; the first successful push replaced that
+ * with the id the provider assigned, so the renderer - still holding the row it
+ * loaded a moment earlier - failed with "Event not found" on the next move,
+ * edit or delete. Every new event went through that window, and the window is
+ * however long it takes the next poll to run.
+ *
+ * The provider's id now lives in its own column and `events.id` never changes.
+ *
+ * Deliberately no backfill. Rows that synced before this carry the provider id
+ * as their primary key, and both code paths already fall back to it - a push
+ * addresses `provider_event_id || id`, and a pull that finds no row for a
+ * provider id uses that id as the local one, which is exactly what those rows
+ * are keyed by. The column fills itself in as each event is next pulled or
+ * pushed.
+ *
+ * The backfill was written and then removed: `UPDATE events SET
+ * provider_event_id = id WHERE etag IS NOT NULL` took 73 seconds on a real
+ * 7,800-event database, because trg_events_fts_update fires on any column
+ * change and re-indexes the row in FTS5. That would have hung startup for over
+ * a minute for no gain.
+ *
+ * CalDAV is unaffected either way: it addresses events by UID, which is ours.
+ */
+export const MIGRATION_014_SQL = `
+ALTER TABLE events ADD COLUMN provider_event_id TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_provider_id
+  ON events(calendar_id, provider_event_id)
+  WHERE provider_event_id IS NOT NULL;
+`
+
+/**
  * Execute all schema migrations in order
  */
 export function runMigrations(db: ISqliteDatabase): void {
@@ -427,6 +461,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_013_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       13,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 14) {
+    db.exec(MIGRATION_014_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      14,
       new Date().toISOString()
     )
   }

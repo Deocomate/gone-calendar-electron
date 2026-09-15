@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-31  
 **Version:** 0.1.0  
-**Build status:** All 10 phases complete, 317/317 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
+**Build status:** All 10 phases complete, 327/327 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
 
 ---
 
@@ -100,7 +100,7 @@ gone-calendar/
 │       ├── mini-calendar-grid.ts # Grid computation utilities
 │       ├── visible-range.ts     # Visible date range helpers
 │       └── ipc-contract.ts      # IPC_CHANNELS constants and GoneAPI interface
-├── tests/                       # Vitest unit tests (317 tests / 40 files)
+├── tests/                       # Vitest unit tests (327 tests / 41 files)
 │   └── stubs/electron.ts        # `electron` module stub for main-process tests
 ├── docs/
 │   ├── urd.md                   # User Requirements Document
@@ -218,6 +218,7 @@ tests/
 ├── ics-roundtrip.test.ts          # ical.js import + RFC 5545 export round-trips
 ├── database-repos.test.ts         # SQLite calendars / events / settings repos
 ├── migration-007.test.ts          # Migration SQL applied directly, not by rewinding
+├── provider-event-id.test.ts      # The local id never changes when a provider assigns its own
 ├── exception-upsert.test.ts       # event_exceptions upsert needs its UNIQUE index
 ├── exception-sync.test.ts         # Occurrence exceptions push to Google / Graph
 ├── calendar-color-ownership.test.ts # A local colour edit touches one calendar only
@@ -245,7 +246,7 @@ tests/
 └── ipc-contract.test.ts           # IPC channel and API surface contract
 ```
 
-**Total: 317 tests across 40 files. All passing.**
+**Total: 327 tests across 41 files. All passing.**
 
 Main-process tests run in plain Node; the `electron` module is aliased to
 `tests/stubs/electron.ts` in `vitest.config.ts` so they do not need the Electron

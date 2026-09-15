@@ -30,6 +30,7 @@ export class ReadOnlyCalendarError extends Error {
 interface EventRow {
   id: string
   calendar_id: string
+  provider_event_id?: string | null
   uid: string
   title: string
   notes: string | null
@@ -90,6 +91,7 @@ interface ExceptionRow {
 
 function mapRowToEvent(row: EventRow): CalendarEvent {
   return {
+    providerEventId: row.provider_event_id ?? undefined,
     id: row.id,
     calendarId: row.calendar_id,
     uid: row.uid,

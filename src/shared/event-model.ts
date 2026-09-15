@@ -52,6 +52,9 @@ export interface LunarRecurrenceSpec {
 }
 
 export interface CalendarEvent {
+  /** The id the provider knows this event by. Absent until the event has been
+   *  pushed once; `id` is ours and never changes. */
+  providerEventId?: string
   id: string
   calendarId: string
   uid: string

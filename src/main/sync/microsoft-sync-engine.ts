@@ -127,13 +127,21 @@ export class MicrosoftSyncEngine {
     let pulledCount = 0
 
     this.db.transaction(() => {
+      // A locally created event keeps its own id, so the provider's id no longer
+      // finds it by primary key; without this the next pull inserts a duplicate.
+      const localIdFor = (providerId: string): string =>
+        this.db
+          .prepare('SELECT id FROM events WHERE calendar_id = ? AND provider_event_id = ?')
+          .get<{ id: string }>(calendarId, providerId)?.id ?? providerId
+
       for (const gEvent of items) {
         const mapped = mapGraphEventToDomain(gEvent, calendarId)
 
         if (mapped.isException && mapped.exception) {
           const exc = mapped.exception
           const now = new Date().toISOString()
-          const excId = `exc_${exc.masterEventId}_${exc.originalStartUtc.replace(/[:.]/g, '')}`
+          const masterLocalId = localIdFor(exc.masterEventId)
+          const excId = `exc_${masterLocalId}_${exc.originalStartUtc.replace(/[:.]/g, '')}`
 
           this.db
             .prepare(
@@ -157,7 +165,7 @@ export class MicrosoftSyncEngine {
             )
             .run(
               excId,
-              exc.masterEventId,
+              masterLocalId,
               exc.originalStartUtc,
               exc.isCancelled ? 1 : 0,
               exc.title || null,
@@ -179,11 +187,12 @@ export class MicrosoftSyncEngine {
           this.db
             .prepare(
               `INSERT INTO events (
-                id, calendar_id, uid, title, notes, location,
+                id, provider_event_id, calendar_id, uid, title, notes, location,
                 dtstart_utc, dtend_utc, tzid, all_day, rrule, color,
                 meeting_url, etag, dirty, is_deleted, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
               ON CONFLICT(id) DO UPDATE SET
+                provider_event_id = excluded.provider_event_id,
                 title = excluded.title,
                 notes = excluded.notes,
                 location = excluded.location,
@@ -201,6 +210,7 @@ export class MicrosoftSyncEngine {
               WHERE events.dirty = 0 AND events.has_conflict = 0`
             )
             .run(
+              localIdFor(evt.id),
               evt.id,
               evt.calendarId,
               evt.uid || `${evt.id}@outlook.com`,
@@ -245,7 +255,9 @@ export class MicrosoftSyncEngine {
     for (const row of dirtyRows) {
       try {
         const isDeleted = row.is_deleted === 1
-        const eventId = row.id
+        // Graph's id, not ours; identical only for rows that synced before the
+        // two were separated.
+        const eventId = row.provider_event_id || row.id
 
         if (isDeleted) {
           const delRes = await fetchWithTimeout(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
@@ -311,20 +323,14 @@ export class MicrosoftSyncEngine {
           if (res.ok) {
             const resJson = await res.json()
             const now = new Date().toISOString()
-            if (resJson.id && resJson.id !== row.id) {
-              this.db
-                .prepare('UPDATE event_exceptions SET master_event_id = ? WHERE master_event_id = ?')
-                .run(resJson.id, row.id)
-              this.db
-                .prepare(
-                  'UPDATE events SET id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?'
-                )
-                .run(resJson.id, resJson['@odata.etag'], now, row.id)
-            } else {
-              this.db
-                .prepare('UPDATE events SET etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?')
-                .run(resJson['@odata.etag'] || row.etag, now, row.id)
-            }
+            // Ours stays ours; only the provider's id is recorded.
+            this.db
+              .prepare(
+                `UPDATE events
+                 SET provider_event_id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ?
+                 WHERE id = ?`
+              )
+              .run(resJson.id || eventId, resJson['@odata.etag'] || row.etag, now, row.id)
             pushedCount++
           } else if (res.status === 412) {
             console.warn(`ETag conflict on Microsoft event ${row.id}`)
@@ -373,7 +379,9 @@ export class MicrosoftSyncEngine {
         let instanceId = providerInstanceId
         if (!instanceId) {
           instanceId = await this.findInstanceId(
-            master.id,
+            // The /instances collection is the provider's, so it wants the
+            // provider's id for the series.
+            master.providerEventId || master.id,
             exception.originalStartUtc,
             accessToken
           )

@@ -80,7 +80,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
   const gridRef = useRef<HTMLDivElement>(null)
   const columnRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
-  const { hourBlockSize, dayStartHour } = useDisplayPreferences()
+  const { hourBlockSize, dayStartHour, dragSnapMinutes } = useDisplayPreferences()
   const HOUR_HEIGHT = HOUR_HEIGHT_BY_SIZE[hourBlockSize]
   const gridColsClass = WEEK_GRID_COLS
   const dayColOffset = 2
@@ -356,7 +356,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   onDragOver={(e) => {
                     prepareDropEvent(e)
                     const rect = e.currentTarget.getBoundingClientRect()
-                    const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT)
+                    const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT, dragSnapMinutes)
                     onDragOverTarget?.({
                       dateKey: dayKey,
                       hour: Math.floor(minutes / 60),
@@ -365,7 +365,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   }}
                   onDrop={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect()
-                    const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT)
+                    const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT, dragSnapMinutes)
                     onDropOnDate?.(e, day, minutes)
                   }}
                   onMouseDown={(e) => {

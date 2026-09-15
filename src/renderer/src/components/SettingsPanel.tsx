@@ -21,6 +21,7 @@ import type { Calendar } from '@shared/event-model'
 import type { ThemeConfig, ThemeMode } from '@shared/theme-mode'
 import type { DisplayPreferences } from '../context/DisplayPreferencesContext'
 import { NumberInput, CustomSelect, toast } from './ui'
+import { SNAP_STEP_OPTIONS } from '../dnd/resize-math'
 import AppearanceSettings from './AppearanceSettings'
 import HolidayCalendarToggle from './HolidayCalendarToggle'
 import { CALENDAR_COLOR_PALETTE } from '../lib/calendar-colors'
@@ -64,6 +65,8 @@ interface SettingsPanelProps {
   onChangeSecondaryTimezone: (next: string) => void
   suggestionShowCalendarName: boolean
   onToggleSuggestionShowCalendarName: (next: boolean) => void
+  dragSnapMinutes: DisplayPreferences['dragSnapMinutes']
+  onChangeDragSnapMinutes: (next: DisplayPreferences['dragSnapMinutes']) => void
   timezoneNames: string[]
   autoHideHeader: boolean
   onToggleAutoHideHeader: (next: boolean) => void
@@ -315,6 +318,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                           onClick={() => props.onChangeHourBlockSize(opt)}
                         >
                           {t(`settings.hourBlockSize${opt[0].toUpperCase()}${opt.slice(1)}`)}
+                        </button>
+                      ))}
+                    </div>
+                  </Row>
+                  <Row label={t('settings.dragSnap')}>
+                    <div className="flex gap-1">
+                      {SNAP_STEP_OPTIONS.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          className={props.dragSnapMinutes === opt ? 'gc-btn-primary' : 'gc-btn'}
+                          onClick={() => props.onChangeDragSnapMinutes(opt)}
+                        >
+                          {opt === 60 ? t('settings.dragSnapHour') : t('settings.dragSnapMin', { count: opt })}
                         </button>
                       ))}
                     </div>

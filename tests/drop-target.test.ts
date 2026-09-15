@@ -259,3 +259,53 @@ describe('resolveDropRange', () => {
     expect(Math.round(end.diff(start, 'hours').hours)).toBe(24)
   })
 })
+
+describe('snap step applied to drops', () => {
+  const targetDate = DateTime.fromISO('2026-09-20T00:00:00', { zone: 'utc' })
+
+  it('snaps the pointer reading to the configured step', () => {
+    expect(minutesFromPointer(638, 0, 60)).toBe(645) // 15-minute default
+    expect(minutesFromPointer(638, 0, 60, 30)).toBe(630)
+    expect(minutesFromPointer(638, 0, 60, 60)).toBe(660)
+  })
+
+  it('keeps the last slot of the day reachable at every step', () => {
+    // The clamp is one step short of midnight, so an hour step must still allow
+    // 23:00 rather than pinning the last hour to 23:45.
+    expect(minutesFromPointer(1e6, 0, 60, 60)).toBe(23 * 60)
+    expect(minutesFromPointer(1e6, 0, 60, 30)).toBe(23 * 60 + 30)
+    expect(minutesFromPointer(1e6, 0, 60, 15)).toBe(23 * 60 + 45)
+  })
+
+  it('places an all-day drop on the configured grid', () => {
+    const onHour = timedRangeForAllDayDrop({
+      targetDate,
+      pointerMinutes: 14 * 60 + 20,
+      snapStepMinutes: 60
+    })
+    expect(onHour.start.toFormat('HH:mm')).toBe('14:00')
+
+    const onQuarter = timedRangeForAllDayDrop({ targetDate, pointerMinutes: 14 * 60 + 20 })
+    expect(onQuarter.start.toFormat('HH:mm')).toBe('14:15')
+  })
+
+  it('shifts a timed drop on the configured grid', () => {
+    const origStart = DateTime.fromISO('2026-09-13T09:00:00', { zone: 'utc' })
+    const origEnd = origStart.plus({ hours: 2 })
+
+    const { start, end } = resolveDropRange({
+      allDay: false,
+      origStart,
+      origEnd,
+      segmentStart: origStart,
+      targetDate,
+      targetMinutes: 14 * 60 + 20,
+      grabOffsetMinutes: 0,
+      snapStepMinutes: 60
+    })
+
+    expect(start.toFormat('HH:mm')).toBe('14:00')
+    // The span survives the snap - only the start moves onto the grid.
+    expect(end.diff(start, 'hours').hours).toBe(2)
+  })
+})

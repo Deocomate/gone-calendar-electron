@@ -26,22 +26,28 @@ export function hourFromPointer(clientY: number, top: number, hourHeight: number
   return clampHour((clientY - top) / hourHeight)
 }
 
-export function minutesFromPointer(clientY: number, top: number, hourHeight: number): number {
+export function minutesFromPointer(
+  clientY: number,
+  top: number,
+  hourHeight: number,
+  snapStepMinutes: number = RESIZE_SNAP_MINUTES
+): number {
   if (hourHeight <= 0) return 0
   const raw = ((clientY - top) / hourHeight) * 60
-  const snapped = snapMinutes(raw, RESIZE_SNAP_MINUTES)
-  return Math.max(0, Math.min(24 * 60 - RESIZE_SNAP_MINUTES, snapped))
+  const snapped = snapMinutes(raw, snapStepMinutes)
+  return Math.max(0, Math.min(24 * 60 - snapStepMinutes, snapped))
 }
 
 export function grabOffsetMinutes(
   clientY: number,
   eventTop: number,
   eventHeight: number,
-  durationMinutes: number
+  durationMinutes: number,
+  snapStepMinutes: number = RESIZE_SNAP_MINUTES
 ): number {
   if (eventHeight <= 0) return 0
   const ratio = Math.max(0, Math.min(1, (clientY - eventTop) / eventHeight))
-  return ratio * Math.max(RESIZE_SNAP_MINUTES, durationMinutes)
+  return ratio * Math.max(snapStepMinutes, durationMinutes)
 }
 
 export function dropRangeFromPointer(args: {
@@ -49,11 +55,13 @@ export function dropRangeFromPointer(args: {
   pointerMinutes: number
   durationMinutes: number
   grabOffsetMinutes?: number
+  snapStepMinutes?: number
 }): { start: DateTime; end: DateTime } {
-  const duration = Math.max(RESIZE_SNAP_MINUTES, args.durationMinutes)
+  const step = args.snapStepMinutes ?? RESIZE_SNAP_MINUTES
+  const duration = Math.max(step, args.durationMinutes)
   const snappedStart = Math.max(
     0,
-    snapMinutes(args.pointerMinutes - (args.grabOffsetMinutes ?? 0), RESIZE_SNAP_MINUTES)
+    snapMinutes(args.pointerMinutes - (args.grabOffsetMinutes ?? 0), step)
   )
   const start = args.targetDate.startOf('day').plus({ minutes: snappedStart })
   return { start, end: start.plus({ minutes: duration }) }
@@ -88,12 +96,14 @@ export function timedRangeForAllDayDrop(args: {
   targetDate: DateTime
   pointerMinutes: number
   durationMinutes?: number
+  snapStepMinutes?: number
 }): { start: DateTime; end: DateTime } {
   return dropRangeFromPointer({
     targetDate: args.targetDate,
     pointerMinutes: args.pointerMinutes,
     durationMinutes: args.durationMinutes ?? ALL_DAY_TO_TIMED_MINUTES,
-    grabOffsetMinutes: 0
+    grabOffsetMinutes: 0,
+    snapStepMinutes: args.snapStepMinutes
   })
 }
 
@@ -104,12 +114,14 @@ export function shiftOccurrenceByDrop(args: {
   targetDate: DateTime
   pointerMinutes: number
   grabOffsetMinutes?: number
+  snapStepMinutes?: number
 }): { start: DateTime; end: DateTime } {
   const dropped = dropRangeFromPointer({
     targetDate: args.targetDate,
     pointerMinutes: args.pointerMinutes,
-    durationMinutes: RESIZE_SNAP_MINUTES,
-    grabOffsetMinutes: args.grabOffsetMinutes
+    durationMinutes: args.snapStepMinutes ?? RESIZE_SNAP_MINUTES,
+    grabOffsetMinutes: args.grabOffsetMinutes,
+    snapStepMinutes: args.snapStepMinutes
   })
   const deltaMs = dropped.start.toMillis() - args.segmentStart.toMillis()
   return {
@@ -144,10 +156,12 @@ export function resolveDropRange(args: {
   /** Minutes from midnight when the drop landed on the hourly grid. */
   targetMinutes?: number
   grabOffsetMinutes?: number
+  snapStepMinutes?: number
 }): { start: DateTime; end: DateTime } {
+  const step = args.snapStepMinutes ?? RESIZE_SNAP_MINUTES
   if (args.targetMinutes === undefined) {
     const durationMinutes = Math.max(
-      RESIZE_SNAP_MINUTES,
+      step,
       args.origEnd.diff(args.origStart, 'minutes').minutes
     )
     const start = args.targetDate.set({
@@ -162,7 +176,8 @@ export function resolveDropRange(args: {
   if (args.allDay) {
     return timedRangeForAllDayDrop({
       targetDate: args.targetDate,
-      pointerMinutes: args.targetMinutes
+      pointerMinutes: args.targetMinutes,
+      snapStepMinutes: step
     })
   }
 
@@ -172,6 +187,7 @@ export function resolveDropRange(args: {
     segmentStart: args.segmentStart,
     targetDate: args.targetDate,
     pointerMinutes: args.targetMinutes,
-    grabOffsetMinutes: args.grabOffsetMinutes
+    grabOffsetMinutes: args.grabOffsetMinutes,
+    snapStepMinutes: step
   })
 }

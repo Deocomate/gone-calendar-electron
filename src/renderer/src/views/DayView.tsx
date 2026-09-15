@@ -57,7 +57,7 @@ export const DayView: React.FC<DayViewProps> = ({
   const columnRef = useRef<HTMLDivElement>(null)
 
   const { t } = useTranslation()
-  const { hourBlockSize, dayStartHour } = useDisplayPreferences()
+  const { hourBlockSize, dayStartHour, dragSnapMinutes } = useDisplayPreferences()
   const HOUR_HEIGHT = HOUR_HEIGHT_BY_SIZE[hourBlockSize]
   const gridColsClass = 'grid-cols-[68px_minmax(0,1fr)]'
 
@@ -229,7 +229,7 @@ export const DayView: React.FC<DayViewProps> = ({
             onDragOver={(e) => {
               prepareDropEvent(e)
               const rect = e.currentTarget.getBoundingClientRect()
-              const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT)
+              const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT, dragSnapMinutes)
               onDragOverTarget?.({
                 dateKey: dayKey,
                 hour: Math.floor(minutes / 60),
@@ -238,7 +238,7 @@ export const DayView: React.FC<DayViewProps> = ({
             }}
             onDrop={(e) => {
               const rect = e.currentTarget.getBoundingClientRect()
-              const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT)
+              const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT, dragSnapMinutes)
               onDropOnDate?.(e, anchorDate, minutes)
             }}
             onMouseDown={(e) => {

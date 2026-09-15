@@ -9,6 +9,8 @@ export interface DisplayPreferences {
   secondaryTimezone: string
   /** Whether title suggestions name their calendar as well as colouring it. */
   suggestionShowCalendarName: boolean
+  /** Minutes that drag, drop and resize snap to. */
+  dragSnapMinutes: AppSettings['dragSnapMinutes']
 }
 
 export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
@@ -16,7 +18,8 @@ export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
   hourBlockSize: 'medium',
   dayStartHour: 7,
   secondaryTimezone: '',
-  suggestionShowCalendarName: true
+  suggestionShowCalendarName: true,
+  dragSnapMinutes: 15
 }
 
 /** Row height (px) of one hour in the Day/Week timed grid, per hourBlockSize setting. */

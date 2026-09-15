@@ -34,7 +34,11 @@ export function useEventResize(options: {
   scrollerRef?: RefObject<HTMLElement | null>
 }) {
   const { getGeometry, onCommit, onBusyEnd, scrollerRef } = options
-  const { timeFormat } = useDisplayPreferences()
+  const { timeFormat, dragSnapMinutes } = useDisplayPreferences()
+  // Read through a ref: the pointermove listener is registered once and must
+  // see the current step without being torn down and rebuilt on every change.
+  const snapStepRef = useRef(dragSnapMinutes)
+  snapStepRef.current = dragSnapMinutes
   const [preview, setPreview] = useState<ResizePreview | null>(null)
   const sessionRef = useRef<{
     occ: ExpandedOccurrence
@@ -84,7 +88,8 @@ export function useEventResize(options: {
         clientY: e.clientY,
         gridTop: geometry.gridTop,
         hourHeight: geometry.hourHeight,
-        daysDelta: daysDeltaFromPointer(session.originX, e.clientX, session.columnWidth)
+        daysDelta: daysDeltaFromPointer(session.originX, e.clientX, session.columnWidth),
+        snapStepMinutes: snapStepRef.current
       })
       const nextPreview: ResizePreview = {
         occId: session.occ.id,
@@ -155,7 +160,8 @@ export function useEventResize(options: {
       clientY: e.clientY,
       gridTop: geometry.gridTop,
       hourHeight: geometry.hourHeight,
-      daysDelta: 0
+      daysDelta: 0,
+      snapStepMinutes: snapStepRef.current
     })
     const nextPreview: ResizePreview = {
       occId: occ.id,

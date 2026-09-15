@@ -9,7 +9,8 @@ import {
   sameDropTarget,
   type CalendarDropTarget
 } from './drop-target'
-import { RESIZE_SNAP_MINUTES, snapMinutes } from './resize-math'
+import { snapMinutes } from './resize-math'
+import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 
 export function useEventDnD(
   onDirectMove?: (
@@ -22,6 +23,7 @@ export function useEventDnD(
     droppedOnTimeGrid?: boolean
   ) => void
 ) {
+  const { dragSnapMinutes } = useDisplayPreferences()
   const [draggedOccurrence, setDraggedOccurrence] = useState<ExpandedOccurrence | null>(null)
   const [dropTarget, setDropTarget] = useState<CalendarDropTarget | null>(null)
   const [pendingDrop, setPendingDrop] = useState<PendingDropAction | null>(null)
@@ -41,8 +43,8 @@ export function useEventDnD(
       const origStart = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
       const origEnd = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local')
       const visualDuration = segment
-        ? Math.max(RESIZE_SNAP_MINUTES, segment.endLocal.diff(segment.startLocal, 'minutes').minutes)
-        : Math.max(RESIZE_SNAP_MINUTES, origEnd.diff(origStart, 'minutes').minutes)
+        ? Math.max(dragSnapMinutes, segment.endLocal.diff(segment.startLocal, 'minutes').minutes)
+        : Math.max(dragSnapMinutes, origEnd.diff(origStart, 'minutes').minutes)
       segmentStartRef.current = segment?.startLocal ?? origStart
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
       // An all-day pill is a short bar with a 24-hour span, so where you grabbed
@@ -50,26 +52,29 @@ export function useEventDnD(
       // drop preview - and the drop - hours away from the cursor.
       grabOffsetRef.current = occ.allDay
         ? 0
-        : grabOffsetMinutes(e.clientY, rect.top, rect.height, visualDuration)
+        : grabOffsetMinutes(e.clientY, rect.top, rect.height, visualDuration, dragSnapMinutes)
     },
-    []
+    [dragSnapMinutes]
   )
 
-  const handleDragOverTarget = useCallback((target: CalendarDropTarget) => {
-    let next = target
-    if (target.minutes !== undefined) {
-      const startMinutes = Math.max(
-        0,
-        snapMinutes(target.minutes - grabOffsetRef.current, RESIZE_SNAP_MINUTES)
-      )
-      next = {
-        ...target,
-        minutes: startMinutes,
-        hour: Math.floor(startMinutes / 60)
+  const handleDragOverTarget = useCallback(
+    (target: CalendarDropTarget) => {
+      let next = target
+      if (target.minutes !== undefined) {
+        const startMinutes = Math.max(
+          0,
+          snapMinutes(target.minutes - grabOffsetRef.current, dragSnapMinutes)
+        )
+        next = {
+          ...target,
+          minutes: startMinutes,
+          hour: Math.floor(startMinutes / 60)
+        }
       }
-    }
-    setDropTarget((current) => (sameDropTarget(current, next) ? current : next))
-  }, [])
+      setDropTarget((current) => (sameDropTarget(current, next) ? current : next))
+    },
+    [dragSnapMinutes]
+  )
 
   const clearDragState = useCallback(() => {
     document.body.classList.remove('is-dnd-active')
@@ -124,7 +129,8 @@ export function useEventDnD(
         segmentStart: segmentStart ?? origStart,
         targetDate,
         targetMinutes,
-        grabOffsetMinutes: grabOffsetMinutesValue
+        grabOffsetMinutes: grabOffsetMinutesValue,
+        snapStepMinutes: dragSnapMinutes
       })
 
       if (newStart.toMillis() === origStart.toMillis() && newEnd.toMillis() === origEnd.toMillis()) {
@@ -146,7 +152,7 @@ export function useEventDnD(
         position: { x: e.clientX, y: e.clientY }
       })
     },
-    [clearDragState, draggedOccurrence, onDirectMove]
+    [clearDragState, draggedOccurrence, dragSnapMinutes, onDirectMove]
   )
 
   return {

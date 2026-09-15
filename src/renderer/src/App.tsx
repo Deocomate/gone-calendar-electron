@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
 import type { AppLocale } from '@shared/ipc-contract'
+import type { AppSettings } from '@shared/settings-contract'
 import type {
   Calendar,
   ExpandedOccurrence,
@@ -71,6 +72,7 @@ export const App: React.FC = () => {
   const [hourBlockSize, setHourBlockSize] = useState<DisplayPreferences['hourBlockSize']>('medium')
   const [secondaryTimezone, setSecondaryTimezone] = useState<string>('')
   const [suggestionShowCalendarName, setSuggestionShowCalendarName] = useState<boolean>(true)
+  const [dragSnapMinutes, setDragSnapMinutes] = useState<AppSettings['dragSnapMinutes']>(15)
   const [headerVisible, setHeaderVisible] = useState(true)
   const headerHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [firstDayOfWeek, setFirstDayOfWeek] = useState(1)
@@ -420,6 +422,7 @@ export const App: React.FC = () => {
           setHourBlockSize(settings.hourBlockSize ?? 'medium')
           setSecondaryTimezone(settings.secondaryTimezone ?? '')
           setSuggestionShowCalendarName(settings.suggestionShowCalendarName ?? true)
+          setDragSnapMinutes(settings.dragSnapMinutes ?? 15)
           setFirstDayOfWeek(settings.firstDayOfWeek ?? 1)
           const loc = settings.locale === 'vi' || settings.locale === 'en' ? settings.locale : 'en'
           if (loc !== i18n.language) await i18n.changeLanguage(loc)
@@ -539,6 +542,11 @@ export const App: React.FC = () => {
   const changeSecondaryTimezone = async (value: string) => {
     setSecondaryTimezone(value)
     if (window.gone?.settings) await window.gone.settings.set('secondaryTimezone', value)
+  }
+
+  const changeDragSnapMinutes = async (next: AppSettings['dragSnapMinutes']) => {
+    setDragSnapMinutes(next)
+    if (window.gone?.settings) await window.gone.settings.set('dragSnapMinutes', next)
   }
 
   const toggleSuggestionShowCalendarName = async (next: boolean) => {
@@ -787,7 +795,8 @@ export const App: React.FC = () => {
         hourBlockSize,
         dayStartHour,
         secondaryTimezone,
-        suggestionShowCalendarName
+        suggestionShowCalendarName,
+        dragSnapMinutes
       }}>
     <div
       className="relative flex h-screen w-screen flex-col overflow-hidden bg-app font-sans text-primary select-none"
@@ -1070,6 +1079,8 @@ export const App: React.FC = () => {
         onChangeSecondaryTimezone={changeSecondaryTimezone}
         suggestionShowCalendarName={suggestionShowCalendarName}
         onToggleSuggestionShowCalendarName={toggleSuggestionShowCalendarName}
+        dragSnapMinutes={dragSnapMinutes}
+        onChangeDragSnapMinutes={changeDragSnapMinutes}
         timezoneNames={TIMEZONE_NAMES}
         autoHideHeader={autoHideHeader}
         onToggleAutoHideHeader={toggleAutoHideHeader}

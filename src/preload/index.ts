@@ -29,7 +29,14 @@ const goneApi: GoneAPI = {
   },
   sync: {
     triggerNow: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC.TRIGGER_NOW),
-    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC.GET_STATUS)
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC.GET_STATUS),
+    onChanged: (callback: () => void) => {
+      // The renderer never sees the raw IpcRendererEvent - passing the sender
+      // across the bridge would hand it a live handle into main.
+      const listener = (): void => callback()
+      ipcRenderer.on(IPC_CHANNELS.SYNC.CHANGED, listener)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.SYNC.CHANGED, listener)
+    }
   },
   calendars: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.CALENDAR.LIST),

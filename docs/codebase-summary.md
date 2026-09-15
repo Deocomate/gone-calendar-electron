@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-31  
 **Version:** 0.1.0  
-**Build status:** All 10 phases complete, 275/275 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
+**Build status:** All 10 phases complete, 280/280 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
 
 ---
 
@@ -100,7 +100,7 @@ gone-calendar/
 │       ├── mini-calendar-grid.ts # Grid computation utilities
 │       ├── visible-range.ts     # Visible date range helpers
 │       └── ipc-contract.ts      # IPC_CHANNELS constants and GoneAPI interface
-├── tests/                       # Vitest unit tests (275 tests / 39 files)
+├── tests/                       # Vitest unit tests (280 tests / 40 files)
 │   └── stubs/electron.ts        # `electron` module stub for main-process tests
 ├── docs/
 │   ├── urd.md                   # User Requirements Document
@@ -241,10 +241,11 @@ tests/
 ├── resize-math.test.ts            # Event edge-resize math (renderer)
 ├── ui-components.test.ts          # UI primitive + editor SSR smoke (renderer)
 ├── i18n-parity.test.ts            # vi and en keep the same key set
+├── stale-event-error.test.ts      # Detecting an event re-keyed by a sync (renderer)
 └── ipc-contract.test.ts           # IPC channel and API surface contract
 ```
 
-**Total: 275 tests across 39 files. All passing.**
+**Total: 280 tests across 40 files. All passing.**
 
 Main-process tests run in plain Node; the `electron` module is aliased to
 `tests/stubs/electron.ts` in `vitest.config.ts` so they do not need the Electron

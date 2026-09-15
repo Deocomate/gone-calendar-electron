@@ -6,6 +6,20 @@ import i18n from '../../i18n'
 export { toast }
 
 /**
+ * True when the failure is "the row you asked about is not there any more".
+ *
+ * Almost always means a background sync re-keyed the event between the view
+ * rendering and the action firing: a first successful push replaces the local
+ * `evt_...` id with the one the provider assigned. The right response is to
+ * reload rather than to report a failure the user can do nothing about, so this
+ * is a predicate for the call site instead of a branch in showFriendlyError.
+ */
+export function isStaleEventError(err: unknown): boolean {
+  const raw = typeof err === 'string' ? err : (err as { message?: string })?.message || ''
+  return /Event not found|Source event not found|Master event not found/i.test(raw)
+}
+
+/**
  * Format any backend/IPC error message into a human-friendly, localized notification.
  */
 export function showFriendlyError(err: any, fallbackTitle?: string) {

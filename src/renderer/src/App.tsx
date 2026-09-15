@@ -33,7 +33,7 @@ import SyncConflictsModal from './components/SyncConflictsModal'
 import AppHeader from './components/shell/AppHeader'
 import AppSidebar from './components/shell/AppSidebar'
 import { useEventDnD } from './dnd/use-event-dnd'
-import { NotionToaster, toast, showFriendlyError } from './components/ui'
+import { NotionToaster, toast, showFriendlyError, isStaleEventError } from './components/ui'
 import { DisplayPreferencesProvider, type DisplayPreferences } from './context/DisplayPreferencesContext'
 
 export type { CalendarViewType }
@@ -197,6 +197,17 @@ export const App: React.FC = () => {
     }
   }
 
+  // A background sync can rewrite the rows under the view - including the id of
+  // an event that has just been pushed for the first time, which the provider
+  // assigns. Reloading on that signal is what keeps a drag or resize from acting
+  // on an occurrence that no longer exists.
+  useEffect(() => {
+    if (!window.gone?.sync?.onChanged) return
+    return window.gone.sync.onChanged(() => {
+      void loadCalendarsAndEvents()
+    })
+  }, [loadCalendarsAndEvents])
+
   const handleDirectMove = useCallback(
     async (
       occ: ExpandedOccurrence,
@@ -270,6 +281,14 @@ export const App: React.FC = () => {
         }
         await loadCalendarsAndEvents()
       } catch (err: any) {
+        // A sync that lands between the drag starting and the drop finishing can
+        // re-key the event, so the id in hand is already gone. Refresh instead of
+        // blaming the user for a move that was valid when they began it.
+        if (isStaleEventError(err)) {
+          await loadCalendarsAndEvents()
+          toast.error(t('friendly.staleTitle'), { description: t('friendly.staleBody') })
+          return
+        }
         showFriendlyError(err, t('toast.moveFailed'))
       }
     },
@@ -734,6 +753,12 @@ export const App: React.FC = () => {
       await loadCalendarsAndEvents()
       toast.success(t('toast.eventMoved'))
     } catch (err: any) {
+      if (isStaleEventError(err)) {
+        await loadCalendarsAndEvents()
+        toast.error(t('friendly.staleTitle'), { description: t('friendly.staleBody') })
+        setPendingDrop(null)
+        return
+      }
       showFriendlyError(err, t('toast.moveFailed'))
     }
   }

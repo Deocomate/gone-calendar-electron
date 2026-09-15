@@ -4,6 +4,8 @@ import { MicrosoftSyncEngine } from './microsoft-sync-engine'
 import { CalDavSyncEngine } from './caldav-sync-engine'
 import type { SyncStatus, SyncResult } from '@shared/event-model'
 import { mt } from '../i18n-main'
+import { BrowserWindow } from 'electron'
+import { IPC_CHANNELS } from '@shared/ipc-contract'
 
 export class SyncWorker {
   private googleEngine: GoogleSyncEngine
@@ -115,6 +117,17 @@ export class SyncWorker {
 
       this.lastSyncTime = new Date().toISOString()
       this.lastError = totalErrors > 0 ? `Sync completed with ${totalErrors} errors` : undefined
+
+      // Tell the renderer its copy of the data is out of date. This matters more
+      // than "the view is a few minutes stale": a successful push re-keys the
+      // local row to the id the provider assigned, so an occurrence the renderer
+      // is still holding by its old `evt_...` id no longer resolves, and the next
+      // move or resize of it fails with "Event not found".
+      if (totalPulled > 0 || totalPushed > 0) {
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) win.webContents.send(IPC_CHANNELS.SYNC.CHANGED)
+        }
+      }
 
       return {
         success: totalErrors === 0,

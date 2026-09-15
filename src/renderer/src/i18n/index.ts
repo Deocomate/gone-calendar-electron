@@ -325,6 +325,8 @@ export const resources = {
         untitled: '(untitled)'
       },
       friendly: {
+        staleTitle: 'This event just changed',
+        staleBody: 'A sync updated it. The calendar has been refreshed — try again.',
         fallback: 'Something went wrong',
         tryAgain: 'Please try again later.',
         readOnlyTitle: 'Read-only calendar',
@@ -693,6 +695,8 @@ export const resources = {
         untitled: '(không tiêu đề)'
       },
       friendly: {
+        staleTitle: 'Sự kiện vừa thay đổi',
+        staleBody: 'Đồng bộ đã cập nhật nó. Lịch đã được làm mới — hãy thử lại.',
         fallback: 'Có lỗi xảy ra',
         tryAgain: 'Vui lòng thử lại sau.',
         readOnlyTitle: 'Lịch chỉ đọc',

@@ -49,7 +49,10 @@ export const IPC_CHANNELS = {
   },
   SYNC: {
     TRIGGER_NOW: 'gone:sync:trigger-now',
-    GET_STATUS: 'gone:sync:get-status'
+    GET_STATUS: 'gone:sync:get-status',
+    /** main -> renderer. The only push channel in the app; everything else is
+     *  invoke/handle. Sent after a background sync that actually changed rows. */
+    CHANGED: 'gone:sync:changed'
   },
   CALENDAR: {
     LIST: 'gone:calendar:list',
@@ -163,6 +166,8 @@ export interface GoneAPI {
   sync: {
     triggerNow: () => Promise<SyncResult>
     getStatus: () => Promise<SyncStatus>
+    /** Fires when a background sync changed the database. Returns an unsubscribe. */
+    onChanged: (callback: () => void) => () => void
   }
   calendars: {
     list: () => Promise<Calendar[]>

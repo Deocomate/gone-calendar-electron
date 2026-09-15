@@ -68,7 +68,8 @@ describe('IPC Channels and Contracts', () => {
       },
       sync: {
         triggerNow: async () => ({ success: true, pulledCount: 0, pushedCount: 0, errorCount: 0 }),
-        getStatus: async () => ({ isSyncing: false, pendingPushesCount: 0, connectedAccounts: [] })
+        getStatus: async () => ({ isSyncing: false, pendingPushesCount: 0, connectedAccounts: [] }),
+        onChanged: () => () => {}
       },
       calendars: {
         list: async () => [],

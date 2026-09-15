@@ -826,6 +826,15 @@ export class EventsRepo {
     const rrule = input.copyInstanceOnly ? null : (existing.event.rrule || null)
     const exdate = input.copyInstanceOnly ? null : (existing.event.exdate || null)
 
+    // A bare copy is a new event that happens to share a name, not a duplicate.
+    // Carrying the original's location, notes and meeting link into a slot the
+    // user picked by dragging is usually wrong - the details belonged to the
+    // occasion, not to the title.
+    const notes = input.bare ? null : existing.event.notes || null
+    const location = input.bare ? null : existing.event.location || null
+    const color = input.bare ? null : existing.event.color || null
+    const meetingUrl = input.bare ? null : existing.event.meetingUrl || null
+
     this.db
       .prepare(
         `INSERT INTO events (
@@ -839,16 +848,16 @@ export class EventsRepo {
         targetCalendarId,
         newUid,
         existing.event.title,
-        existing.event.notes || null,
-        existing.event.location || null,
+        notes,
+        location,
         input.dtStartUtc,
         input.dtEndUtc,
         existing.event.tzid,
         (input.allDay ?? existing.event.allDay) ? 1 : 0,
         rrule,
         exdate,
-        existing.event.color || null,
-        existing.event.meetingUrl || null,
+        color,
+        meetingUrl,
         now,
         now
       )

@@ -47,7 +47,10 @@ export function grabOffsetMinutes(
 ): number {
   if (eventHeight <= 0) return 0
   const ratio = Math.max(0, Math.min(1, (clientY - eventTop) / eventHeight))
-  return ratio * Math.max(snapStepMinutes, durationMinutes)
+  // Snapped, not raw. An arbitrary offset subtracted from an already-snapped
+  // pointer gives the drop a phase that depends on where inside the block you
+  // happened to grab, so the preview and the drop can disagree about the grid.
+  return snapMinutes(ratio * Math.max(snapStepMinutes, durationMinutes), snapStepMinutes)
 }
 
 export function dropRangeFromPointer(args: {
@@ -124,9 +127,23 @@ export function shiftOccurrenceByDrop(args: {
     snapStepMinutes: args.snapStepMinutes
   })
   const deltaMs = dropped.start.toMillis() - args.segmentStart.toMillis()
+  const rawStart = args.origStart.plus({ milliseconds: deltaMs })
+
+  // Land the start on the grid, then carry the end by the same correction so the
+  // span is untouched.
+  //
+  // The delta alone is not enough. It is measured from the slice being dragged,
+  // which for a multi-day event is midnight rather than the event's own start -
+  // so an event beginning at 09:07 kept its :07 through every drop and could
+  // never reach a round time. Events pulled from a provider start at arbitrary
+  // minutes, so this was not an edge case.
+  const step = args.snapStepMinutes ?? RESIZE_SNAP_MINUTES
+  const minutesOfDay = rawStart.hour * 60 + rawStart.minute + rawStart.second / 60
+  const correction = snapMinutes(minutesOfDay, step) - minutesOfDay
+
   return {
-    start: args.origStart.plus({ milliseconds: deltaMs }),
-    end: args.origEnd.plus({ milliseconds: deltaMs })
+    start: rawStart.plus({ minutes: correction }).startOf('minute'),
+    end: args.origEnd.plus({ milliseconds: deltaMs }).plus({ minutes: correction }).startOf('minute')
   }
 }
 
@@ -190,4 +207,30 @@ export function resolveDropRange(args: {
     grabOffsetMinutes: args.grabOffsetMinutes,
     snapStepMinutes: step
   })
+}
+
+/**
+ * Confine a dropped range to the day it starts on.
+ *
+ * Drag-copy makes a fresh single event, so a source that ran across several days
+ * must not hand its span to the copy - dropping a three-day event at 14:00
+ * should give you one event at 14:00, not another three-day block. The length is
+ * kept where it fits and trimmed back to the day's last grid slot where it does
+ * not. A drop so late that even one step does not fit still gets one step rather
+ * than a zero-length event, so it may cross midnight by a few minutes - the
+ * point is not inheriting a multi-day span, not avoiding midnight at all costs.
+ */
+export function singleDayRange(
+  start: DateTime,
+  end: DateTime,
+  snapStepMinutes: number = RESIZE_SNAP_MINUTES
+): { start: DateTime; end: DateTime } {
+  const endOfDay = start.endOf('day')
+  if (end <= endOfDay) return { start, end }
+
+  // Snap *down* onto the grid: rounding could push the end past midnight, and a
+  // copy ending at 23:59:59.999 is not a time anyone meant to pick.
+  const remaining = endOfDay.diff(start, 'minutes').minutes
+  const minutes = Math.max(snapStepMinutes, Math.floor(remaining / snapStepMinutes) * snapStepMinutes)
+  return { start, end: start.plus({ minutes }) }
 }

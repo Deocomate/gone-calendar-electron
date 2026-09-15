@@ -34,6 +34,7 @@ import SyncConflictsModal from './components/SyncConflictsModal'
 import AppHeader from './components/shell/AppHeader'
 import AppSidebar from './components/shell/AppSidebar'
 import { useEventDnD } from './dnd/use-event-dnd'
+import { singleDayRange } from './dnd/drop-target'
 import { NotionToaster, toast, showFriendlyError, isStaleEventError } from './components/ui'
 import { DisplayPreferencesProvider, type DisplayPreferences } from './context/DisplayPreferencesContext'
 
@@ -232,12 +233,17 @@ export const App: React.FC = () => {
 
       try {
         if (isCopy) {
+          // Drag-copy makes a new event that shares a name and a calendar, not a
+          // duplicate: no recurrence, no multi-day span, and none of the
+          // original's notes, location or meeting link. Its length is kept.
+          const range = singleDayRange(targetStart, targetEnd, dragSnapMinutes)
           await window.gone.events.copy({
             sourceEventId: occ.eventId,
-            dtStartUtc: targetStart.toUTC().toISO()!,
-            dtEndUtc: targetEnd.toUTC().toISO()!,
+            dtStartUtc: range.start.toUTC().toISO()!,
+            dtEndUtc: range.end.toUTC().toISO()!,
             targetCalendarId: occ.calendarId,
             copyInstanceOnly: true,
+            bare: true,
             // Alt-dragging an all-day event onto the grid has to produce a timed
             // copy too, or the copy keeps its all-day flag with an hour's range.
             allDay: targetAllDay === undefined ? occ.allDay : targetAllDay
@@ -294,7 +300,7 @@ export const App: React.FC = () => {
         showFriendlyError(err, t('toast.moveFailed'))
       }
     },
-    [calendars, loadCalendarsAndEvents, t]
+    [calendars, dragSnapMinutes, loadCalendarsAndEvents, t]
   )
 
   const {

@@ -193,6 +193,9 @@ export interface CopyEventInput {
   /** Override the source's all-day-ness - set when an all-day event is
    *  alt-dragged onto the hourly grid. Omitted keeps the source's. */
   allDay?: boolean
+  /** Keep only the title and the calendar. Drag-copy makes a fresh event rather
+   *  than a duplicate carrying the original's notes, location and meeting link. */
+  bare?: boolean
 }
 
 export interface UpdateRecurringScopeInput {

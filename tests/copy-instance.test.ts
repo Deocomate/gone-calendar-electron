@@ -128,3 +128,91 @@ describe('copyEvent all-day override', () => {
     expect(copy.dtEndUtc).toBe('2026-09-27T05:00:00.000Z')
   })
 })
+
+describe('bare copy from a drag', () => {
+  let db: ISqliteDatabase
+  let repo: EventsRepo
+  let calendarId: string
+
+  beforeEach(() => {
+    db = initDatabase(':memory:')
+    repo = new EventsRepo(db)
+    calendarId = new CalendarsRepo(db).createCalendar({ name: 'Work', color: '#6366f1' }).id
+  })
+
+  afterEach(() => {
+    closeDatabase()
+  })
+
+  function detailedSource() {
+    return repo.createEvent({
+      calendarId,
+      title: 'Standup',
+      notes: 'bring laptop',
+      location: 'Room 2',
+      meetingUrl: 'https://meet.example.com/abc',
+      color: '#ff0000',
+      dtStartUtc: '2026-09-14T09:00:00.000Z',
+      dtEndUtc: '2026-09-14T09:30:00.000Z',
+      rrule: 'FREQ=WEEKLY;BYDAY=MO'
+    })
+  }
+
+  it('keeps the name, the calendar and the length, and nothing else', () => {
+    const src = detailedSource()
+
+    const copy = repo.copyEvent({
+      sourceEventId: src.id,
+      dtStartUtc: '2026-09-17T14:00:00.000Z',
+      dtEndUtc: '2026-09-17T14:30:00.000Z',
+      copyInstanceOnly: true,
+      bare: true
+    })
+
+    expect(copy.title).toBe('Standup')
+    expect(copy.calendarId).toBe(calendarId)
+    expect(copy.dtStartUtc).toBe('2026-09-17T14:00:00.000Z')
+    expect(copy.dtEndUtc).toBe('2026-09-17T14:30:00.000Z')
+
+    // The row mapper reports an absent column as undefined, so assert "not set"
+    // rather than a specific empty value.
+    expect(copy.rrule ?? null).toBeNull()
+    expect(copy.notes ?? null).toBeNull()
+    expect(copy.location ?? null).toBeNull()
+    expect(copy.meetingUrl ?? null).toBeNull()
+    expect(copy.color ?? null).toBeNull()
+  })
+
+  it('is a new event, not a second pointer at the old one', () => {
+    const src = detailedSource()
+    const copy = repo.copyEvent({
+      sourceEventId: src.id,
+      dtStartUtc: '2026-09-17T14:00:00.000Z',
+      dtEndUtc: '2026-09-17T14:30:00.000Z',
+      copyInstanceOnly: true,
+      bare: true
+    })
+
+    expect(copy.id).not.toBe(src.id)
+    expect(copy.uid).not.toBe(src.uid)
+    // The original is untouched, series and all.
+    const original = repo.getEventById(src.id)!.event
+    expect(original.rrule).toBe('FREQ=WEEKLY;BYDAY=MO')
+    expect(original.notes).toBe('bring laptop')
+  })
+
+  it('still carries the details when the copy is not bare', () => {
+    // The Move/Copy popover offers a deliberate full-series copy; that path must
+    // keep behaving like a duplicate.
+    const src = detailedSource()
+    const copy = repo.copyEvent({
+      sourceEventId: src.id,
+      dtStartUtc: '2026-09-17T14:00:00.000Z',
+      dtEndUtc: '2026-09-17T14:30:00.000Z'
+    })
+
+    expect(copy.notes).toBe('bring laptop')
+    expect(copy.location).toBe('Room 2')
+    expect(copy.rrule).toBe('FREQ=WEEKLY;BYDAY=MO')
+  })
+})

@@ -11,7 +11,9 @@ import {
   shiftOccurrenceByDrop,
   timedRangeForAllDayDrop,
   ALL_DAY_TO_TIMED_MINUTES,
-  resolveDropRange
+  resolveDropRange,
+  grabOffsetMinutes,
+  singleDayRange
 } from '../src/renderer/src/dnd/drop-target'
 import MonthView from '../src/renderer/src/views/MonthView'
 
@@ -307,5 +309,119 @@ describe('snap step applied to drops', () => {
     expect(start.toFormat('HH:mm')).toBe('14:00')
     // The span survives the snap - only the start moves onto the grid.
     expect(end.diff(start, 'hours').hours).toBe(2)
+  })
+})
+
+describe('a dropped start always lands on the grid', () => {
+  const day = DateTime.fromISO('2026-09-20T00:00:00', { zone: 'utc' })
+
+  /**
+   * Regression. The drop was computed as a delta added to the event's own start,
+   * and the delta is measured from the slice being dragged - which for a
+   * multi-day event is midnight, not the event's start. An event beginning at
+   * 09:07 therefore kept its :07 through every drop and could never reach a
+   * round time. Provider events start at arbitrary minutes, so this was common.
+   */
+  function reachableStarts(args: {
+    origStart: string
+    origEnd: string
+    segmentStart: string
+    step: number
+  }) {
+    const origStart = DateTime.fromISO(args.origStart, { zone: 'utc' })
+    const origEnd = DateTime.fromISO(args.origEnd, { zone: 'utc' })
+    const segmentStart = DateTime.fromISO(args.segmentStart, { zone: 'utc' })
+    const starts = new Set<string>()
+    for (let grabY = 0; grabY <= 60; grabY += 5) {
+      const grab = grabOffsetMinutes(grabY, 0, 60, 60, args.step)
+      for (let py = 600; py <= 660; py += 3) {
+        const pointer = minutesFromPointer(py, 0, 60, args.step)
+        const { start } = resolveDropRange({
+          allDay: false,
+          origStart,
+          origEnd,
+          segmentStart,
+          targetDate: day,
+          targetMinutes: pointer,
+          grabOffsetMinutes: grab,
+          snapStepMinutes: args.step
+        })
+        starts.add(start.toFormat('HH:mm'))
+      }
+    }
+    return [...starts]
+  }
+
+  const offGridMultiDay = {
+    origStart: '2026-09-13T09:07:00',
+    origEnd: '2026-09-15T11:00:00',
+    segmentStart: '2026-09-14T00:00:00'
+  }
+
+  it('reaches round times even when the event itself starts at an odd minute', () => {
+    const starts = reachableStarts({ ...offGridMultiDay, step: 15 })
+    for (const s of starts) expect(Number(s.slice(3)) % 15, s).toBe(0)
+    expect(starts).toContain('19:00')
+    expect(starts).toContain('19:30')
+  })
+
+  it('offers only half hours on a 30-minute step', () => {
+    const starts = reachableStarts({ ...offGridMultiDay, step: 30 })
+    for (const s of starts) expect(Number(s.slice(3)) % 30, s).toBe(0)
+  })
+
+  it('offers only whole hours on a 60-minute step', () => {
+    const starts = reachableStarts({ ...offGridMultiDay, step: 60 })
+    for (const s of starts) expect(s.slice(3), s).toBe('00')
+  })
+
+  it('keeps the span exactly while moving the start onto the grid', () => {
+    const origStart = DateTime.fromISO('2026-09-13T09:07:00', { zone: 'utc' })
+    const origEnd = DateTime.fromISO('2026-09-15T11:00:00', { zone: 'utc' })
+    const { start, end } = resolveDropRange({
+      allDay: false,
+      origStart,
+      origEnd,
+      segmentStart: DateTime.fromISO('2026-09-14T00:00:00', { zone: 'utc' }),
+      targetDate: day,
+      targetMinutes: 14 * 60,
+      grabOffsetMinutes: 0,
+      snapStepMinutes: 15
+    })
+    expect(start.minute % 15).toBe(0)
+    expect(end.diff(start, 'minutes').minutes).toBe(origEnd.diff(origStart, 'minutes').minutes)
+  })
+
+  it('snaps the grab offset so the preview and the drop agree on the grid', () => {
+    // A mid-block grab of a 50-minute event used to yield an offset of 25, which
+    // is not on any grid and skewed every drop that subtracted it.
+    expect(grabOffsetMinutes(25, 0, 50, 50, 15) % 15).toBe(0)
+    expect(grabOffsetMinutes(25, 0, 50, 50, 30) % 30).toBe(0)
+  })
+})
+
+describe('singleDayRange', () => {
+  const start = DateTime.fromISO('2026-09-20T14:00:00', { zone: 'utc' })
+
+  it('leaves a range that already fits inside the day alone', () => {
+    const end = start.plus({ hours: 2 })
+    expect(singleDayRange(start, end).end.toISO()).toBe(end.toISO())
+  })
+
+  it('trims a multi-day span to the end of the starting day', () => {
+    const { end } = singleDayRange(start, start.plus({ days: 3 }))
+    expect(end.toISODate()).toBe('2026-09-20')
+    expect(end.diff(start, 'hours').hours).toBeLessThanOrEqual(10)
+  })
+
+  it('leaves the trimmed end on the grid', () => {
+    const { end } = singleDayRange(start, start.plus({ days: 3 }), 30)
+    expect(end.minute % 30).toBe(0)
+  })
+
+  it('never produces a zero-length event at the very end of the day', () => {
+    const late = DateTime.fromISO('2026-09-20T23:50:00', { zone: 'utc' })
+    const { start: s, end } = singleDayRange(late, late.plus({ days: 2 }), 15)
+    expect(end.diff(s, 'minutes').minutes).toBeGreaterThanOrEqual(15)
   })
 })

@@ -7,6 +7,7 @@ export const resources = {
       appName: 'Gone Calendar',
       common: {
         cancel: 'Cancel',
+        copy: 'Copy',
         close: 'Close',
         back: 'Back',
         delete: 'Delete',
@@ -339,15 +340,6 @@ export const resources = {
         rruleBody: 'The recurrence rule (RRULE) is not valid RFC 5545 syntax.'
       },
       toast: {
-        eventCreated: 'Event created',
-        changesSaved: 'Changes saved',
-        eventDeleted: 'Event deleted',
-        eventMoved: 'Event moved',
-        eventTimeUpdated: 'Event time updated',
-        eventCopied: 'Event copied',
-        recurringUpdated: 'Recurring event updated',
-        recurringDeleted: 'Recurring event deleted',
-        conflictResolved: 'Conflict resolved',
         conflictResolveFailed: 'Failed to resolve conflict',
         saveFailed: 'Failed to save event',
         deleteFailed: 'Failed to delete event',
@@ -360,8 +352,6 @@ export const resources = {
           'This event belongs to a read-only calendar (such as a Holiday calendar) and cannot be moved or edited.',
         readOnlyDelete:
           'This event belongs to a read-only calendar (such as a Holiday calendar) and cannot be deleted.',
-        copiedTo: '"{{title}}" copied to {{date}}',
-        movedDetail: '"{{title}}" · {{when}}',
         lunarAdded: 'Added {{count}} year(s) to the calendar',
         lunarAddedDetail: 'Through {{year}}. These sync to the provider as ordinary events.',
         lunarUpToDate: 'Already up to date — nothing new to add',
@@ -380,6 +370,7 @@ export const resources = {
       appName: 'Gone Calendar',
       common: {
         cancel: 'Hủy',
+        copy: 'Sao chép',
         close: 'Đóng',
         back: 'Quay lại',
         delete: 'Xóa',
@@ -712,15 +703,6 @@ export const resources = {
         rruleBody: 'Cú pháp quy tắc lặp lại (RRULE) không đúng định dạng RFC 5545.'
       },
       toast: {
-        eventCreated: 'Đã tạo sự kiện',
-        changesSaved: 'Đã lưu thay đổi',
-        eventDeleted: 'Đã xóa sự kiện',
-        eventMoved: 'Đã chuyển sự kiện',
-        eventTimeUpdated: 'Đã cập nhật thời gian sự kiện',
-        eventCopied: 'Đã sao chép sự kiện',
-        recurringUpdated: 'Đã cập nhật sự kiện lặp',
-        recurringDeleted: 'Đã xóa sự kiện lặp',
-        conflictResolved: 'Đã xử lý xung đột',
         conflictResolveFailed: 'Xử lý xung đột thất bại',
         saveFailed: 'Lưu sự kiện thất bại',
         deleteFailed: 'Xóa sự kiện thất bại',
@@ -733,8 +715,6 @@ export const resources = {
           'Sự kiện này thuộc lịch chỉ đọc (như Lịch ngày lễ) nên không thể chuyển hoặc chỉnh sửa.',
         readOnlyDelete:
           'Sự kiện này thuộc lịch chỉ đọc (như Lịch ngày lễ) nên không thể xóa.',
-        copiedTo: 'Đã sao chép "{{title}}" sang {{date}}',
-        movedDetail: '"{{title}}" · {{when}}',
         lunarAdded: 'Đã thêm {{count}} năm vào lịch',
         lunarAddedDetail: 'Đến năm {{year}}. Các bản này đồng bộ sang nhà cung cấp như sự kiện thường.',
         lunarUpToDate: 'Đã cập nhật — không có gì mới để thêm',

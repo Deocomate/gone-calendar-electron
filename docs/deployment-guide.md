@@ -47,7 +47,7 @@ npm run typecheck:web    # Renderer (tsconfig.web.json)
 
 ```bash
 npm run test
-# Runs: vitest run (all 336 tests across 41 files)
+# Runs: vitest run (all 342 tests across 42 files)
 ```
 
 Test files live in `tests/` at the project root and use `:memory:` SQLite for database tests.

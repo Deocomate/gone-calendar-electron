@@ -12,7 +12,6 @@ import type {
   SyncConflict
 } from '@shared/event-model'
 import type { CalendarViewType } from '@shared/visible-range'
-import { formatClockTime } from '@shared/time-format'
 import { useVisibleRange } from './hooks/use-visible-range'
 import { useTheme } from './hooks/use-theme'
 import MonthView from './views/MonthView'
@@ -194,7 +193,6 @@ export const App: React.FC = () => {
     try {
       await window.gone.events.resolveConflict(eventId, resolution)
       setConflicts((prev) => prev.filter((c) => c.eventId !== eventId))
-      toast.success(t('toast.conflictResolved'))
     } catch (err: any) {
       showFriendlyError(err, t('toast.conflictResolveFailed'))
     }
@@ -245,7 +243,6 @@ export const App: React.FC = () => {
       targetStart: DateTime,
       targetEnd: DateTime,
       isCopy: boolean,
-      kind: 'move' | 'resize' = 'move',
       /** Undefined keeps the occurrence's current all-day-ness. */
       targetAllDay?: boolean
     ) => {
@@ -256,8 +253,6 @@ export const App: React.FC = () => {
         toast.error(t('toast.readOnlyTitle'), { description: t('toast.readOnlyMove') })
         return
       }
-
-      const when = `${targetStart.toFormat('dd/MM')} ${formatClockTime(targetStart, timeFormat)} – ${formatClockTime(targetEnd, timeFormat)}`
 
       try {
         if (isCopy) {
@@ -275,12 +270,6 @@ export const App: React.FC = () => {
             // Alt-dragging an all-day event onto the grid has to produce a timed
             // copy too, or the copy keeps its all-day flag with an hour's range.
             allDay: targetAllDay === undefined ? occ.allDay : targetAllDay
-          })
-          toast.success(t('toast.eventCopied'), {
-            description: t('toast.copiedTo', {
-              title: occ.title,
-              date: targetStart.toFormat('dd/MM/yyyy')
-            })
           })
         } else if (occ.isRecurring) {
           await window.gone.events.updateScope({
@@ -300,9 +289,6 @@ export const App: React.FC = () => {
               meetingUrl: occ.meetingUrl
             }
           })
-          toast.success(kind === 'resize' ? t('toast.eventTimeUpdated') : t('toast.eventMoved'), {
-            description: t('toast.movedDetail', { title: occ.title, when })
-          })
         } else {
           await window.gone.events.move({
             eventId: occ.eventId,
@@ -310,9 +296,6 @@ export const App: React.FC = () => {
             dtEndUtc: targetEnd.toUTC().toISO()!,
             targetCalendarId: occ.calendarId,
             allDay: targetAllDay === undefined ? occ.allDay : targetAllDay
-          })
-          toast.success(kind === 'resize' ? t('toast.eventTimeUpdated') : t('toast.eventMoved'), {
-            description: t('toast.movedDetail', { title: occ.title, when })
           })
         }
         await loadCalendarsAndEvents()
@@ -351,14 +334,14 @@ export const App: React.FC = () => {
         end: DateTime,
         isCopy: boolean,
         targetAllDay?: boolean
-      ) => void handleDirectMove(occ, start, end, isCopy, 'move', targetAllDay),
+      ) => void handleDirectMove(occ, start, end, isCopy, targetAllDay),
       [handleDirectMove]
     )
   )
 
   const handleResizeCommit = useCallback(
     (occ: ExpandedOccurrence, start: DateTime, end: DateTime) => {
-      void handleDirectMove(occ, start, end, false, 'resize')
+      void handleDirectMove(occ, start, end, false)
     },
     [handleDirectMove]
   )
@@ -625,7 +608,6 @@ export const App: React.FC = () => {
         await window.gone.events.create(payload.input as CreateEventInput)
         setIsEditorOpen(false)
         await loadCalendarsAndEvents()
-        toast.success(t('toast.eventCreated'))
       } else if (payload.eventId) {
         if (payload.isRecurringOccurrence && payload.occurrenceStartUtc) {
           setIsEditorOpen(false)
@@ -640,7 +622,6 @@ export const App: React.FC = () => {
           await window.gone.events.update(payload.eventId, payload.input as UpdateEventInput)
           setIsEditorOpen(false)
           await loadCalendarsAndEvents()
-          toast.success(t('toast.changesSaved'))
         }
       }
     } catch (err: any) {
@@ -663,7 +644,6 @@ export const App: React.FC = () => {
       await loadCalendarsAndEvents()
       // With no confirmation this toast is the only feedback the gesture gives,
       // so it names what went.
-      toast.success(t('toast.eventDeleted'), { description: options?.title })
     }
 
     if (isRecurring && occurrenceStartUtc) {
@@ -715,14 +695,12 @@ export const App: React.FC = () => {
           scope,
           updateInput: pendingRecurringScope.input
         })
-        toast.success(t('toast.recurringUpdated'))
       } else if (pendingRecurringScope.action === 'delete') {
         await window.gone.events.deleteScope({
           masterEventId: pendingRecurringScope.eventId,
           originalStartUtc: pendingRecurringScope.occurrenceStartUtc,
           scope
         })
-        toast.success(t('toast.recurringDeleted'))
       }
       setPendingRecurringScope(null)
       await loadCalendarsAndEvents()
@@ -794,7 +772,6 @@ export const App: React.FC = () => {
       })
       setPendingDrop(null)
       await loadCalendarsAndEvents()
-      toast.success(t('toast.eventMoved'))
     } catch (err: any) {
       if (isStaleEventError(err)) {
         await loadCalendarsAndEvents()
@@ -827,7 +804,6 @@ export const App: React.FC = () => {
       })
       setPendingDrop(null)
       await loadCalendarsAndEvents()
-      toast.success(t('toast.eventCopied'))
     } catch (err: any) {
       showFriendlyError(err, t('toast.copyFailed'))
     }

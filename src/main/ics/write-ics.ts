@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { inclusiveEndToExclusiveDate } from '@shared/all-day'
 import type { Calendar, CalendarEvent, EventException } from '@shared/event-model'
 
 function formatIcsDateTime(isoUtc: string, isAllDay: boolean): string {
@@ -50,7 +51,10 @@ export function generateIcs(
 
     if (event.allDay) {
       lines.push(`DTSTART;VALUE=DATE:${formatIcsDateTime(event.dtStartUtc, true)}`)
-      lines.push(`DTEND;VALUE=DATE:${formatIcsDateTime(event.dtEndUtc, true)}`)
+      // DTEND is exclusive for DATE values per RFC 5545.
+      lines.push(
+        `DTEND;VALUE=DATE:${inclusiveEndToExclusiveDate(event.dtStartUtc, event.dtEndUtc).replace(/-/g, '')}`
+      )
     } else {
       lines.push(`DTSTART:${formatIcsDateTime(event.dtStartUtc, false)}`)
       lines.push(`DTEND:${formatIcsDateTime(event.dtEndUtc, false)}`)
@@ -62,6 +66,14 @@ export function generateIcs(
     }
     if (event.location) {
       lines.push(`LOCATION:${escapeIcsText(event.location)}`)
+    }
+    // URL and COLOR are both RFC-defined (5545 / 7986) and round-trip through
+    // CalDAV servers, so a meeting link or per-event colour survives a push.
+    if (event.meetingUrl) {
+      lines.push(`URL:${escapeIcsText(event.meetingUrl)}`)
+    }
+    if (event.color) {
+      lines.push(`COLOR:${escapeIcsText(event.color)}`)
     }
     if (event.rrule) {
       lines.push(`RRULE:${event.rrule}`)
@@ -97,7 +109,9 @@ export function generateIcs(
         const endIso = ex.dtEndUtc || startIso
         if (event.allDay) {
           lines.push(`DTSTART;VALUE=DATE:${formatIcsDateTime(startIso, true)}`)
-          lines.push(`DTEND;VALUE=DATE:${formatIcsDateTime(endIso, true)}`)
+          lines.push(
+            `DTEND;VALUE=DATE:${inclusiveEndToExclusiveDate(startIso, endIso).replace(/-/g, '')}`
+          )
         } else {
           lines.push(`DTSTART:${formatIcsDateTime(startIso, false)}`)
           lines.push(`DTEND:${formatIcsDateTime(endIso, false)}`)

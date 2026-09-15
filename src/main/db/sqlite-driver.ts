@@ -23,6 +23,9 @@ export interface ISqliteDatabase {
  * Universal driver wrapper that prefers node:sqlite (DatabaseSync)
  * and falls back to better-sqlite3 if node:sqlite is not bundled.
  */
+/** Upper bound on cached prepared statements per connection. */
+const MAX_CACHED_STATEMENTS = 256
+
 export function createSqliteDriver(dbPath: string): ISqliteDatabase {
   if (dbPath !== ':memory:') {
     const dir = dirname(dbPath)
@@ -44,14 +47,26 @@ export function createSqliteDriver(dbPath: string): ISqliteDatabase {
     rawDb.exec('PRAGMA foreign_keys = ON;')
 
     let txnDepth = 0
+    const statementCache = new Map<string, ISqliteStatement>()
 
     const driver: ISqliteDatabase = {
       exec(sql: string): void {
         rawDb.exec(sql)
       },
       prepare(sql: string): ISqliteStatement {
+        // Compiling a statement is not free, and the hot paths re-prepare the
+        // same handful of queries constantly - a single week view measured over
+        // 200 prepares. Statements are immutable once compiled and safe to
+        // reuse, so they are cached by SQL text for the life of the connection.
+        let wrapped = statementCache.get(sql)
+        if (wrapped) return wrapped
+
+        // Queries built with `IN (?,?,…)` produce a distinct SQL string per
+        // argument count, so the key space is not fixed. Cap it rather than let
+        // it grow for the life of the process; past the cap we simply stop
+        // caching and compile as before.
         const stmt = rawDb.prepare(sql)
-        return {
+        wrapped = {
           run(...params: any[]): ISqliteRunResult {
             const res = stmt.run(...params)
             return {
@@ -66,6 +81,8 @@ export function createSqliteDriver(dbPath: string): ISqliteDatabase {
             return stmt.all(...params) as T[]
           }
         }
+        if (statementCache.size < MAX_CACHED_STATEMENTS) statementCache.set(sql, wrapped)
+        return wrapped
       },
       transaction<T>(fn: () => T): () => T {
         return () => {
@@ -98,6 +115,8 @@ export function createSqliteDriver(dbPath: string): ISqliteDatabase {
         }
       },
       close(): void {
+        // Cached statements belong to this connection; drop them with it.
+        statementCache.clear()
         rawDb.close()
       }
     }

@@ -35,7 +35,8 @@ describe('IPC Channels and Contracts', () => {
           return false
         },
         getPlatform: async () => 'win32',
-        pickBackgroundImage: async () => null
+        pickBackgroundImage: async () => null,
+      backupDatabase: async () => ({ success: true })
       },
       settings: {
         getAll: async () => ({
@@ -49,7 +50,9 @@ describe('IPC Channels and Contracts', () => {
           autoHideHeader: true,
           dayStartHour: 7,
           hourBlockSize: 'medium',
-          secondaryTimezone: ''
+          secondaryTimezone: '',
+          dragSnapMinutes: 15,
+          suggestionShowCalendarName: true
         }),
         get: async () => true as any,
         set: async () => true
@@ -61,11 +64,13 @@ describe('IPC Channels and Contracts', () => {
         disconnectMicrosoft: async () => true,
         connectCalDav: async () => ({ success: true }),
         disconnectCalDav: async () => true,
-        listAccounts: async () => []
+        listAccounts: async () => [],
+      detachAccount: async () => ({ success: true, calendarCount: 0, eventCount: 0 })
       },
       sync: {
         triggerNow: async () => ({ success: true, pulledCount: 0, pushedCount: 0, errorCount: 0 }),
-        getStatus: async () => ({ isSyncing: false, pendingPushesCount: 0, connectedAccounts: [] })
+        getStatus: async () => ({ isSyncing: false, pendingPushesCount: 0, connectedAccounts: [] }),
+        onChanged: () => () => {}
       },
       calendars: {
         list: async () => [],
@@ -166,6 +171,7 @@ describe('IPC Channels and Contracts', () => {
         materializeLunar: async () => ({ count: 0 }),
         detachLunar: async () => ({ count: 0 }),
         search: async () => [],
+        suggestTitles: async () => [],
         shareIcs: async () => ({ success: true }),
         listConflicts: async () => [],
         resolveConflict: async () => true

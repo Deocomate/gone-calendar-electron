@@ -11,6 +11,7 @@ import type {
   UpdateEventInput,
   LunarRecurrenceSpec
 } from '@shared/event-model'
+import type { TitleSuggestion } from '@shared/title-suggestions'
 import { convertSolarToLunar, resolveLunarOccurrence } from '@shared/lunar-vietnam'
 import { DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
 import {
@@ -25,6 +26,7 @@ import {
   toast,
   showFriendlyError
 } from '../components/ui'
+import { TitleSuggestInput } from './TitleSuggestInput'
 
 export interface EventEditorInitialData {
   occurrence?: ExpandedOccurrence
@@ -284,6 +286,19 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, isDirty, onClose])
 
+  /**
+   * The slot the title suggestions are being asked about, in the same shape the
+   * database stores: an all-day start is a floating date pinned to midnight UTC,
+   * a timed one is a real instant. Getting this wrong would rank against the
+   * wrong hour of the day west of GMT.
+   */
+  const suggestionTargetStartUtc = useMemo(() => {
+    if (!startDateStr) return ''
+    if (allDay || recurrencePreset === 'lunar-yearly') return `${startDateStr}T00:00:00.000Z`
+    const dt = DateTime.fromISO(`${startDateStr}T${startTimeStr}:00`, { zone: 'local' })
+    return dt.isValid ? dt.toUTC().toISO()! : ''
+  }, [startDateStr, startTimeStr, allDay, recurrencePreset])
+
   const calendarOptions = useMemo(
     () =>
       (calendars || []).map((cal) => ({
@@ -366,6 +381,20 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
   const handleFieldChange = (setter: React.Dispatch<React.SetStateAction<any>>, val: any) => {
     setter(val)
+    setIsDirty(true)
+  }
+
+  /**
+   * Accepting a suggestion also moves the event onto the calendar that title
+   * normally lives on - the whole point of ranking by past events rather than
+   * just completing the text. A read-only calendar never reaches the list, so
+   * the switch cannot land somewhere nothing can be created.
+   */
+  const handlePickSuggestion = (suggestion: TitleSuggestion) => {
+    setTitle(suggestion.title)
+    if ((calendars || []).some((c) => c.id === suggestion.calendarId && !c.isReadOnly)) {
+      setCalendarId(suggestion.calendarId)
+    }
     setIsDirty(true)
   }
 
@@ -604,7 +633,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
 
   return (
     <div
-      className={isSidePanel ? 'fixed inset-0 z-50 select-none bg-black/10' : 'gc-overlay select-none'}
+      className={isSidePanel ? 'fixed inset-0 z-50 select-none bg-black/30' : 'gc-overlay select-none'}
       onClick={(e) => {
         if (e.target === e.currentTarget) handleCloseAttempt()
       }}
@@ -612,7 +641,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       <div
         className={
           isSidePanel
-            ? `absolute top-0 flex h-full w-full max-w-[420px] flex-col overflow-hidden bg-surface text-primary shadow-xl ${
+            ? `absolute top-0 flex h-full w-full max-w-[420px] flex-col overflow-hidden bg-dialog text-primary shadow-xl ${
                 panelSide === 'right' ? 'right-0 border-l border-hairline gc-slide-right' : 'left-0 border-r border-hairline gc-slide-left'
               }`
             : 'gc-dialog w-full max-w-lg'
@@ -639,13 +668,16 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
           className="px-6 py-3.5 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-1 text-xs space-y-0"
         >
           <div className="pb-2 mb-1 border-b border-hairline/60">
-            <input
-              type="text"
+            <TitleSuggestInput
               value={title}
-              onChange={(e) => handleFieldChange(setTitle, e.target.value)}
+              onChange={(val) => handleFieldChange(setTitle, val)}
+              onPick={handlePickSuggestion}
+              targetStartUtc={suggestionTargetStartUtc}
+              targetAllDay={allDay || isLunarYearly}
+              calendars={calendars || []}
               placeholder={t('editor.titlePlaceholder')}
               autoFocus
-              className="w-full bg-transparent text-[20px] font-semibold text-primary placeholder:text-muted/60 border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none tracking-tight"
+              enabled={!isEditing}
             />
           </div>
 
@@ -1020,7 +1052,7 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
         {showDiscardConfirm && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-6 z-60">
             <div
-              className="bg-surface border border-hairline p-5 max-w-xs w-full"
+              className="bg-dialog border border-hairline p-5 max-w-xs w-full"
               style={{ borderRadius: 'var(--radius-dialog)' }}
             >
               <h4 className="text-sm font-semibold text-primary mb-1.5">{t('editor.discardTitle')}</h4>

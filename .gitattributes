@@ -1,0 +1,18 @@
+# Normalise to LF in the repository. This project is built and packaged on both
+# Windows and Linux, so without this a checkout on Windows can commit CRLF back
+# and turn a one-line change into a whole-file diff.
+* text=auto eol=lf
+
+# Binary assets - never touch these.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.icns binary
+*.zip  binary
+*.woff binary
+*.woff2 binary
+
+# Generated; collapse in review and keep out of language stats.
+package-lock.json linguist-generated=true -diff

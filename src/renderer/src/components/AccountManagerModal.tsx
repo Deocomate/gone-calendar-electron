@@ -5,6 +5,7 @@ import {
   Plus,
   RotateCw,
   Trash2,
+  Unlink,
   X,
   Clock,
   ShieldCheck,
@@ -111,6 +112,29 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
       toast.success(t('accounts.disconnected'), { description: acc.name })
     } catch (err: any) {
       showFriendlyError(err, t('accounts.disconnectFailed'))
+    }
+  }
+
+  const handleDetach = async (acc: CalendarAccount) => {
+    if (!window.gone?.auth) return
+    if (!confirm(t('accounts.detachConfirm', { name: acc.name }))) return
+
+    try {
+      const result = await window.gone.auth.detachAccount(acc.id)
+      if (!result.success) {
+        showFriendlyError(new Error(result.message || ''), t('accounts.detachFailed'))
+        return
+      }
+      await loadData()
+      onAccountsChanged()
+      toast.success(t('accounts.detached'), {
+        description: t('accounts.detachedDetail', {
+          calendars: result.calendarCount,
+          events: result.eventCount
+        })
+      })
+    } catch (err: any) {
+      showFriendlyError(err, t('accounts.detachFailed'))
     }
   }
 
@@ -235,6 +259,16 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {(acc.type === 'google' || acc.type === 'graph' || acc.type === 'caldav') && (
+                      <button
+                        onClick={() => handleDetach(acc)}
+                        className="cursor-pointer p-1.5 text-muted transition-colors hover:text-primary"
+                        title={t('accounts.detach')}
+                        style={{ borderRadius: 'var(--radius-control)' }}
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     {(acc.type === 'google' || acc.type === 'graph' || acc.type === 'caldav') && (
                       <button
                         onClick={() => handleDisconnect(acc)}

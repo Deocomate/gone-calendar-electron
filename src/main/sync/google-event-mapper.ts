@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { exclusiveEndToInclusive, inclusiveEndToExclusiveDate } from '@shared/all-day'
 import type {
   CalendarEvent,
   EventException,
@@ -25,6 +26,13 @@ export interface GoogleEventDateTime {
   timeZone?: string
 }
 
+/**
+ * What we send to Google. The id is deliberately not part of this shape: on an
+ * update it lives in the request URL, and on an insert Google assigns it. Typing
+ * the write payload separately is what stops an id being put back by accident.
+ */
+export type GoogleEventWritePayload = Omit<GoogleCalendarApiEvent, 'id'>
+
 export interface GoogleCalendarApiEvent {
   id: string
   status?: string
@@ -42,11 +50,41 @@ export interface GoogleCalendarApiEvent {
   conferenceData?: {
     entryPoints?: { entryPointType: string; uri: string }[]
   }
+  extendedProperties?: {
+    private?: Record<string, string>
+  }
 }
+
+/** Reverse of GOOGLE_COLOR_MAP, for pushing a local hex colour back as a colorId. */
+export const GOOGLE_COLOR_ID_BY_HEX: Record<string, string> = Object.fromEntries(
+  Object.entries(GOOGLE_COLOR_MAP).map(([id, hex]) => [hex.toLowerCase(), id])
+)
+
+/**
+ * Google exposes no writable field for an arbitrary meeting link - `hangoutLink`
+ * and `conferenceData` are server-owned (conferenceData only accepts a Meet
+ * create-request, not a URL). Private extended properties are the documented
+ * per-client escape hatch and round-trip losslessly, so the link survives a
+ * push/pull cycle instead of being dropped on the way out.
+ */
+export const GONE_MEETING_URL_PROP = 'goneMeetingUrl'
 
 /**
  * Format Google Event DateTime to ISO UTC and determine all-day status
  */
+/**
+ * All-day ends arrive exclusive from Google; the app stores them inclusive.
+ * Timed events are unaffected.
+ */
+function normaliseEnd(
+  startInfo: { iso: string; allDay: boolean },
+  endInfo: { iso: string }
+): string {
+  return startInfo.allDay
+    ? exclusiveEndToInclusive(startInfo.iso, endInfo.iso)
+    : endInfo.iso
+}
+
 export function parseGoogleDateTime(dt?: GoogleEventDateTime): {
   iso: string
   allDay: boolean
@@ -96,6 +134,8 @@ export function mapGoogleEventToDomain(
     )
     if (videoEntry) meetingUrl = videoEntry.uri
   }
+  // A link we pushed ourselves comes back here rather than as a real conference.
+  if (!meetingUrl) meetingUrl = gEvent.extendedProperties?.private?.[GONE_MEETING_URL_PROP]
 
   const isCancelled = gEvent.status === 'cancelled'
 
@@ -113,8 +153,10 @@ export function mapGoogleEventToDomain(
         notes: gEvent.description || undefined,
         location: gEvent.location || undefined,
         dtStartUtc: startInfo.iso,
-        dtEndUtc: endInfo.iso,
+        dtEndUtc: normaliseEnd(startInfo, endInfo),
         tzid: startInfo.tzid,
+        // An occurrence can be timed while its series is all-day (and back).
+        allDay: startInfo.allDay,
         color
       }
     }
@@ -142,7 +184,7 @@ export function mapGoogleEventToDomain(
       notes: gEvent.description || undefined,
       location: gEvent.location || undefined,
       dtStartUtc: startInfo.iso,
-      dtEndUtc: endInfo.iso,
+      dtEndUtc: normaliseEnd(startInfo, endInfo),
       tzid: startInfo.tzid,
       allDay: startInfo.allDay,
       rrule: rruleString,
@@ -159,16 +201,15 @@ export function mapGoogleEventToDomain(
  */
 export function mapDomainEventToGoogle(
   event: CalendarEvent | (CreateEventInput & { id?: string })
-): GoogleCalendarApiEvent {
+): GoogleEventWritePayload {
   const isAllDay = Boolean(event.allDay)
   let start: GoogleEventDateTime
   let end: GoogleEventDateTime
 
   if (isAllDay) {
-    const startDateStr = event.dtStartUtc.split('T')[0]
-    const endDateStr = event.dtEndUtc.split('T')[0]
-    start = { date: startDateStr }
-    end = { date: endDateStr }
+    start = { date: event.dtStartUtc.split('T')[0] }
+    // Google wants the exclusive end date back.
+    end = { date: inclusiveEndToExclusiveDate(event.dtStartUtc, event.dtEndUtc) }
   } else {
     start = {
       dateTime: event.dtStartUtc,
@@ -180,8 +221,13 @@ export function mapDomainEventToGoogle(
     }
   }
 
-  const gEvent: GoogleCalendarApiEvent = {
-    id: (event as any).id || undefined,
+  const gEvent: GoogleEventWritePayload = {
+    // No `id`. On an update the id is in the request URL, so sending it again is
+    // redundant; on an insert it is actively harmful. Google only accepts
+    // base32hex ids - lowercase a-v and digits - and ours look like
+    // `evt_1789396326299_uqqwff`, so every insert came back 400 and no event
+    // created here ever reached Google. Let the provider assign the id; the
+    // engine already re-keys the local row when the response id differs.
     summary: event.title,
     description: event.notes || undefined,
     location: event.location || undefined,
@@ -191,6 +237,16 @@ export function mapDomainEventToGoogle(
 
   if (event.rrule) {
     gEvent.recurrence = [`RRULE:${event.rrule}`]
+  }
+
+  const hex = event.color?.toLowerCase()
+  if (hex && GOOGLE_COLOR_ID_BY_HEX[hex]) {
+    gEvent.colorId = GOOGLE_COLOR_ID_BY_HEX[hex]
+  }
+  if (event.meetingUrl) {
+    gEvent.extendedProperties = {
+      private: { [GONE_MEETING_URL_PROP]: event.meetingUrl }
+    }
   }
 
   if ((event as CalendarEvent).etag) {

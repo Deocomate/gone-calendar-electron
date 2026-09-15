@@ -36,7 +36,11 @@
     "src/renderer/src/env.d.ts",
     "src/shared/**/*",
     "tests/ui-components.test.ts",
+    "tests/stale-event-error.test.ts",
+    "tests/friendly-error.test.ts",
     "tests/drop-target.test.ts",
-    "tests/resize-math.test.ts"
+    "tests/resize-math.test.ts",
+    "tests/i18n-parity.test.ts",
+    "tests/layout-allday-events.test.ts"
   ]
 }

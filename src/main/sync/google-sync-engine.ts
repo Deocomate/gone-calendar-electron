@@ -1,3 +1,4 @@
+import { fetchWithTimeout, describeHttpFailure } from './http'
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { GoogleOAuthManager } from '../oauth/google-oauth'
 import {
@@ -5,22 +6,58 @@ import {
   mapDomainEventToGoogle,
   type GoogleCalendarApiEvent
 } from './google-event-mapper'
-import type { SyncResult } from '@shared/event-model'
+import { EventsRepo } from '../db/repos/events-repo'
+import { SyncStateRepo } from '../db/repos/sync-state-repo'
+import type { CalendarEvent, EventException, SyncResult } from '@shared/event-model'
+
+/**
+ * Start/end payload for an occurrence override, falling back to the master's
+ * shape when the override only changes text.
+ */
+function buildInstanceTimes(
+  exception: EventException,
+  master: CalendarEvent
+): Record<string, unknown> {
+  const startIso = exception.dtStartUtc || exception.originalStartUtc
+  const endIso = exception.dtEndUtc || master.dtEndUtc
+  // The override decides: converting one occurrence of an all-day series to a
+  // timed one (or back) must reach Google as that shape, not the series'.
+  const allDay = exception.allDay !== undefined ? exception.allDay : master.allDay
+  if (allDay) {
+    return {
+      start: { date: startIso.split('T')[0] },
+      end: { date: endIso.split('T')[0] }
+    }
+  }
+  const tz = exception.tzid || master.tzid || 'UTC'
+  return {
+    start: { dateTime: startIso, timeZone: tz },
+    end: { dateTime: endIso, timeZone: tz }
+  }
+}
 
 const GOOGLE_API_BASE = 'https://www.googleapis.com/calendar/v3'
+/** Events requested per page; Google's own maximum for events.list. */
+const PAGE_SIZE = 250
+/** Safety stop so a pathological calendar cannot spin forever. */
+const MAX_SYNC_PAGES = 200
 
 export class GoogleSyncEngine {
   private oauthManager: GoogleOAuthManager
+  private eventsRepo: EventsRepo
+  private syncStateRepo: SyncStateRepo
 
   constructor(private db: ISqliteDatabase) {
     this.oauthManager = new GoogleOAuthManager(db)
+    this.eventsRepo = new EventsRepo(db)
+    this.syncStateRepo = new SyncStateRepo(db)
   }
 
   /**
    * Sync calendar list from Google
    */
   async syncCalendarList(accountId: string, accessToken: string): Promise<string[]> {
-    const res = await fetch(`${GOOGLE_API_BASE}/users/me/calendarList`, {
+    const res = await fetchWithTimeout(`${GOOGLE_API_BASE}/users/me/calendarList`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     })
 
@@ -53,10 +90,14 @@ export class GoogleSyncEngine {
       } else {
         this.db
           .prepare(
-            `UPDATE calendars SET name = ?, color = ?, is_read_only = ?, updated_at = ?
+            // Colour is local-only: the provider seeds it when the calendar is
+            // first discovered and never overwrites it again, so what you pick
+            // here stays picked.
+            `UPDATE calendars
+             SET name = ?, is_read_only = ?, updated_at = ?
              WHERE id = ?`
           )
-          .run(name, color, isReadOnly ? 1 : 0, now, item.id)
+          .run(name, isReadOnly ? 1 : 0, now, item.id)
       }
 
       syncedCalIds.push(item.id)
@@ -72,38 +113,76 @@ export class GoogleSyncEngine {
     calendarId: string,
     accessToken: string
   ): Promise<{ pulledCount: number }> {
-    // Read existing syncToken from sync_state table
-    const syncRow = this.db
-      .prepare('SELECT sync_token FROM sync_state WHERE calendar_id = ?')
-      .get<{ sync_token: string }>(calendarId)
+    const storedToken = this.syncStateRepo.getSyncToken(calendarId)
 
-    let url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=250`
-    if (syncRow?.sync_token) {
-      url += `&syncToken=${encodeURIComponent(syncRow.sync_token)}`
-    }
+    const baseUrl = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=${PAGE_SIZE}`
+    let queryUrl = storedToken ? `${baseUrl}&syncToken=${encodeURIComponent(storedToken)}` : baseUrl
 
-    let res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    })
+    let pageToken: string | undefined
+    let pulledCount = 0
+    let pages = 0
+    let resyncedAfterGone = false
 
-    // Handle 410 Gone (syncToken expired/invalidated) -> full resync
-    if (res.status === 410) {
-      url = `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=false&maxResults=250`
-      res = await fetch(url, {
+    // Walk every page. Google caps a response at maxResults and hands back a
+    // nextPageToken; it only emits nextSyncToken on the FINAL page. Reading one
+    // page and stopping therefore capped a calendar at maxResults events AND
+    // never stored a sync token, so each poll refetched the same first page
+    // forever and the rest of the calendar never arrived.
+    for (;;) {
+      const pageUrl = pageToken
+        ? `${queryUrl}&pageToken=${encodeURIComponent(pageToken)}`
+        : queryUrl
+
+      const res = await fetchWithTimeout(pageUrl, {
         headers: { Authorization: `Bearer ${accessToken}` }
       })
+
+      // 410 Gone: the stored syncToken is no longer valid. Drop it and restart
+      // from the first page of a full listing (once - a second 410 is a real error).
+      if (res.status === 410 && !resyncedAfterGone) {
+        resyncedAfterGone = true
+        this.syncStateRepo.clearSyncToken(calendarId)
+        queryUrl = baseUrl
+        pageToken = undefined
+        pulledCount = 0
+        continue
+      }
+
+      if (!res.ok) {
+        throw new Error(`Google event pull failed for ${calendarId}: ${await res.text()}`)
+      }
+
+      const data = await res.json()
+      pulledCount += this.applyPulledPage(calendarId, data)
+
+      pageToken = data.nextPageToken
+      if (!pageToken) break
+      if (++pages >= MAX_SYNC_PAGES) {
+        console.warn(
+          `Google pull for ${calendarId} stopped at ${MAX_SYNC_PAGES} pages; remaining events follow next sync`
+        )
+        break
+      }
     }
 
-    if (!res.ok) {
-      throw new Error(`Google event pull failed for ${calendarId}: ${await res.text()}`)
-    }
+    return { pulledCount }
+  }
 
-    const data = await res.json()
+  /** Apply one page of listing results. Returns how many rows it touched. */
+  private applyPulledPage(calendarId: string, data: any): number {
     const items: GoogleCalendarApiEvent[] = data.items || []
     let pulledCount = 0
 
     // Database transaction to apply batch updates
     this.db.transaction(() => {
+      // A locally created event keeps its own id, so the provider's id no longer
+      // finds it by primary key. Without this the next pull would not recognise
+      // the event it had just accepted and would insert a second copy.
+      const localIdFor = (providerId: string): string =>
+        this.db
+          .prepare('SELECT id FROM events WHERE calendar_id = ? AND provider_event_id = ?')
+          .get<{ id: string }>(calendarId, providerId)?.id ?? providerId
+
       for (const gEvent of items) {
         const mapped = mapGoogleEventToDomain(gEvent, calendarId)
 
@@ -111,15 +190,17 @@ export class GoogleSyncEngine {
           // Occurrence exception
           const now = new Date().toISOString()
           const exc = mapped.exception
-          const excId = `exc_${exc.masterEventId}_${exc.originalStartUtc.replace(/[:.]/g, '')}`
+          // `recurringEventId` names the master the provider's way.
+          const masterLocalId = localIdFor(exc.masterEventId)
+          const excId = `exc_${masterLocalId}_${exc.originalStartUtc.replace(/[:.]/g, '')}`
 
           this.db
             .prepare(
               `INSERT INTO event_exceptions (
                 id, master_event_id, original_start_utc, is_cancelled,
-                title, notes, location, dtstart_utc, dtend_utc, tzid, color,
+                title, notes, location, dtstart_utc, dtend_utc, tzid, all_day, color,
                 created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(master_event_id, original_start_utc) DO UPDATE SET
                 is_cancelled = excluded.is_cancelled,
                 title = excluded.title,
@@ -128,12 +209,14 @@ export class GoogleSyncEngine {
                 dtstart_utc = excluded.dtstart_utc,
                 dtend_utc = excluded.dtend_utc,
                 tzid = excluded.tzid,
+                all_day = excluded.all_day,
                 color = excluded.color,
-                updated_at = excluded.updated_at`
+                updated_at = excluded.updated_at
+              WHERE event_exceptions.dirty = 0`
             )
             .run(
               excId,
-              exc.masterEventId,
+              masterLocalId,
               exc.originalStartUtc,
               exc.isCancelled ? 1 : 0,
               exc.title || null,
@@ -142,6 +225,7 @@ export class GoogleSyncEngine {
               exc.dtStartUtc || null,
               exc.dtEndUtc || null,
               exc.tzid || null,
+              exc.allDay === undefined ? null : exc.allDay ? 1 : 0,
               exc.color || null,
               now,
               now
@@ -155,11 +239,12 @@ export class GoogleSyncEngine {
           this.db
             .prepare(
               `INSERT INTO events (
-                id, calendar_id, uid, title, notes, location,
+                id, provider_event_id, calendar_id, uid, title, notes, location,
                 dtstart_utc, dtend_utc, tzid, all_day, rrule, color,
                 meeting_url, etag, dirty, is_deleted, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
               ON CONFLICT(id) DO UPDATE SET
+                provider_event_id = excluded.provider_event_id,
                 title = excluded.title,
                 notes = excluded.notes,
                 location = excluded.location,
@@ -177,6 +262,7 @@ export class GoogleSyncEngine {
               WHERE events.dirty = 0 AND events.has_conflict = 0`
             )
             .run(
+              localIdFor(evt.id),
               evt.id,
               evt.calendarId,
               evt.uid || `${evt.id}@google.com`,
@@ -199,20 +285,14 @@ export class GoogleSyncEngine {
         }
       }
 
-      // Save nextSyncToken
-      if (data.nextSyncToken) {
-        const now = new Date().toISOString()
-        this.db
-          .prepare(
-            `INSERT INTO sync_state (calendar_id, sync_token, updated_at)
-             VALUES (?, ?, ?)
-             ON CONFLICT(calendar_id) DO UPDATE SET sync_token = excluded.sync_token, updated_at = excluded.updated_at`
-          )
-          .run(calendarId, data.nextSyncToken, now)
-      }
     })()
 
-    return { pulledCount }
+    // Only the final page carries a sync token; store it outside the row loop.
+    if (data.nextSyncToken) {
+      this.syncStateRepo.saveSyncToken(calendarId, data.nextSyncToken)
+    }
+
+    return pulledCount
   }
 
   /**
@@ -221,36 +301,88 @@ export class GoogleSyncEngine {
   async pushDirtyEvents(
     calendarId: string,
     accessToken: string
-  ): Promise<{ pushedCount: number; errorCount: number }> {
+  ): Promise<{ pushedCount: number; errorCount: number; lastError: string | null }> {
     const dirtyRows = this.db
-      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1')
+      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1 AND has_conflict = 0')
       .all<any>(calendarId)
 
     let pushedCount = 0
     let errorCount = 0
+    let lastError: string | null = null
 
     for (const row of dirtyRows) {
       try {
         const isDeleted = row.is_deleted === 1
-        const googleEventId = row.id
+        // Ours is `evt_...` until the first push; the provider's is what every
+        // URL below needs. They are the same string only for rows that synced
+        // before the two were separated.
+        const googleEventId = row.provider_event_id || row.id
 
         if (isDeleted) {
           // DELETE
-          const delRes = await fetch(
+          const delRes = await fetchWithTimeout(
             `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
             {
               method: 'DELETE',
-              headers: { Authorization: `Bearer ${accessToken}` }
+              headers: row.etag
+                ? { Authorization: `Bearer ${accessToken}`, 'If-Match': row.etag }
+                : { Authorization: `Bearer ${accessToken}` }
             }
           )
 
           if (delRes.ok || delRes.status === 404 || delRes.status === 410) {
             this.db.prepare('DELETE FROM events WHERE id = ?').run(row.id)
             pushedCount++
+          } else if (delRes.status === 412) {
+            // Someone edited the event remotely after our last pull. Surface it
+            // rather than deleting their change; the row stays out of the push
+            // set until the user resolves.
+            console.warn(`Conflict deleting event ${row.id}: ETag precondition failed (412)`)
+            this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
+            errorCount++
           } else {
+            const detail = await describeHttpFailure(delRes)
+            console.error(`Failed to delete event ${row.id} on Google: ${detail}`)
+            lastError = detail
             errorCount++
           }
         } else {
+          // A calendar change is a move, not an update: the event lives in a
+          // calendar, so PUTting it to the destination with an id that only
+          // exists in the origin returns 404 and the row stays dirty for ever.
+          // Google's move endpoint keeps the id, so the etag and any exception
+          // rows pointing at it stay valid.
+          if (row.moved_from_calendar_id && row.moved_from_calendar_id !== calendarId) {
+            const moveRes = await fetchWithTimeout(
+              `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(row.moved_from_calendar_id)}` +
+                `/events/${encodeURIComponent(googleEventId)}/move` +
+                `?destination=${encodeURIComponent(calendarId)}`,
+              { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } }
+            )
+
+            if (moveRes.ok) {
+              this.db
+                .prepare('UPDATE events SET moved_from_calendar_id = NULL WHERE id = ?')
+                .run(row.id)
+            } else if (moveRes.status === 404 || moveRes.status === 410) {
+              // Already gone from the origin - somebody moved or deleted it
+              // there. Clearing the marker lets the normal push decide what to
+              // do next rather than retrying a move that can never succeed.
+              console.warn(
+                `Move origin missing for event ${row.id}; continuing as a plain update`
+              )
+              this.db
+                .prepare('UPDATE events SET moved_from_calendar_id = NULL WHERE id = ?')
+                .run(row.id)
+            } else {
+              const detail = await describeHttpFailure(moveRes)
+              console.error(`Failed to move event ${row.id} between calendars: ${detail}`)
+              lastError = detail
+              errorCount++
+              continue
+            }
+          }
+
           // INSERT or UPDATE
           const payload = mapDomainEventToGoogle({
             id: row.id,
@@ -264,26 +396,32 @@ export class GoogleSyncEngine {
             tzid: row.tzid,
             allDay: row.all_day === 1,
             rrule: row.rrule,
+            color: row.color,
+            meetingUrl: row.meeting_url,
             etag: row.etag
           } as any)
 
           let putRes: Response
           if (row.etag) {
             // Existing event update
-            putRes = await fetch(
+            putRes = await fetchWithTimeout(
               `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
               {
                 method: 'PUT',
                 headers: {
                   Authorization: `Bearer ${accessToken}`,
-                  'Content-Type': 'application/json'
+                  'Content-Type': 'application/json',
+                  // Optimistic concurrency. Google honours the precondition
+                  // only as a header - an etag in the request body is ignored,
+                  // so without this the 412 branch below is unreachable.
+                  'If-Match': row.etag
                 },
                 body: JSON.stringify(payload)
               }
             )
           } else {
             // New event insertion
-            putRes = await fetch(
+            putRes = await fetchWithTimeout(
               `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events`,
               {
                 method: 'POST',
@@ -299,20 +437,16 @@ export class GoogleSyncEngine {
           if (putRes.ok) {
             const resJson = await putRes.json()
             const now = new Date().toISOString()
-            if (resJson.id && resJson.id !== row.id) {
-              this.db
-                .prepare('UPDATE event_exceptions SET master_event_id = ? WHERE master_event_id = ?')
-                .run(resJson.id, row.id)
-              this.db
-                .prepare(
-                  `UPDATE events SET id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?`
-                )
-                .run(resJson.id, resJson.etag, now, row.id)
-            } else {
-              this.db
-                .prepare(`UPDATE events SET etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?`)
-                .run(resJson.etag || row.etag, now, row.id)
-            }
+            // The row keeps its own id. Rewriting it to whatever the provider
+            // assigned is what used to break the renderer mid-edit, and it took
+            // `event_exceptions.master_event_id` along with it.
+            this.db
+              .prepare(
+                `UPDATE events
+                 SET provider_event_id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ?
+                 WHERE id = ?`
+              )
+              .run(resJson.id || googleEventId, resJson.etag || row.etag, now, row.id)
             pushedCount++
           } else if (putRes.status === 412) {
             // Precondition failed (ETag conflict): preserve local dirty row, surface it
@@ -321,16 +455,133 @@ export class GoogleSyncEngine {
             this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
             errorCount++
           } else {
+            const detail = await describeHttpFailure(putRes)
+            console.error(`Failed to push event ${row.id} to Google: ${detail}`)
+            lastError = detail
             errorCount++
           }
         }
       } catch (err) {
         console.error(`Failed to push dirty event ${row.id}:`, err)
+        lastError = err instanceof Error ? err.message : String(err)
+        errorCount++
+      }
+    }
+
+    const excRes = await this.pushDirtyExceptions(calendarId, accessToken)
+    return {
+      pushedCount: pushedCount + excRes.pushedCount,
+      errorCount: errorCount + excRes.errorCount,
+      lastError
+    }
+  }
+
+  /**
+   * Push per-occurrence overrides and cancellations.
+   *
+   * Google models these as separate event resources reachable through the
+   * master's /instances collection, so each one has to be resolved to its own
+   * instance id and PATCHed there - a PUT of the master carries no occurrence
+   * information at all. The resolved id is cached on the row so later edits
+   * skip the lookup.
+   */
+  private async pushDirtyExceptions(
+    calendarId: string,
+    accessToken: string
+  ): Promise<{ pushedCount: number; errorCount: number }> {
+    const pending = this.eventsRepo.listDirtyExceptions(calendarId)
+    let pushedCount = 0
+    let errorCount = 0
+
+    for (const { exception, master, providerInstanceId } of pending) {
+      try {
+        let instanceId = providerInstanceId
+        if (!instanceId) {
+          instanceId = await this.findInstanceId(
+            calendarId,
+            // The /instances collection is the provider's, so it wants the
+            // provider's id for the series.
+            master.providerEventId || master.id,
+            exception.originalStartUtc,
+            accessToken
+          )
+        }
+        if (!instanceId) {
+          // The series may not have propagated yet; leave it dirty and retry.
+          errorCount++
+          continue
+        }
+
+        const body: Record<string, unknown> = exception.isCancelled
+          ? { status: 'cancelled' }
+          : {
+              summary: exception.title || master.title,
+              description: exception.notes ?? master.notes ?? undefined,
+              location: exception.location ?? master.location ?? undefined,
+              ...buildInstanceTimes(exception, master)
+            }
+
+        const res = await fetchWithTimeout(
+          `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(instanceId)}`,
+          {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          }
+        )
+
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}))
+          this.eventsRepo.markExceptionSynced(exception.id, instanceId, json?.etag ?? null)
+          pushedCount++
+        } else {
+          console.warn(
+            `Failed to push occurrence override ${exception.id}: HTTP ${res.status}`
+          )
+          errorCount++
+        }
+      } catch (err) {
+        console.error(`Failed to push occurrence override ${exception.id}:`, err)
         errorCount++
       }
     }
 
     return { pushedCount, errorCount }
+  }
+
+  /** Resolve a master + original start time to Google's own id for that instance. */
+  private async findInstanceId(
+    calendarId: string,
+    masterEventId: string,
+    originalStartUtc: string,
+    accessToken: string
+  ): Promise<string | null> {
+    // A one-second window either side is enough to isolate the occurrence while
+    // tolerating sub-second representation differences.
+    const origin = new Date(originalStartUtc)
+    const timeMin = new Date(origin.getTime() - 1000).toISOString()
+    const timeMax = new Date(origin.getTime() + 1000).toISOString()
+
+    const res = await fetchWithTimeout(
+      `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(masterEventId)}/instances` +
+        `?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&showDeleted=true&maxResults=10`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    if (!res.ok) return null
+
+    const data = await res.json()
+    const items: GoogleCalendarApiEvent[] = data.items || []
+    const targetMs = origin.getTime()
+
+    for (const item of items) {
+      const raw = item.originalStartTime?.dateTime || item.originalStartTime?.date
+      if (!raw) continue
+      if (Math.abs(new Date(raw).getTime() - targetMs) < 1000) return item.id
+    }
+    return items[0]?.id ?? null
   }
 
   /**
@@ -355,12 +606,34 @@ export class GoogleSyncEngine {
         const calendarIds = await this.syncCalendarList(acc.id, token)
 
         for (const calId of calendarIds) {
-          const pushRes = await this.pushDirtyEvents(calId, token)
-          totalPushed += pushRes.pushedCount
-          totalErrors += pushRes.errorCount
+          // Isolate each calendar. Some entries the calendar list returns are not
+          // real event collections (Google's "Tasks" pseudo-calendar, for one) and
+          // reject the events endpoint; without this, the first such calendar threw
+          // and every remaining calendar on the account was silently skipped.
+          try {
+            const pushRes = await this.pushDirtyEvents(calId, token)
+            totalPushed += pushRes.pushedCount
+            totalErrors += pushRes.errorCount
 
-          const pullRes = await this.pullCalendarEvents(calId, token)
-          totalPulled += pullRes.pulledCount
+            const pullRes = await this.pullCalendarEvents(calId, token)
+            totalPulled += pullRes.pulledCount
+
+            // A calendar that pulled cleanly but could not push is not "ok".
+            // Recording success regardless is how an insert rejected on every
+            // single poll stayed invisible for as long as it did.
+            if (pushRes.errorCount > 0) {
+              this.syncStateRepo.recordFailure(
+                calId,
+                `push failed for ${pushRes.errorCount} event(s): ${pushRes.lastError ?? 'unknown error'}`
+              )
+            } else {
+              this.syncStateRepo.recordSuccess(calId, pullRes.pulledCount)
+            }
+          } catch (calErr: any) {
+            console.error(`Google sync failed for calendar ${calId}:`, calErr)
+            this.syncStateRepo.recordFailure(calId, calErr)
+            totalErrors++
+          }
         }
       } catch (err: any) {
         console.error(`Sync failed for account ${acc.id}:`, err)

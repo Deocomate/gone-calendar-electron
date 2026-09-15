@@ -65,6 +65,3 @@ export function setupTray(mainWindow: BrowserWindow): Tray {
   return trayInstance
 }
 
-export function getTray(): Tray | null {
-  return trayInstance
-}

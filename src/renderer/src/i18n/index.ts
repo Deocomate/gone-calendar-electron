@@ -7,11 +7,11 @@ export const resources = {
       appName: 'Gone Calendar',
       common: {
         cancel: 'Cancel',
+        copy: 'Copy',
         close: 'Close',
-        save: 'Save',
+        back: 'Back',
         delete: 'Delete',
         add: 'Add',
-        ok: 'OK',
         gotIt: 'Got it',
         on: 'ON',
         off: 'OFF',
@@ -32,18 +32,11 @@ export const resources = {
       },
       actions: {
         newEvent: 'Create',
-        settings: 'Settings',
-        refresh: 'Refresh',
+        openDay: 'Open this day',
         search: 'Search',
-        more: 'More',
         toggleSidebar: 'Toggle sidebar',
-        accounts: 'Accounts & sync',
-        importIcs: 'Import sample ICS',
         keyboard: 'Keyboard shortcuts',
         appearance: 'Appearance'
-      },
-      sidebar: {
-        miniCalendar: 'Mini calendar'
       },
       ui: {
         selectPlaceholder: 'Select an item…',
@@ -75,16 +68,22 @@ export const resources = {
       settings: {
         title: 'Settings',
         tabGeneral: 'General',
+        tabAppearance: 'Appearance',
+        tabView: 'Calendar view',
         tabCalendars: 'Calendars & accounts',
         language: 'Language',
         theme: 'Theme',
-        themeSystem: 'System',
-        themeDark: 'Dark',
-        themeLight: 'Light',
+        themeModeSystem: 'System',
+        themeModeLight: 'Light',
+        themeModeDark: 'Dark',
         lunar: 'Lunar & solar terms',
         weekNumbers: 'Week numbers',
         showMiniCalendar: 'Show mini calendar in sidebar',
         autoHideHeader: 'Auto-hide header bar',
+        dragSnap: 'Snap drag and resize to',
+        dragSnapMin: '{{count}} min',
+        dragSnapHour: '1 hour',
+        suggestionShowCalendarName: 'Name the calendar in title suggestions',
         timeFormat: 'Time format',
         timeFormat24h: '24h',
         timeFormat12h: 'AM/PM',
@@ -94,9 +93,12 @@ export const resources = {
         hourBlockSizeMedium: 'Medium',
         hourBlockSizeLarge: 'Large',
         secondaryTimezone: 'Second timezone',
+        dayStartHourHint: 'Hour the day and week grids scroll to on open',
+        secondaryTimezoneHint: 'Shown under each hour in the day and week grids',
         secondaryTimezoneNone: 'None',
-        advancedAppearance: 'Advanced appearance…',
-        version: 'Version',
+        backup: 'Back up database…',
+        backupDone: 'Backup saved',
+        backupFailed: 'Backup failed',
         myCalendars: 'My calendars',
         manageAccounts: 'Manage accounts & sync…',
         noCalendars: 'No calendars yet',
@@ -104,8 +106,6 @@ export const resources = {
         colorInUse: 'already used by another calendar'
       },
       status: {
-        ready: 'Ready',
-        syncing: 'Syncing…',
         offline: 'Offline mode'
       },
       editor: {
@@ -211,6 +211,11 @@ export const resources = {
         syncStatus: 'Sync status',
         syncNow: 'Sync now',
         disconnect: 'Disconnect account',
+        detach: 'Keep events, unlink provider',
+        detachConfirm: 'Unlink {{name}}? Its calendars and events stay here as local data, and this app stops syncing with the provider.',
+        detached: 'Provider unlinked',
+        detachedDetail: '{{calendars}} calendars and {{events}} events kept locally',
+        detachFailed: 'Could not unlink the provider',
         disconnectConfirm: 'Are you sure you want to disconnect the account {{name}}?',
         default: 'Default',
         neverSynced: 'Never synced',
@@ -266,6 +271,7 @@ export const resources = {
         purpleSunset: 'Purple Sunset',
         cyberCity: 'Cyber City',
         cosmicNight: 'Cosmic Night',
+        usingImportedImage: 'Using an imported image. Paste a URL to replace it.',
         customUrl: 'Or paste a custom background image URL (https://…)',
         importImage: 'Import…',
         overlayAndBlur: 'Overlay & background blur',
@@ -298,11 +304,12 @@ export const resources = {
         searching: 'Searching…',
         empty: 'Type a keyword to search across your whole calendar',
         noResults: 'No matching events for "{{q}}"',
-        navHint: 'to navigate',
-        openHint: 'to open',
-        closeHint: 'to close',
         attendees: '{{count}} guest(s)',
         allDaySuffix: 'All day'
+      },
+      month: {
+        moreCount_one: '+{{count}} more',
+        moreCount_other: '+{{count}} more'
       },
       list: {
         empty: 'No events in this period.',
@@ -322,6 +329,8 @@ export const resources = {
         untitled: '(untitled)'
       },
       friendly: {
+        staleTitle: 'This event just changed',
+        staleBody: 'A sync updated it. The calendar has been refreshed — try again.',
         fallback: 'Something went wrong',
         tryAgain: 'Please try again later.',
         readOnlyTitle: 'Read-only calendar',
@@ -331,15 +340,6 @@ export const resources = {
         rruleBody: 'The recurrence rule (RRULE) is not valid RFC 5545 syntax.'
       },
       toast: {
-        eventCreated: 'Event created',
-        changesSaved: 'Changes saved',
-        eventDeleted: 'Event deleted',
-        eventMoved: 'Event moved',
-        eventTimeUpdated: 'Event time updated',
-        eventCopied: 'Event copied',
-        recurringUpdated: 'Recurring event updated',
-        recurringDeleted: 'Recurring event deleted',
-        conflictResolved: 'Conflict resolved',
         conflictResolveFailed: 'Failed to resolve conflict',
         saveFailed: 'Failed to save event',
         deleteFailed: 'Failed to delete event',
@@ -352,8 +352,6 @@ export const resources = {
           'This event belongs to a read-only calendar (such as a Holiday calendar) and cannot be moved or edited.',
         readOnlyDelete:
           'This event belongs to a read-only calendar (such as a Holiday calendar) and cannot be deleted.',
-        copiedTo: '"{{title}}" copied to {{date}}',
-        movedDetail: '"{{title}}" · {{when}}',
         lunarAdded: 'Added {{count}} year(s) to the calendar',
         lunarAddedDetail: 'Through {{year}}. These sync to the provider as ordinary events.',
         lunarUpToDate: 'Already up to date — nothing new to add',
@@ -363,8 +361,7 @@ export const resources = {
         lunarRemoveFailed: 'Failed to remove synced copies',
         icsCreated: 'Event .ics file created',
         shareFailed: 'Share failed',
-        shareError: 'Failed to share event',
-        importFailed: 'Import failed: {{msg}}'
+        shareError: 'Failed to share event'
       }
     }
   },
@@ -373,11 +370,11 @@ export const resources = {
       appName: 'Gone Calendar',
       common: {
         cancel: 'Hủy',
+        copy: 'Sao chép',
         close: 'Đóng',
-        save: 'Lưu',
+        back: 'Quay lại',
         delete: 'Xóa',
         add: 'Thêm',
-        ok: 'OK',
         gotIt: 'Đã hiểu',
         on: 'BẬT',
         off: 'TẮT',
@@ -398,18 +395,11 @@ export const resources = {
       },
       actions: {
         newEvent: 'Tạo',
-        settings: 'Cài đặt',
-        refresh: 'Làm mới',
+        openDay: 'Mở ngày này',
         search: 'Tìm kiếm',
-        more: 'Thêm',
         toggleSidebar: 'Thu gọn thanh bên',
-        accounts: 'Tài khoản & đồng bộ',
-        importIcs: 'Nhập ICS mẫu',
         keyboard: 'Phím tắt',
         appearance: 'Giao diện nâng cao'
-      },
-      sidebar: {
-        miniCalendar: 'Lịch nhỏ'
       },
       ui: {
         selectPlaceholder: 'Chọn một mục…',
@@ -441,16 +431,22 @@ export const resources = {
       settings: {
         title: 'Cài đặt',
         tabGeneral: 'Chung',
+        tabAppearance: 'Giao diện',
+        tabView: 'Hiển thị lịch',
         tabCalendars: 'Lịch & tài khoản',
         language: 'Ngôn ngữ',
         theme: 'Giao diện',
-        themeSystem: 'Hệ thống',
-        themeDark: 'Tối',
-        themeLight: 'Sáng',
+        themeModeSystem: 'Hệ thống',
+        themeModeLight: 'Sáng',
+        themeModeDark: 'Tối',
         lunar: 'Lịch âm & Tiết khí',
         weekNumbers: 'Số thứ tự tuần',
         showMiniCalendar: 'Hiện lịch nhỏ ở thanh bên',
         autoHideHeader: 'Tự ẩn thanh tiêu đề',
+        dragSnap: 'Kéo và đổi kích thước theo bước',
+        dragSnapMin: '{{count}} phút',
+        dragSnapHour: '1 giờ',
+        suggestionShowCalendarName: 'Hiện tên lịch trong gợi ý tiêu đề',
         timeFormat: 'Định dạng giờ',
         timeFormat24h: '24 giờ',
         timeFormat12h: 'Sáng/Chiều',
@@ -460,9 +456,12 @@ export const resources = {
         hourBlockSizeMedium: 'Vừa',
         hourBlockSizeLarge: 'Lớn',
         secondaryTimezone: 'Múi giờ thứ hai',
+        dayStartHourHint: 'Giờ mà lưới ngày và tuần cuộn tới khi mở',
+        secondaryTimezoneHint: 'Hiển thị dưới mỗi giờ trong lưới ngày và tuần',
         secondaryTimezoneNone: 'Không có',
-        advancedAppearance: 'Giao diện nâng cao…',
-        version: 'Phiên bản',
+        backup: 'Sao lưu dữ liệu…',
+        backupDone: 'Đã lưu bản sao',
+        backupFailed: 'Sao lưu thất bại',
         myCalendars: 'Lịch của tôi',
         manageAccounts: 'Quản lý tài khoản & đồng bộ…',
         noCalendars: 'Chưa có lịch nào',
@@ -470,8 +469,6 @@ export const resources = {
         colorInUse: 'đã dùng cho lịch khác'
       },
       status: {
-        ready: 'Sẵn sàng',
-        syncing: 'Đang đồng bộ…',
         offline: 'Chế độ ngoại tuyến'
       },
       editor: {
@@ -577,6 +574,11 @@ export const resources = {
         syncStatus: 'Trạng thái đồng bộ',
         syncNow: 'Đồng bộ ngay',
         disconnect: 'Ngắt kết nối tài khoản',
+        detach: 'Giữ sự kiện, bỏ liên kết nhà cung cấp',
+        detachConfirm: 'Bỏ liên kết {{name}}? Lịch và sự kiện vẫn ở lại đây dưới dạng dữ liệu cục bộ, và ứng dụng ngừng đồng bộ với nhà cung cấp.',
+        detached: 'Đã bỏ liên kết',
+        detachedDetail: 'Giữ lại {{calendars}} lịch và {{events}} sự kiện',
+        detachFailed: 'Không thể bỏ liên kết',
         disconnectConfirm: 'Bạn có chắc chắn muốn ngắt kết nối tài khoản {{name}}?',
         default: 'Mặc định',
         neverSynced: 'Chưa đồng bộ',
@@ -632,6 +634,7 @@ export const resources = {
         purpleSunset: 'Hoàng hôn Tím (Purple Sunset)',
         cyberCity: 'Thành phố Cyber (Cyber City)',
         cosmicNight: 'Vũ trụ Đêm (Cosmic Night)',
+        usingImportedImage: 'Đang dùng ảnh đã nhập. Dán URL để thay thế.',
         customUrl: 'Hoặc dán URL ảnh nền tùy chỉnh (https://…)',
         importImage: 'Nhập ảnh…',
         overlayAndBlur: 'Độ tương phản & Làm mờ nền',
@@ -664,11 +667,12 @@ export const resources = {
         searching: 'Đang tìm kiếm…',
         empty: 'Gõ từ khóa để tìm kiếm nhanh trong toàn bộ lịch',
         noResults: 'Không tìm thấy sự kiện nào khớp với "{{q}}"',
-        navHint: 'để chuyển',
-        openHint: 'để mở',
-        closeHint: 'để đóng',
         attendees: '{{count}} người tham gia',
         allDaySuffix: 'Cả ngày'
+      },
+      month: {
+        moreCount_one: 'thêm {{count}}',
+        moreCount_other: 'thêm {{count}}'
       },
       list: {
         empty: 'Không có sự kiện nào trong khoảng thời gian này.',
@@ -688,6 +692,8 @@ export const resources = {
         untitled: '(không tiêu đề)'
       },
       friendly: {
+        staleTitle: 'Sự kiện vừa thay đổi',
+        staleBody: 'Đồng bộ đã cập nhật nó. Lịch đã được làm mới — hãy thử lại.',
         fallback: 'Có lỗi xảy ra',
         tryAgain: 'Vui lòng thử lại sau.',
         readOnlyTitle: 'Lịch chỉ đọc',
@@ -697,15 +703,6 @@ export const resources = {
         rruleBody: 'Cú pháp quy tắc lặp lại (RRULE) không đúng định dạng RFC 5545.'
       },
       toast: {
-        eventCreated: 'Đã tạo sự kiện',
-        changesSaved: 'Đã lưu thay đổi',
-        eventDeleted: 'Đã xóa sự kiện',
-        eventMoved: 'Đã chuyển sự kiện',
-        eventTimeUpdated: 'Đã cập nhật thời gian sự kiện',
-        eventCopied: 'Đã sao chép sự kiện',
-        recurringUpdated: 'Đã cập nhật sự kiện lặp',
-        recurringDeleted: 'Đã xóa sự kiện lặp',
-        conflictResolved: 'Đã xử lý xung đột',
         conflictResolveFailed: 'Xử lý xung đột thất bại',
         saveFailed: 'Lưu sự kiện thất bại',
         deleteFailed: 'Xóa sự kiện thất bại',
@@ -718,8 +715,6 @@ export const resources = {
           'Sự kiện này thuộc lịch chỉ đọc (như Lịch ngày lễ) nên không thể chuyển hoặc chỉnh sửa.',
         readOnlyDelete:
           'Sự kiện này thuộc lịch chỉ đọc (như Lịch ngày lễ) nên không thể xóa.',
-        copiedTo: 'Đã sao chép "{{title}}" sang {{date}}',
-        movedDetail: '"{{title}}" · {{when}}',
         lunarAdded: 'Đã thêm {{count}} năm vào lịch',
         lunarAddedDetail: 'Đến năm {{year}}. Các bản này đồng bộ sang nhà cung cấp như sự kiện thường.',
         lunarUpToDate: 'Đã cập nhật — không có gì mới để thêm',
@@ -729,8 +724,7 @@ export const resources = {
         lunarRemoveFailed: 'Xóa bản đã đồng bộ thất bại',
         icsCreated: 'Đã tạo tệp .ics của sự kiện',
         shareFailed: 'Chia sẻ thất bại',
-        shareError: 'Chia sẻ sự kiện thất bại',
-        importFailed: 'Nhập thất bại: {{msg}}'
+        shareError: 'Chia sẻ sự kiện thất bại'
       }
     }
   }

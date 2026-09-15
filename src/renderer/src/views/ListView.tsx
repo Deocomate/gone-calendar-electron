@@ -1,4 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react'
+import { sortOccurrencesWithinDay } from '@shared/occurrence-order'
+import { occurrenceDateKey } from '@shared/all-day'
 import { DateTime } from 'luxon'
 import { useTranslation } from 'react-i18next'
 import { CalendarDays, Clock, MapPin, Repeat, Layers } from 'lucide-react'
@@ -44,8 +46,7 @@ export const ListView: React.FC<ListViewProps> = ({
     const map = new Map<string, ExpandedOccurrence[]>()
 
     for (const occ of occurrences) {
-      const dt = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
-      const key = dt.toFormat('yyyy-MM-dd')
+      const key = occurrenceDateKey(occ.allDay, occ.startUtc)
       const list = map.get(key) || []
       list.push(occ)
       map.set(key, list)
@@ -55,7 +56,8 @@ export const ListView: React.FC<ListViewProps> = ({
     for (const key of sortedKeys) {
       groups.push({
         date: DateTime.fromFormat(key, 'yyyy-MM-dd'),
-        items: map.get(key)!
+        // Same ordering rule as the month grid: all-day first, then by start.
+        items: sortOccurrencesWithinDay(map.get(key)!)
       })
     }
 

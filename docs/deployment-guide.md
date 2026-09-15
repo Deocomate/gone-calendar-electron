@@ -16,8 +16,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/gone-calendar/gone-calendar
-cd gone-calendar
+git clone https://github.com/Deocomate/gone-calendar-electron
+cd gone-calendar-electron
 
 # Install dependencies
 npm install
@@ -47,7 +47,7 @@ npm run typecheck:web    # Renderer (tsconfig.web.json)
 
 ```bash
 npm run test
-# Runs: vitest run (all 100 tests across 22 files)
+# Runs: vitest run (all 342 tests across 42 files)
 ```
 
 Test files live in `tests/` at the project root and use `:memory:` SQLite for database tests.

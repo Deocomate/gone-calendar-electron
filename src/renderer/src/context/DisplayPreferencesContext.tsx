@@ -7,13 +7,19 @@ export interface DisplayPreferences {
   dayStartHour: number
   /** IANA zone name, or '' when the secondary timezone gutter is disabled. */
   secondaryTimezone: string
+  /** Whether title suggestions name their calendar as well as colouring it. */
+  suggestionShowCalendarName: boolean
+  /** Minutes that drag, drop and resize snap to. */
+  dragSnapMinutes: AppSettings['dragSnapMinutes']
 }
 
 export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
   timeFormat: '24h',
   hourBlockSize: 'medium',
   dayStartHour: 7,
-  secondaryTimezone: ''
+  secondaryTimezone: '',
+  suggestionShowCalendarName: true,
+  dragSnapMinutes: 15
 }
 
 /** Row height (px) of one hour in the Day/Week timed grid, per hourBlockSize setting. */

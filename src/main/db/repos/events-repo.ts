@@ -15,6 +15,7 @@ import type {
   DetachLunarInput,
   SyncConflict
 } from '@shared/event-model'
+import type { TitleSample } from '@shared/title-suggestions'
 import { resolveLunarOccurrence } from '@shared/lunar-vietnam'
 import { expandOccurrences } from '@shared/expand-occurrences'
 import { DateTime } from 'luxon'
@@ -29,6 +30,7 @@ export class ReadOnlyCalendarError extends Error {
 interface EventRow {
   id: string
   calendar_id: string
+  provider_event_id?: string | null
   uid: string
   title: string
   notes: string | null
@@ -81,6 +83,7 @@ interface ExceptionRow {
   dtstart_utc: string | null
   dtend_utc: string | null
   tzid: string | null
+  all_day: number | null
   color: string | null
   created_at: string
   updated_at: string
@@ -88,6 +91,7 @@ interface ExceptionRow {
 
 function mapRowToEvent(row: EventRow): CalendarEvent {
   return {
+    providerEventId: row.provider_event_id ?? undefined,
     id: row.id,
     calendarId: row.calendar_id,
     uid: row.uid,
@@ -126,6 +130,8 @@ function mapRowToException(row: ExceptionRow): EventException {
     dtStartUtc: row.dtstart_utc || undefined,
     dtEndUtc: row.dtend_utc || undefined,
     tzid: row.tzid || undefined,
+    // NULL means "inherit the master's all-day flag".
+    allDay: row.all_day === null ? undefined : row.all_day === 1,
     color: row.color || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -273,6 +279,11 @@ export class EventsRepo {
     const existing = existingResult.event
     this.checkReadOnlyCalendar(existing.calendarId)
 
+    const calendarId = input.calendarId ?? existing.calendarId
+    if (calendarId !== existing.calendarId) {
+      this.checkReadOnlyCalendar(calendarId)
+    }
+
     const now = new Date().toISOString()
     const title = input.title ?? existing.title
     const notes = input.notes !== undefined ? input.notes : (existing.notes || null)
@@ -298,12 +309,14 @@ export class EventsRepo {
     this.db
       .prepare(
         `UPDATE events SET
+          calendar_id = ?,
           title = ?, notes = ?, location = ?, dtstart_utc = ?, dtend_utc = ?,
           tzid = ?, all_day = ?, rrule = ?, exdate = ?, lunar_rule = ?, color = ?,
           meeting_url = ?, dirty = 1, is_deleted = ?, updated_at = ?
          WHERE id = ?`
       )
       .run(
+        calendarId,
         title,
         notes,
         location,
@@ -320,6 +333,8 @@ export class EventsRepo {
         now,
         id
       )
+
+    this.recordCalendarMove(id, existing.calendarId, calendarId)
 
     if (input.attendees !== undefined) {
       this.saveAttendees(id, input.attendees)
@@ -373,7 +388,8 @@ export class EventsRepo {
         .prepare(
           `UPDATE event_exceptions SET
             is_cancelled = ?, title = ?, notes = ?, location = ?,
-            dtstart_utc = ?, dtend_utc = ?, tzid = ?, color = ?, updated_at = ?
+            dtstart_utc = ?, dtend_utc = ?, tzid = ?, all_day = ?, color = ?, updated_at = ?,
+            dirty = 1
            WHERE id = ?`
         )
         .run(
@@ -384,6 +400,7 @@ export class EventsRepo {
           exception.dtStartUtc || null,
           exception.dtEndUtc || null,
           exception.tzid || null,
+          exception.allDay === undefined ? null : exception.allDay ? 1 : 0,
           exception.color || null,
           now,
           id
@@ -393,8 +410,9 @@ export class EventsRepo {
         .prepare(
           `INSERT INTO event_exceptions (
             id, master_event_id, original_start_utc, is_cancelled,
-            title, notes, location, dtstart_utc, dtend_utc, tzid, color, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            title, notes, location, dtstart_utc, dtend_utc, tzid, all_day, color,
+            created_at, updated_at, dirty
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
         )
         .run(
           id,
@@ -407,6 +425,7 @@ export class EventsRepo {
           exception.dtStartUtc || null,
           exception.dtEndUtc || null,
           exception.tzid || null,
+          exception.allDay === undefined ? null : exception.allDay ? 1 : 0,
           exception.color || null,
           now,
           now
@@ -415,6 +434,138 @@ export class EventsRepo {
 
     const row = this.db.prepare('SELECT * FROM event_exceptions WHERE id = ?').get<ExceptionRow>(id)
     return mapRowToException(row!)
+  }
+
+  /**
+   * Occurrence exceptions in a calendar that still need pushing, with the master
+   * they belong to. Masters that have never been pushed (no etag) are skipped:
+   * there is no remote series to attach an instance override to yet, and the
+   * master's own push will carry the series on the next cycle.
+   */
+  listDirtyExceptions(calendarId: string): {
+    exception: EventException
+    master: CalendarEvent
+    providerInstanceId: string | null
+  }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT x.* FROM event_exceptions x
+         JOIN events e ON e.id = x.master_event_id
+         WHERE e.calendar_id = ? AND x.dirty = 1 AND e.has_conflict = 0 AND e.is_deleted = 0
+           AND e.etag IS NOT NULL`
+      )
+      .all<ExceptionRow & { provider_instance_id: string | null }>(calendarId)
+
+    const out: {
+      exception: EventException
+      master: CalendarEvent
+      providerInstanceId: string | null
+    }[] = []
+    for (const row of rows) {
+      const master = this.getEventById(row.master_event_id)
+      if (!master) continue
+      out.push({
+        exception: mapRowToException(row),
+        master: master.event,
+        providerInstanceId: row.provider_instance_id ?? null
+      })
+    }
+    return out
+  }
+
+  /** Master events whose series has a pending occurrence override or cancellation. */
+  listMastersWithDirtyExceptions(calendarId: string): CalendarEvent[] {
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT e.id FROM events e
+         JOIN event_exceptions x ON x.master_event_id = e.id
+         WHERE e.calendar_id = ? AND x.dirty = 1 AND e.has_conflict = 0 AND e.is_deleted = 0`
+      )
+      .all<{ id: string }>(calendarId)
+
+    const out: CalendarEvent[] = []
+    for (const row of rows) {
+      const found = this.getEventById(row.id)
+      if (found) out.push(found.event)
+    }
+    return out
+  }
+
+  markExceptionSynced(id: string, providerInstanceId?: string | null, etag?: string | null): void {
+    this.db
+      .prepare(
+        `UPDATE event_exceptions
+         SET dirty = 0,
+             provider_instance_id = COALESCE(?, provider_instance_id),
+             etag = COALESCE(?, etag)
+         WHERE id = ?`
+      )
+      .run(providerInstanceId ?? null, etag ?? null, id)
+  }
+
+  /** Clear the dirty flag on every pending exception of a master (CalDAV pushes
+   *  the whole series as one resource, so they all land together). */
+  markExceptionsSyncedForMaster(masterEventId: string): void {
+    this.db
+      .prepare('UPDATE event_exceptions SET dirty = 0 WHERE master_event_id = ? AND dirty = 1')
+      .run(masterEventId)
+  }
+
+  /** SQLite's default parameter ceiling is 999; stay well inside it. */
+  private static readonly ID_CHUNK = 500
+
+  private static chunk<T>(items: T[], size = EventsRepo.ID_CHUNK): T[][] {
+    const out: T[][] = []
+    for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+    return out
+  }
+
+  /** All exceptions for the given masters, grouped by master id. */
+  private getExceptionsForEvents(masterIds: string[]): Map<string, EventException[]> {
+    const byMaster = new Map<string, EventException[]>()
+    if (masterIds.length === 0) return byMaster
+
+    for (const ids of EventsRepo.chunk(masterIds)) {
+      const placeholders = ids.map(() => '?').join(',')
+      const rows = this.db
+        .prepare(
+          `SELECT * FROM event_exceptions
+           WHERE master_event_id IN (${placeholders})
+           ORDER BY original_start_utc ASC`
+        )
+        .all<ExceptionRow>(...ids)
+      for (const row of rows) {
+        const list = byMaster.get(row.master_event_id)
+        if (list) list.push(mapRowToException(row))
+        else byMaster.set(row.master_event_id, [mapRowToException(row)])
+      }
+    }
+    return byMaster
+  }
+
+  /** Gregorian years already materialized, grouped by lunar master id. */
+  private getMaterializedYearsFor(masterIds: string[]): Map<string, Set<number>> {
+    const byMaster = new Map<string, Set<number>>()
+    if (masterIds.length === 0) return byMaster
+
+    for (const ids of EventsRepo.chunk(masterIds)) {
+      const placeholders = ids.map(() => '?').join(',')
+      const rows = this.db
+        .prepare(
+          `SELECT lunar_source_event_id AS master_id, dtstart_utc
+           FROM events
+           WHERE lunar_source_event_id IN (${placeholders}) AND is_deleted = 0`
+        )
+        .all<{ master_id: string; dtstart_utc: string }>(...ids)
+      for (const row of rows) {
+        const year = Number(row.dtstart_utc.slice(0, 4))
+        if (!Number.isFinite(year)) continue
+        const set = byMaster.get(row.master_id)
+        if (set) set.add(year)
+        else byMaster.set(row.master_id, new Set([year]))
+      }
+    }
+    return byMaster
   }
 
   queryEventsByRange(
@@ -437,30 +588,45 @@ export class EventsRepo {
         AND is_deleted = 0
         AND (
           (rrule IS NULL AND lunar_rule IS NULL AND dtstart_utc <= ? AND dtend_utc >= ?)
-          OR (rrule IS NOT NULL)
+          -- A recurrence cannot produce an occurrence before its own DTSTART, so
+          -- series starting after the window are skipped rather than loaded and
+          -- expanded to nothing. (An UNTIL/COUNT bound lives inside the RRULE
+          -- text and can't be filtered in SQL; expandOccurrences handles that.)
+          OR (rrule IS NOT NULL AND dtstart_utc <= ?)
           OR (lunar_rule IS NOT NULL)
         )
     `
 
     const rows = this.db
       .prepare(sql)
-      .all<EventRow>(...calendarIds, endUtc, startUtc)
+      .all<EventRow>(...calendarIds, endUtc, startUtc, endUtc)
 
     const occurrences: ExpandedOccurrence[] = []
 
+    // Exceptions and materialized-lunar years used to be fetched per master
+    // inside the loop below. With a few hundred recurring series that is a few
+    // hundred round trips for a view that may show a dozen occurrences - a plain
+    // week query measured 201 prepared statements. Both are now loaded in one
+    // query each and grouped in memory.
+    const seriesIds = rows
+      .filter((row) => row.rrule !== null || row.lunar_rule !== null)
+      .map((row) => row.id)
+    const exceptionsByMaster = this.getExceptionsForEvents(seriesIds)
+    const lunarIds = rows.filter((row) => row.lunar_rule !== null).map((row) => row.id)
+    const coveredYearsByMaster = this.getMaterializedYearsFor(lunarIds)
+    const noExceptions: EventException[] = []
+
     for (const row of rows) {
       const event = mapRowToEvent(row)
+      const exceptions = exceptionsByMaster.get(event.id) ?? noExceptions
       if (event.lunarRule) {
-        const exceptions = this.getExceptionsForEvent(event.id)
-        const coveredYears = this.getMaterializedYears(event.id)
+        const coveredYears = coveredYearsByMaster.get(event.id) ?? new Set<number>()
         occurrences.push(
           ...expandOccurrences(event, exceptions, startUtc, endUtc, coveredYears)
         )
         continue
       }
-      const exceptions = event.rrule ? this.getExceptionsForEvent(event.id) : []
-      const expanded = expandOccurrences(event, exceptions, startUtc, endUtc)
-      occurrences.push(...expanded)
+      occurrences.push(...expandOccurrences(event, exceptions, startUtc, endUtc))
     }
 
     // Sort chronologically by startUtc
@@ -551,6 +717,9 @@ export class EventsRepo {
    * `dirty = 1` so the deletion propagates; never-synced ones are hard-deleted.
    */
   detachLunarMaterialized(input: DetachLunarInput): { count: number } {
+    const master = this.getEventById(input.masterEventId)
+    if (master) this.checkReadOnlyCalendar(master.event.calendarId)
+
     const children = this.db
       .prepare(
         'SELECT id, etag FROM events WHERE lunar_source_event_id = ? AND is_deleted = 0'
@@ -590,14 +759,56 @@ export class EventsRepo {
     this.db
       .prepare(
         `UPDATE events SET
-          calendar_id = ?, dtstart_utc = ?, dtend_utc = ?,
+          calendar_id = ?, dtstart_utc = ?, dtend_utc = ?, all_day = ?,
           dirty = 1, updated_at = ?
          WHERE id = ?`
       )
-      .run(targetCalendarId, input.dtStartUtc, input.dtEndUtc, now, input.eventId)
+      .run(
+        targetCalendarId,
+        input.dtStartUtc,
+        input.dtEndUtc,
+        // Dropping onto the hourly grid turns an all-day event into a timed one;
+        // an unspecified allDay leaves the existing flag alone.
+        input.allDay === undefined ? (existing.event.allDay ? 1 : 0) : input.allDay ? 1 : 0,
+        now,
+        input.eventId
+      )
+
+    this.recordCalendarMove(input.eventId, existing.event.calendarId, targetCalendarId)
 
     const updated = this.getEventById(input.eventId)
     return updated!.event
+  }
+
+  /**
+   * Remember which calendar the provider still holds this event in.
+   *
+   * At the provider an event lives *in* a calendar, so a local calendar change
+   * cannot be pushed as a field update - the id does not exist in the
+   * destination and the PUT 404s. Google has a move endpoint that takes the
+   * origin, and by the time the push runs the local row has already been
+   * overwritten with the destination, so the origin has to be kept here.
+   *
+   * Only for events the provider has actually seen (`etag IS NOT NULL`); a row
+   * that has never synced just gets created in the right place. And only when
+   * the column is still empty, so moving A -> B -> C before the next poll still
+   * names A, which is where the event really is.
+   */
+  private recordCalendarMove(eventId: string, fromCalendarId: string, toCalendarId: string): void {
+    if (fromCalendarId === toCalendarId) return
+    this.db
+      .prepare(
+        `UPDATE events
+         SET moved_from_calendar_id = ?
+         WHERE id = ? AND etag IS NOT NULL AND moved_from_calendar_id IS NULL`
+      )
+      .run(fromCalendarId, eventId)
+    // Moving back where it came from is not a move at all.
+    this.db
+      .prepare(
+        'UPDATE events SET moved_from_calendar_id = NULL WHERE id = ? AND moved_from_calendar_id = ?'
+      )
+      .run(eventId, toCalendarId)
   }
 
   copyEvent(input: CopyEventInput): CalendarEvent {
@@ -617,6 +828,15 @@ export class EventsRepo {
     const rrule = input.copyInstanceOnly ? null : (existing.event.rrule || null)
     const exdate = input.copyInstanceOnly ? null : (existing.event.exdate || null)
 
+    // A bare copy is a new event that happens to share a name, not a duplicate.
+    // Carrying the original's location, notes and meeting link into a slot the
+    // user picked by dragging is usually wrong - the details belonged to the
+    // occasion, not to the title.
+    const notes = input.bare ? null : existing.event.notes || null
+    const location = input.bare ? null : existing.event.location || null
+    const color = input.bare ? null : existing.event.color || null
+    const meetingUrl = input.bare ? null : existing.event.meetingUrl || null
+
     this.db
       .prepare(
         `INSERT INTO events (
@@ -630,16 +850,16 @@ export class EventsRepo {
         targetCalendarId,
         newUid,
         existing.event.title,
-        existing.event.notes || null,
-        existing.event.location || null,
+        notes,
+        location,
         input.dtStartUtc,
         input.dtEndUtc,
         existing.event.tzid,
-        existing.event.allDay ? 1 : 0,
+        (input.allDay ?? existing.event.allDay) ? 1 : 0,
         rrule,
         exdate,
-        existing.event.color || null,
-        existing.event.meetingUrl || null,
+        color,
+        meetingUrl,
         now,
         now
       )
@@ -654,6 +874,19 @@ export class EventsRepo {
       throw new Error(`Master event not found: ${input.masterEventId}`)
     }
     this.checkReadOnlyCalendar(master.event.calendarId)
+
+    // A calendar lives on the event row, and a single occurrence is an
+    // exception row - there is nowhere to record "this one instance belongs to
+    // another calendar", and no provider supports it either. Say so rather than
+    // dropping the change and reporting success.
+    if (input.updateInput.calendarId && input.scope !== 'all') {
+      const master = this.getEventById(input.masterEventId)
+      if (master && input.updateInput.calendarId !== master.event.calendarId) {
+        throw new Error(
+          'A single occurrence cannot be moved to another calendar. Apply the change to the whole series, or delete this occurrence and create a new event.'
+        )
+      }
+    }
 
     if (input.scope === 'all') {
       this.updateEvent(input.masterEventId, input.updateInput)
@@ -671,6 +904,9 @@ export class EventsRepo {
         dtStartUtc: input.updateInput.dtStartUtc,
         dtEndUtc: input.updateInput.dtEndUtc,
         tzid: input.updateInput.tzid,
+        // Dropping one occurrence of an all-day series onto the time grid (or
+        // vice versa) changes only that occurrence's all-day-ness.
+        allDay: input.updateInput.allDay,
         color: input.updateInput.color
       })
       return true
@@ -796,6 +1032,51 @@ export class EventsRepo {
     })
   }
 
+  /**
+   * Recent events flattened for the title autocomplete.
+   *
+   * Read-only calendars are left out: a suggestion carries the calendar to
+   * create on, and nothing can be created on a holiday subscription.
+   *
+   * Recurring masters deliberately skip the date window. A weekly standup that
+   * started two years ago is the single most relevant thing this list can
+   * offer, and its `dtstart_utc` sits outside every window worth using -
+   * filtering on it would hide exactly the habits the feature exists to learn.
+   */
+  listTitleSamples(windowStartUtc: string, windowEndUtc: string, limit = 1500): TitleSample[] {
+    const rows = this.db
+      .prepare(
+        `SELECT e.title, e.calendar_id, e.dtstart_utc, e.dtend_utc, e.all_day, e.location, e.rrule
+         FROM events e
+         JOIN calendars c ON c.id = e.calendar_id
+         WHERE e.is_deleted = 0
+           AND c.is_read_only = 0
+           AND TRIM(e.title) <> ''
+           AND (e.rrule IS NOT NULL OR (e.dtstart_utc >= ? AND e.dtstart_utc <= ?))
+         ORDER BY e.dtstart_utc DESC
+         LIMIT ?`
+      )
+      .all<{
+        title: string
+        calendar_id: string
+        dtstart_utc: string
+        dtend_utc: string
+        all_day: number
+        location: string | null
+        rrule: string | null
+      }>(windowStartUtc, windowEndUtc, limit)
+
+    return rows.map((r) => ({
+      title: r.title,
+      calendarId: r.calendar_id,
+      startUtc: r.dtstart_utc,
+      endUtc: r.dtend_utc,
+      allDay: r.all_day === 1,
+      location: r.location,
+      rrule: r.rrule
+    }))
+  }
+
   queryEventsByCalendar(calendarId: string): CalendarEvent[] {
     const rows = this.db
       .prepare('SELECT * FROM events WHERE calendar_id = ? AND is_deleted = 0')
@@ -843,6 +1124,8 @@ export class EventsRepo {
       .prepare('SELECT calendar_id FROM events WHERE id = ? AND has_conflict = 1')
       .get<{ calendar_id: string }>(eventId)
     if (!row) return false
+    // 'keepMine' re-arms a push, so it is a write to the calendar like any other.
+    this.checkReadOnlyCalendar(row.calendar_id)
 
     if (resolution === 'keepMine') {
       this.db

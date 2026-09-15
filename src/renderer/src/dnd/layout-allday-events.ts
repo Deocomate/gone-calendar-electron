@@ -21,18 +21,32 @@ export function layoutAllDayEvents(
   weekDays: DateTime[]
 ): AllDayBarLayout[] {
   if (weekDays.length === 0 || occs.length === 0) return []
-  const weekStart = weekDays[0].startOf('day')
-  const weekEnd = weekDays[weekDays.length - 1].startOf('day')
+
+  // An all-day occurrence is a floating calendar date stored at UTC midnight,
+  // while weekDays are local. Comparing the two as instants drifted by the zone
+  // offset: east of GMT the UTC day start fell past the local week end, so the
+  // final column's bars were clamped into nothing and dropped. Reduce both sides
+  // to a plain ISO date and do integer day arithmetic in one zone instead.
+  const lastCol = weekDays.length - 1
+  const base = DateTime.fromISO(weekDays[0].toISODate()!, { zone: 'utc' })
+
+  const dateOf = (occ: ExpandedOccurrence, iso: string): string =>
+    occ.allDay
+      ? iso.slice(0, 10)
+      : DateTime.fromISO(iso, { zone: 'utc' }).toLocal().toISODate()!
+
+  const colOf = (isoDate: string): number =>
+    Math.round(DateTime.fromISO(isoDate, { zone: 'utc' }).diff(base, 'days').days)
 
   const items = occs
     .map((occ) => {
-      const occStart = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).startOf('day')
-      const occEnd = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).startOf('day')
-      const clampedStart = occStart < weekStart ? weekStart : occStart
-      const clampedEnd = occEnd > weekEnd ? weekEnd : occEnd
-      if (clampedEnd < clampedStart) return null
-      const startCol = Math.round(clampedStart.diff(weekStart, 'days').days)
-      const endCol = Math.round(clampedEnd.diff(weekStart, 'days').days)
+      const rawStart = colOf(dateOf(occ, occ.startUtc))
+      const rawEnd = colOf(dateOf(occ, occ.endUtc))
+      // Entirely before or after the visible week.
+      if (rawEnd < 0 || rawStart > lastCol) return null
+      const startCol = Math.max(0, rawStart)
+      const endCol = Math.min(lastCol, rawEnd)
+      if (endCol < startCol) return null
       return { occ, startCol, endCol, span: endCol - startCol + 1 }
     })
     .filter((x): x is { occ: ExpandedOccurrence; startCol: number; endCol: number; span: number } => x !== null)

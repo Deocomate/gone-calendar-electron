@@ -3,8 +3,6 @@ import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
 import {
   applyResizeEdge,
-  averageColumnWidth,
-  daysDeltaFromPointer,
   formatResizeTooltip,
   type ResizeEdge
 } from './resize-math'
@@ -13,7 +11,6 @@ import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 export interface ResizeGeometry {
   gridTop: number
   hourHeight: number
-  columns: Array<{ left: number; right: number; day: DateTime }>
 }
 
 export interface ResizePreview {
@@ -34,15 +31,17 @@ export function useEventResize(options: {
   scrollerRef?: RefObject<HTMLElement | null>
 }) {
   const { getGeometry, onCommit, onBusyEnd, scrollerRef } = options
-  const { timeFormat } = useDisplayPreferences()
+  const { timeFormat, dragSnapMinutes } = useDisplayPreferences()
+  // Read through a ref: the pointermove listener is registered once and must
+  // see the current step without being torn down and rebuilt on every change.
+  const snapStepRef = useRef(dragSnapMinutes)
+  snapStepRef.current = dragSnapMinutes
   const [preview, setPreview] = useState<ResizePreview | null>(null)
   const sessionRef = useRef<{
     occ: ExpandedOccurrence
     edge: ResizeEdge
     originStart: DateTime
     originEnd: DateTime
-    originX: number
-    columnWidth: number
   } | null>(null)
   const previewRef = useRef<ResizePreview | null>(null)
   const getGeometryRef = useRef(getGeometry)
@@ -84,7 +83,7 @@ export function useEventResize(options: {
         clientY: e.clientY,
         gridTop: geometry.gridTop,
         hourHeight: geometry.hourHeight,
-        daysDelta: daysDeltaFromPointer(session.originX, e.clientX, session.columnWidth)
+        snapStepMinutes: snapStepRef.current
       })
       const nextPreview: ResizePreview = {
         occId: session.occ.id,
@@ -144,8 +143,6 @@ export function useEventResize(options: {
       edge,
       originStart,
       originEnd,
-      originX: e.clientX,
-      columnWidth: averageColumnWidth(geometry.columns)
     }
     const next = applyResizeEdge({
       edge,
@@ -155,7 +152,7 @@ export function useEventResize(options: {
       clientY: e.clientY,
       gridTop: geometry.gridTop,
       hourHeight: geometry.hourHeight,
-      daysDelta: 0
+      snapStepMinutes: snapStepRef.current
     })
     const nextPreview: ResizePreview = {
       occId: occ.id,

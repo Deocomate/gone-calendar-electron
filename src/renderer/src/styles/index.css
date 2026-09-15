@@ -6,6 +6,7 @@
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --color-app: var(--color-bg-app);
   --color-surface: var(--color-bg-surface);
+  --color-dialog: var(--color-bg-dialog);
   --color-sidebar: var(--color-bg-sidebar);
   --color-hairline: var(--color-border);
   --color-primary: var(--color-text-main);
@@ -19,6 +20,11 @@
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --color-bg-app: #f7f6f3;
   --color-bg-surface: #ffffff;
+  /* Dialogs and side panels sit on top of everything and get read closely, so
+     they stay near-opaque even when the rest of the chrome goes translucent for
+     a custom background. Defaults to the surface colour; only .gc-custom-bg
+     pulls them apart. */
+  --color-bg-dialog: #ffffff;
   --color-bg-sidebar: #fbfbfa;
   --color-border: #e9e9e7;
   --color-text-main: #37352f;
@@ -26,6 +32,10 @@
   --color-today-mark: #eb5757;
   --color-accent-mark: #2383e2;
   --color-hover-fill: #efefee;
+  /* Opaque canvas colour used by the custom-background overlay. Kept separate
+     from --color-bg-app because that token goes translucent when a background
+     image is active, which would make the overlay itself see-through. */
+  --gc-overlay-color: #f7f6f3;
   --color-event-green: #52b788;
   --color-event-blue: #529cca;
   --color-event-orange: #ea9a5f;
@@ -43,6 +53,7 @@
   /* Discord-style dark: soft blue-grey, comfortable contrast, never pure black */
   --color-bg-app: #2b2d31;      /* main calendar canvas */
   --color-bg-surface: #313338;  /* elevated: dialogs, menus, inputs, event blocks */
+  --color-bg-dialog: #313338;
   --color-bg-sidebar: #232428;  /* deepest tone for structural chrome */
   --color-border: #3a3d44;      /* soft but visible hairlines / grid lines */
   --color-text-main: #dbdee1;   /* near-white, not #fff — easy on the eyes */
@@ -50,9 +61,31 @@
   --color-today-mark: #f0616d;  /* red, slightly softened for dark ground */
   --color-accent-mark: #5865f2; /* blurple: focus, drop targets, primary button */
   --color-hover-fill: #35373d;
+  --gc-overlay-color: #2b2d31;
   /* Form & chrome radius tokens */
   --radius-control: 3px;
   --radius-dialog: 4px;
+}
+
+/* A custom background image is painted behind everything, but the app chrome is
+   normally opaque, so the image was completely covered and setting one appeared
+   to do nothing. While `gc-custom-bg` is on <html>, the surface tokens go
+   translucent so the image reads through. `.dark.gc-custom-bg` outranks `.dark`,
+   so each theme keeps its own tint. */
+.gc-custom-bg {
+  --color-bg-app: transparent;
+  --color-bg-surface: color-mix(in srgb, #ffffff 74%, transparent);
+  --color-bg-dialog: color-mix(in srgb, #ffffff 96%, transparent);
+  --color-bg-sidebar: color-mix(in srgb, #fbfbfa 70%, transparent);
+  --color-hover-fill: color-mix(in srgb, #efefee 80%, transparent);
+}
+
+.dark.gc-custom-bg {
+  --color-bg-app: transparent;
+  --color-bg-surface: color-mix(in srgb, #313338 74%, transparent);
+  --color-bg-dialog: color-mix(in srgb, #313338 96%, transparent);
+  --color-bg-sidebar: color-mix(in srgb, #232428 70%, transparent);
+  --color-hover-fill: color-mix(in srgb, #35373d 80%, transparent);
 }
 
 @layer base {
@@ -99,7 +132,7 @@
   }
 
   .gc-dialog {
-    @apply relative flex max-h-[90vh] flex-col overflow-hidden border border-hairline bg-surface text-primary shadow-lg;
+    @apply relative flex max-h-[90vh] flex-col overflow-hidden border border-hairline bg-dialog text-primary shadow-lg;
     border-radius: var(--radius-dialog);
     animation: popoverIn 200ms var(--ease-out) both;
   }

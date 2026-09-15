@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
-import { Settings as SettingsIcon, X, Users } from 'lucide-react'
 import type { AppLocale } from '@shared/ipc-contract'
+import type { AppSettings } from '@shared/settings-contract'
 import type {
   Calendar,
   ExpandedOccurrence,
@@ -12,7 +12,6 @@ import type {
   SyncConflict
 } from '@shared/event-model'
 import type { CalendarViewType } from '@shared/visible-range'
-import { formatClockTime } from '@shared/time-format'
 import { useVisibleRange } from './hooks/use-visible-range'
 import { useTheme } from './hooks/use-theme'
 import MonthView from './views/MonthView'
@@ -28,15 +27,14 @@ import RecurringScopeDialog from './editor/RecurringScopeDialog'
 import DropActionPopover, { type PendingDropAction } from './dnd/DropActionPopover'
 import AccountManagerModal from './components/AccountManagerModal'
 import SearchPaletteModal from './components/SearchPaletteModal'
-import ThemeSettingsModal from './components/ThemeSettingsModal'
+import SettingsPanel, { type SettingsSection } from './components/SettingsPanel'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
 import SyncConflictsModal from './components/SyncConflictsModal'
-import HolidayCalendarToggle from './components/HolidayCalendarToggle'
 import AppHeader from './components/shell/AppHeader'
 import AppSidebar from './components/shell/AppSidebar'
 import { useEventDnD } from './dnd/use-event-dnd'
-import { NotionToaster, NumberInput, CustomSelect, toast, showFriendlyError } from './components/ui'
-import { CALENDAR_COLOR_PALETTE } from './lib/calendar-colors'
+import { singleDayRange } from './dnd/drop-target'
+import { NotionToaster, toast, showFriendlyError, isStaleEventError } from './components/ui'
 import { DisplayPreferencesProvider, type DisplayPreferences } from './context/DisplayPreferencesContext'
 
 export type { CalendarViewType }
@@ -51,18 +49,17 @@ const TIMEZONE_NAMES: string[] = (() => {
 
 export const App: React.FC = () => {
   const { t, i18n } = useTranslation()
-  const { mode, isDark, themeConfig, setThemeConfig, persistMode, loadFromSettings } = useTheme()
+  const { mode, themeConfig, setThemeConfig, persistMode, loadFromSettings } = useTheme()
   const [currentView, setCurrentView] = useState<CalendarViewType>('week')
   const [anchorDate, setAnchorDate] = useState<DateTime>(() => DateTime.local())
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('0.1.0')
   const [platform, setPlatform] = useState<string>('win32')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<'general' | 'calendars'>('general')
+  const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null)
   const [colorPickerCalId, setColorPickerCalId] = useState<string | null>(null)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
   const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState(false)
-  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false)
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false)
   const [isConflictsModalOpen, setIsConflictsModalOpen] = useState(false)
   const [conflicts, setConflicts] = useState<SyncConflict[]>([])
@@ -74,6 +71,8 @@ export const App: React.FC = () => {
   const [dayStartHour, setDayStartHour] = useState(7)
   const [hourBlockSize, setHourBlockSize] = useState<DisplayPreferences['hourBlockSize']>('medium')
   const [secondaryTimezone, setSecondaryTimezone] = useState<string>('')
+  const [suggestionShowCalendarName, setSuggestionShowCalendarName] = useState<boolean>(true)
+  const [dragSnapMinutes, setDragSnapMinutes] = useState<AppSettings['dragSnapMinutes']>(15)
   const [headerVisible, setHeaderVisible] = useState(true)
   const headerHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [firstDayOfWeek, setFirstDayOfWeek] = useState(1)
@@ -120,7 +119,30 @@ export const App: React.FC = () => {
     )
   }, [])
 
+  // Year view scrolls continuously through years either side of the anchor, so
+  // the query has to cover the whole mounted span - querying only the anchor
+  // year left every scrolled-to year rendering with no event markers at all.
+  const [yearSpan, setYearSpan] = useState<{ start: number; end: number } | null>(null)
+
+  useEffect(() => {
+    if (currentView !== 'year') setYearSpan(null)
+  }, [currentView])
+
+  const handleVisibleYearsChange = useCallback((start: number, end: number) => {
+    setYearSpan((prev) => (prev && prev.start === start && prev.end === end ? prev : { start, end }))
+  }, [])
+
   const queryRange = useMemo(() => {
+    if (currentView === 'year') {
+      if (!yearSpan) return visibleRange
+      const start = DateTime.local(yearSpan.start, 1, 1).startOf('day')
+      const end = DateTime.local(yearSpan.end, 12, 31).endOf('day')
+      return {
+        startUtc: start.toUTC().toISO() || start.toISO()!,
+        endUtc: end.toUTC().toISO() || end.toISO()!,
+        label: visibleRange.label
+      }
+    }
     if (currentView !== 'list') return visibleRange
     const start = anchorDate.minus({ days: LIST_BASE_DAYS_BEFORE + listExpand.before }).startOf('day')
     const end = anchorDate.plus({ days: LIST_BASE_DAYS_AFTER + listExpand.after }).endOf('day')
@@ -130,7 +152,7 @@ export const App: React.FC = () => {
       label: visibleRange.label
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentView, anchorDate, listExpand, visibleRange.label])
+  }, [currentView, anchorDate, listExpand, yearSpan, visibleRange.label])
 
   const loadCalendarsAndEvents = useCallback(async () => {
     if (!window.gone?.calendars || !window.gone?.events) return
@@ -171,11 +193,49 @@ export const App: React.FC = () => {
     try {
       await window.gone.events.resolveConflict(eventId, resolution)
       setConflicts((prev) => prev.filter((c) => c.eventId !== eventId))
-      toast.success(t('toast.conflictResolved'))
     } catch (err: any) {
       showFriendlyError(err, t('toast.conflictResolveFailed'))
     }
   }
+
+  // A background sync can rewrite the rows under the view - including the id of
+  // an event that has just been pushed for the first time, which the provider
+  // assigns. Reloading on that signal is what keeps a drag or resize from acting
+  // on an occurrence that no longer exists.
+  //
+  // Never mid-gesture, though. The poll runs every 20s while the window is
+  // focused, so reloading the moment the signal arrives yanks the view out from
+  // under a drag that is still in the user's hand - the blocks re-render, the
+  // occurrence being dragged is replaced, and the drop lands somewhere nobody
+  // asked for. Both gesture hooks mark `is-dnd-active` on <body> for exactly as
+  // long as a drag or resize is live, so the reload waits for it to clear.
+  useEffect(() => {
+    if (!window.gone?.sync?.onChanged) return
+
+    let pending = false
+    const isGestureActive = (): boolean => document.body.classList.contains('is-dnd-active')
+
+    const drain = (): void => {
+      if (!pending || isGestureActive()) return
+      pending = false
+      void loadCalendarsAndEvents()
+    }
+
+    // Attribute changes on <body> are the signal that a gesture ended; watching
+    // them beats polling for a class that is usually not there.
+    const observer = new MutationObserver(drain)
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+
+    const unsubscribe = window.gone.sync.onChanged(() => {
+      pending = true
+      drain()
+    })
+
+    return () => {
+      observer.disconnect()
+      unsubscribe()
+    }
+  }, [loadCalendarsAndEvents])
 
   const handleDirectMove = useCallback(
     async (
@@ -183,7 +243,8 @@ export const App: React.FC = () => {
       targetStart: DateTime,
       targetEnd: DateTime,
       isCopy: boolean,
-      kind: 'move' | 'resize' = 'move'
+      /** Undefined keeps the occurrence's current all-day-ness. */
+      targetAllDay?: boolean
     ) => {
       if (!window.gone?.events) return
 
@@ -193,22 +254,22 @@ export const App: React.FC = () => {
         return
       }
 
-      const when = `${targetStart.toFormat('dd/MM')} ${formatClockTime(targetStart, timeFormat)} – ${formatClockTime(targetEnd, timeFormat)}`
-
       try {
         if (isCopy) {
+          // Drag-copy makes a new event that shares a name and a calendar, not a
+          // duplicate: no recurrence, no multi-day span, and none of the
+          // original's notes, location or meeting link. Its length is kept.
+          const range = singleDayRange(targetStart, targetEnd, dragSnapMinutes)
           await window.gone.events.copy({
             sourceEventId: occ.eventId,
-            dtStartUtc: targetStart.toUTC().toISO()!,
-            dtEndUtc: targetEnd.toUTC().toISO()!,
+            dtStartUtc: range.start.toUTC().toISO()!,
+            dtEndUtc: range.end.toUTC().toISO()!,
             targetCalendarId: occ.calendarId,
-            copyInstanceOnly: true
-          })
-          toast.success(t('toast.eventCopied'), {
-            description: t('toast.copiedTo', {
-              title: occ.title,
-              date: targetStart.toFormat('dd/MM/yyyy')
-            })
+            copyInstanceOnly: true,
+            bare: true,
+            // Alt-dragging an all-day event onto the grid has to produce a timed
+            // copy too, or the copy keeps its all-day flag with an hour's range.
+            allDay: targetAllDay === undefined ? occ.allDay : targetAllDay
           })
         } else if (occ.isRecurring) {
           await window.gone.events.updateScope({
@@ -220,31 +281,37 @@ export const App: React.FC = () => {
               dtStartUtc: targetStart.toUTC().toISO()!,
               dtEndUtc: targetEnd.toUTC().toISO()!,
               tzid: occ.tzid,
+              // Dropping one occurrence of an all-day series onto the hourly grid
+              // detaches just that occurrence as a timed event, like Google does.
+              allDay: targetAllDay === undefined ? occ.allDay : targetAllDay,
               notes: occ.notes,
               location: occ.location,
               meetingUrl: occ.meetingUrl
             }
-          })
-          toast.success(kind === 'resize' ? t('toast.eventTimeUpdated') : t('toast.eventMoved'), {
-            description: t('toast.movedDetail', { title: occ.title, when })
           })
         } else {
           await window.gone.events.move({
             eventId: occ.eventId,
             dtStartUtc: targetStart.toUTC().toISO()!,
             dtEndUtc: targetEnd.toUTC().toISO()!,
-            targetCalendarId: occ.calendarId
-          })
-          toast.success(kind === 'resize' ? t('toast.eventTimeUpdated') : t('toast.eventMoved'), {
-            description: t('toast.movedDetail', { title: occ.title, when })
+            targetCalendarId: occ.calendarId,
+            allDay: targetAllDay === undefined ? occ.allDay : targetAllDay
           })
         }
         await loadCalendarsAndEvents()
       } catch (err: any) {
+        // A sync that lands between the drag starting and the drop finishing can
+        // re-key the event, so the id in hand is already gone. Refresh instead of
+        // blaming the user for a move that was valid when they began it.
+        if (isStaleEventError(err)) {
+          await loadCalendarsAndEvents()
+          toast.error(t('friendly.staleTitle'), { description: t('friendly.staleBody') })
+          return
+        }
         showFriendlyError(err, t('toast.moveFailed'))
       }
     },
-    [calendars, loadCalendarsAndEvents, t]
+    [calendars, dragSnapMinutes, loadCalendarsAndEvents, t]
   )
 
   const {
@@ -258,19 +325,32 @@ export const App: React.FC = () => {
     handleDragOverTarget,
     handleDropOnDate,
     markPointerBusyEnd
-  } = useEventDnD(handleDirectMove)
+  } = useEventDnD(
+    dragSnapMinutes,
+    useCallback(
+      (
+        occ: ExpandedOccurrence,
+        start: DateTime,
+        end: DateTime,
+        isCopy: boolean,
+        targetAllDay?: boolean
+      ) => void handleDirectMove(occ, start, end, isCopy, targetAllDay),
+      [handleDirectMove]
+    )
+  )
 
   const handleResizeCommit = useCallback(
     (occ: ExpandedOccurrence, start: DateTime, end: DateTime) => {
-      void handleDirectMove(occ, start, end, false, 'resize')
+      void handleDirectMove(occ, start, end, false)
     },
     [handleDirectMove]
   )
 
-  // Week view: dragging an event drops a copy rather than moving the original.
-  const handleWeekDrop = useCallback(
-    (e: React.DragEvent, targetDate: DateTime, minutes?: number) => {
-      handleDropOnDate(e, targetDate, minutes, true)
+  // Week view drops onto the all-day lane, which turns a timed event into an
+  // all-day one - the mirror of dragging an all-day event onto the hourly grid.
+  const handleWeekAllDayDrop = useCallback(
+    (e: React.DragEvent, targetDate: DateTime) => {
+      handleDropOnDate(e, targetDate, undefined, { toAllDayLane: true })
     },
     [handleDropOnDate]
   )
@@ -359,6 +439,8 @@ export const App: React.FC = () => {
           setDayStartHour(settings.dayStartHour ?? 7)
           setHourBlockSize(settings.hourBlockSize ?? 'medium')
           setSecondaryTimezone(settings.secondaryTimezone ?? '')
+          setSuggestionShowCalendarName(settings.suggestionShowCalendarName ?? true)
+          setDragSnapMinutes(settings.dragSnapMinutes ?? 15)
           setFirstDayOfWeek(settings.firstDayOfWeek ?? 1)
           const loc = settings.locale === 'vi' || settings.locale === 'en' ? settings.locale : 'en'
           if (loc !== i18n.language) await i18n.changeLanguage(loc)
@@ -480,6 +562,17 @@ export const App: React.FC = () => {
     if (window.gone?.settings) await window.gone.settings.set('secondaryTimezone', value)
   }
 
+  const changeDragSnapMinutes = async (next: AppSettings['dragSnapMinutes']) => {
+    setDragSnapMinutes(next)
+    if (window.gone?.settings) await window.gone.settings.set('dragSnapMinutes', next)
+  }
+
+  const toggleSuggestionShowCalendarName = async (next: boolean) => {
+    setSuggestionShowCalendarName(next)
+    if (window.gone?.settings)
+      await window.gone.settings.set('suggestionShowCalendarName', next)
+  }
+
   const toggleMiniCalendar = async (enabled: boolean) => {
     setShowMiniCalendar(enabled)
     if (window.gone?.settings) await window.gone.settings.set('showMiniCalendar', enabled)
@@ -515,7 +608,6 @@ export const App: React.FC = () => {
         await window.gone.events.create(payload.input as CreateEventInput)
         setIsEditorOpen(false)
         await loadCalendarsAndEvents()
-        toast.success(t('toast.eventCreated'))
       } else if (payload.eventId) {
         if (payload.isRecurringOccurrence && payload.occurrenceStartUtc) {
           setIsEditorOpen(false)
@@ -530,7 +622,6 @@ export const App: React.FC = () => {
           await window.gone.events.update(payload.eventId, payload.input as UpdateEventInput)
           setIsEditorOpen(false)
           await loadCalendarsAndEvents()
-          toast.success(t('toast.changesSaved'))
         }
       }
     } catch (err: any) {
@@ -541,11 +632,38 @@ export const App: React.FC = () => {
   const handleDeleteEvent = async (
     eventId: string,
     occurrenceStartUtc?: string,
-    isRecurring?: boolean
+    isRecurring?: boolean,
+    /** Middle-click asks for no prompt: the gesture is already the decision. */
+    options?: { confirm?: boolean; title?: string }
   ) => {
     if (!window.gone?.events) return
 
+    const shouldPrompt = options?.confirm !== false
+    const done = async () => {
+      setIsEditorOpen(false)
+      await loadCalendarsAndEvents()
+      // With no confirmation this toast is the only feedback the gesture gives,
+      // so it names what went.
+    }
+
     if (isRecurring && occurrenceStartUtc) {
+      if (!shouldPrompt) {
+        // Middle-clicking picks out one occurrence, so that is what it removes.
+        // The scope prompt asks a question the gesture has already answered, and
+        // 'this' is both the literal reading and the least destructive one.
+        try {
+          await window.gone.events.deleteScope({
+            masterEventId: eventId,
+            originalStartUtc: occurrenceStartUtc,
+            scope: 'this'
+          })
+          await done()
+        } catch (err: any) {
+          showFriendlyError(err, t('toast.deleteFailed'))
+        }
+        return
+      }
+
       setIsEditorOpen(false)
       setPendingRecurringScope({
         action: 'delete',
@@ -553,15 +671,16 @@ export const App: React.FC = () => {
         eventId,
         occurrenceStartUtc
       })
-    } else if (confirm(t('toast.confirmDelete'))) {
-      try {
-        await window.gone.events.delete(eventId)
-        setIsEditorOpen(false)
-        await loadCalendarsAndEvents()
-        toast.success(t('toast.eventDeleted'))
-      } catch (err: any) {
-        showFriendlyError(err, t('toast.deleteFailed'))
-      }
+      return
+    }
+
+    if (shouldPrompt && !confirm(t('toast.confirmDelete'))) return
+
+    try {
+      await window.gone.events.delete(eventId)
+      await done()
+    } catch (err: any) {
+      showFriendlyError(err, t('toast.deleteFailed'))
     }
   }
 
@@ -576,14 +695,12 @@ export const App: React.FC = () => {
           scope,
           updateInput: pendingRecurringScope.input
         })
-        toast.success(t('toast.recurringUpdated'))
       } else if (pendingRecurringScope.action === 'delete') {
         await window.gone.events.deleteScope({
           masterEventId: pendingRecurringScope.eventId,
           originalStartUtc: pendingRecurringScope.occurrenceStartUtc,
           scope
         })
-        toast.success(t('toast.recurringDeleted'))
       }
       setPendingRecurringScope(null)
       await loadCalendarsAndEvents()
@@ -610,7 +727,10 @@ export const App: React.FC = () => {
         toast.error(t('toast.readOnlyTitle'), { description: t('toast.readOnlyDelete') })
         return
       }
-      void handleDeleteEvent(occ.eventId, occ.originalStartUtc || occ.startUtc, occ.isRecurring)
+      void handleDeleteEvent(occ.eventId, occ.originalStartUtc || occ.startUtc, occ.isRecurring, {
+        confirm: false,
+        title: occ.title
+      })
     },
     [calendars, wasJustDragging] // eslint-disable-line react-hooks/exhaustive-deps
   )
@@ -652,8 +772,13 @@ export const App: React.FC = () => {
       })
       setPendingDrop(null)
       await loadCalendarsAndEvents()
-      toast.success(t('toast.eventMoved'))
     } catch (err: any) {
+      if (isStaleEventError(err)) {
+        await loadCalendarsAndEvents()
+        toast.error(t('friendly.staleTitle'), { description: t('friendly.staleBody') })
+        setPendingDrop(null)
+        return
+      }
       showFriendlyError(err, t('toast.moveFailed'))
     }
   }
@@ -661,23 +786,38 @@ export const App: React.FC = () => {
   const handleDropCopy = async (drop: PendingDropAction, copyInstanceOnly?: boolean) => {
     if (!window.gone?.events) return
     try {
+      // "Copy whole series" is asking for a duplicate, so it keeps everything.
+      // Every other copy is a new event that shares a name: no recurrence, no
+      // multi-day span, and none of the original's notes, location or link.
+      const bare = copyInstanceOnly === true || !drop.occurrence.isRecurring
+      const range = bare
+        ? singleDayRange(drop.targetStart, drop.targetEnd, dragSnapMinutes)
+        : { start: drop.targetStart, end: drop.targetEnd }
+
       await window.gone.events.copy({
         sourceEventId: drop.occurrence.eventId,
-        dtStartUtc: drop.targetStart.toUTC().toISO()!,
-        dtEndUtc: drop.targetEnd.toUTC().toISO()!,
+        dtStartUtc: range.start.toUTC().toISO()!,
+        dtEndUtc: range.end.toUTC().toISO()!,
         targetCalendarId: drop.targetCalendarId,
-        copyInstanceOnly
+        copyInstanceOnly: copyInstanceOnly ?? bare,
+        bare
       })
       setPendingDrop(null)
       await loadCalendarsAndEvents()
-      toast.success(t('toast.eventCopied'))
     } catch (err: any) {
       showFriendlyError(err, t('toast.copyFailed'))
     }
   }
 
   return (
-    <DisplayPreferencesProvider value={{ timeFormat, hourBlockSize, dayStartHour, secondaryTimezone }}>
+    <DisplayPreferencesProvider value={{
+        timeFormat,
+        hourBlockSize,
+        dayStartHour,
+        secondaryTimezone,
+        suggestionShowCalendarName,
+        dragSnapMinutes
+      }}>
     <div
       className="relative flex h-screen w-screen flex-col overflow-hidden bg-app font-sans text-primary select-none"
       style={
@@ -697,8 +837,11 @@ export const App: React.FC = () => {
             }}
           />
           <div
-            className="pointer-events-none fixed inset-0 z-0 bg-app"
-            style={{ opacity: themeConfig.bgOverlayOpacity }}
+            className="pointer-events-none fixed inset-0 z-0"
+            style={{
+              background: 'var(--gc-overlay-color)',
+              opacity: themeConfig.bgOverlayOpacity
+            }}
           />
         </>
       )}
@@ -708,24 +851,17 @@ export const App: React.FC = () => {
             <AppHeader
               title={currentView === 'week' || currentView === 'year' ? '' : visibleRange.label}
               currentView={currentView}
-              language={i18n.language}
-              themeMode={mode}
               showSidebarToggle={showMiniCalendar}
               onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
               onPrev={handlePrev}
               onNext={handleNext}
               onChangeView={setCurrentView}
               onSearch={() => setIsSearchPaletteOpen(true)}
-              onOpenSettings={() => {
-                setSettingsTab('general')
+              onOpenMenu={() => {
+                setSettingsSection(null)
                 setIsSettingsOpen(true)
               }}
-              onOpenTheme={() => setIsThemeModalOpen(true)}
-              onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
-              onToggleLanguage={toggleLanguage}
-              onSetThemeMode={persistMode}
               conflictCount={conflicts.length}
-              onOpenConflicts={() => setIsConflictsModalOpen(true)}
             />
           )
 
@@ -818,7 +954,8 @@ export const App: React.FC = () => {
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               onDragOverTarget={handleDragOverTarget}
-              onDropOnDate={handleWeekDrop}
+              onDropOnDate={handleDropOnDate}
+              onDropOnAllDayLane={handleWeekAllDayDrop}
               onResizeCommit={handleResizeCommit}
               onResizeBusyEnd={markPointerBusyEnd}
             />
@@ -857,6 +994,7 @@ export const App: React.FC = () => {
               anchorDate={anchorDate}
               occurrences={occurrences}
               showLunar={showLunar}
+              onVisibleYearsChange={handleVisibleYearsChange}
               onSelectMonth={(year, month) => {
                 setAnchorDate((d) => d.set({ year, month, day: 1 }))
                 setCurrentView('month')
@@ -904,12 +1042,6 @@ export const App: React.FC = () => {
         onResolve={handleResolveConflict}
       />
 
-      <ThemeSettingsModal
-        isOpen={isThemeModalOpen}
-        onClose={() => setIsThemeModalOpen(false)}
-        onThemeChanged={(theme) => setThemeConfig(theme)}
-      />
-
       <EventEditorDialog
         isOpen={isEditorOpen}
         calendars={calendars}
@@ -942,273 +1074,53 @@ export const App: React.FC = () => {
         onAccountsChanged={() => loadCalendarsAndEvents()}
       />
 
-      {isSettingsOpen && (
-        <div className="gc-overlay">
-          <div className="gc-dialog w-full max-w-md p-6">
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(false)}
-              className="gc-icon-btn absolute top-3 right-3"
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-              <SettingsIcon className="h-5 w-5 text-accent" />
-              {t('settings.title')}
-            </h3>
-
-            <div className="mb-4 flex gap-1 border-b border-hairline">
-              {(['general', 'calendars'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setSettingsTab(tab)}
-                  className={`-mb-px border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
-                    settingsTab === tab
-                      ? 'border-accent text-primary'
-                      : 'border-transparent text-muted hover:text-primary'
-                  }`}
-                >
-                  {tab === 'general' ? t('settings.tabGeneral') : t('settings.tabCalendars')}
-                </button>
-              ))}
-            </div>
-
-            {settingsTab === 'general' && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.language')}</span>
-                  <button type="button" className="gc-btn" onClick={toggleLanguage}>
-                    {i18n.language === 'vi' ? 'Tiếng Việt' : 'English'}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.theme')}</span>
-                  <span className="text-xs text-muted">
-                    {isDark ? t('settings.themeDark') : t('settings.themeLight')}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.lunar')}</span>
-                  <button
-                    type="button"
-                    className={showLunar ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleLunar(!showLunar)}
-                  >
-                    {showLunar ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.weekNumbers')}</span>
-                  <button
-                    type="button"
-                    className={showWeekNumbers ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleWeekNumbers(!showWeekNumbers)}
-                  >
-                    {showWeekNumbers ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.autoHideHeader')}</span>
-                  <button
-                    type="button"
-                    className={autoHideHeader ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleAutoHideHeader(!autoHideHeader)}
-                  >
-                    {autoHideHeader ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.timeFormat')}</span>
-                  <div className="flex gap-1">
-                    {(['24h', '12h'] as const).map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        className={timeFormat === opt ? 'gc-btn-primary' : 'gc-btn'}
-                        onClick={() => changeTimeFormat(opt)}
-                      >
-                        {opt === '24h' ? t('settings.timeFormat24h') : t('settings.timeFormat12h')}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.dayStartHour')}</span>
-                  <NumberInput
-                    value={dayStartHour}
-                    onChange={(v) => changeDayStartHour(Math.max(0, Math.min(23, Math.round(v))))}
-                    min={0}
-                    max={23}
-                    suffix="h"
-                  />
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.hourBlockSize')}</span>
-                  <div className="flex gap-1">
-                    {(['small', 'medium', 'large'] as const).map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        className={hourBlockSize === opt ? 'gc-btn-primary' : 'gc-btn'}
-                        onClick={() => changeHourBlockSize(opt)}
-                      >
-                        {t(`settings.hourBlockSize${opt[0].toUpperCase()}${opt.slice(1)}`)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2 gap-3">
-                  <span className="text-sm shrink-0">{t('settings.secondaryTimezone')}</span>
-                  <div className="w-48">
-                    <CustomSelect
-                      value={secondaryTimezone}
-                      onChange={changeSecondaryTimezone}
-                      searchable
-                      placeholder={t('settings.secondaryTimezoneNone')}
-                      options={[
-                        { value: '', label: t('settings.secondaryTimezoneNone') },
-                        ...TIMEZONE_NAMES.map((tz) => ({ value: tz, label: tz.replace(/_/g, ' ') }))
-                      ]}
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.showMiniCalendar')}</span>
-                  <button
-                    type="button"
-                    className={showMiniCalendar ? 'gc-btn-primary' : 'gc-btn'}
-                    onClick={() => toggleMiniCalendar(!showMiniCalendar)}
-                  >
-                    {showMiniCalendar ? t('common.on') : t('common.off')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between border-b border-hairline py-2">
-                  <span className="text-sm">{t('settings.advancedAppearance')}</span>
-                  <button
-                    type="button"
-                    className="gc-btn"
-                    onClick={() => {
-                      setIsSettingsOpen(false)
-                      setIsThemeModalOpen(true)
-                    }}
-                  >
-                    {t('actions.appearance')}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-sm">{t('settings.version')}</span>
-                  <span className="font-mono text-xs text-muted">
-                    v{appVersion} ({platform})
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {settingsTab === 'calendars' && (
-              <div className="space-y-3">
-                <div className="space-y-0.5">
-                  <div className="text-[11px] font-medium text-muted">{t('settings.myCalendars')}</div>
-                  {calendars.length > 0 ? (
-                    calendars.map((cal) => (
-                      <div
-                        key={cal.id}
-                        className="relative flex items-center gap-2 rounded-[3px] px-1 py-1.5 text-xs text-primary hover:bg-hover transition-colors"
-                      >
-                        <label className="flex flex-1 min-w-0 cursor-pointer items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={cal.isVisible}
-                            onChange={() => toggleCalendarVisibility(cal)}
-                            className="h-3.5 w-3.5 rounded-[3px] accent-accent cursor-pointer"
-                          />
-                          <button
-                            type="button"
-                            title={t('settings.changeColor')}
-                            onClick={(e) => {
-                              e.preventDefault()
-                              setColorPickerCalId(colorPickerCalId === cal.id ? null : cal.id)
-                            }}
-                            className="h-2.5 w-2.5 shrink-0 rounded-full cursor-pointer ring-offset-1 hover:ring-2 hover:ring-hairline transition-all"
-                            style={{ backgroundColor: cal.color }}
-                          />
-                          <span className="flex-1 truncate font-medium">{cal.name}</span>
-                        </label>
-                        {cal.isReadOnly && (
-                          <span className="text-[9px] font-medium text-muted bg-hover px-1.5 py-0.5 rounded-[3px]">
-                            {t('common.readOnlyShort')}
-                          </span>
-                        )}
-
-                        {colorPickerCalId === cal.id && (
-                          <div
-                            className="absolute top-full left-0 z-20 mt-1 grid grid-cols-8 gap-1.5 border border-hairline bg-surface p-2 shadow-lg"
-                            style={{ borderRadius: 'var(--radius-control)' }}
-                          >
-                            {CALENDAR_COLOR_PALETTE.map((hex) => {
-                              const usedByOther = calendars.some(
-                                (other) => other.id !== cal.id && other.color?.toLowerCase() === hex.toLowerCase()
-                              )
-                              return (
-                                <button
-                                  key={hex}
-                                  type="button"
-                                  onClick={() => changeCalendarColor(cal, hex)}
-                                  className="relative h-5 w-5 shrink-0 rounded-full cursor-pointer transition-transform hover:scale-110"
-                                  style={{
-                                    backgroundColor: hex,
-                                    outline: cal.color === hex ? '2px solid var(--color-border)' : 'none',
-                                    outlineOffset: '1px'
-                                  }}
-                                  title={usedByOther ? `${hex} (${t('settings.colorInUse')})` : hex}
-                                >
-                                  {usedByOther && (
-                                    <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-surface border border-hairline" />
-                                  )}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-1 py-1.5 text-xs text-muted">{t('settings.noCalendars')}</div>
-                  )}
-                </div>
-
-                <HolidayCalendarToggle
-                  calendars={calendars}
-                  onCalendarsChanged={loadCalendarsAndEvents}
-                />
-
-                <button
-                  type="button"
-                  className="gc-btn w-full justify-center"
-                  onClick={() => {
-                    setIsSettingsOpen(false)
-                    setIsAccountModalOpen(true)
-                  }}
-                >
-                  <Users className="h-4 w-4" />
-                  <span>{t('settings.manageAccounts')}</span>
-                </button>
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                className="gc-btn-primary"
-                onClick={() => setIsSettingsOpen(false)}
-              >
-                {t('common.close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        section={settingsSection}
+        onSectionChange={setSettingsSection}
+        onClose={() => setIsSettingsOpen(false)}
+        language={i18n.language}
+        onToggleLanguage={toggleLanguage}
+        showLunar={showLunar}
+        onToggleLunar={toggleLunar}
+        showWeekNumbers={showWeekNumbers}
+        onToggleWeekNumbers={toggleWeekNumbers}
+        showMiniCalendar={showMiniCalendar}
+        onToggleMiniCalendar={toggleMiniCalendar}
+        timeFormat={timeFormat}
+        onChangeTimeFormat={changeTimeFormat}
+        themeMode={mode}
+        onSetThemeMode={persistMode}
+        onThemeChanged={setThemeConfig}
+        dayStartHour={dayStartHour}
+        onChangeDayStartHour={changeDayStartHour}
+        hourBlockSize={hourBlockSize}
+        onChangeHourBlockSize={changeHourBlockSize}
+        secondaryTimezone={secondaryTimezone}
+        onChangeSecondaryTimezone={changeSecondaryTimezone}
+        suggestionShowCalendarName={suggestionShowCalendarName}
+        onToggleSuggestionShowCalendarName={toggleSuggestionShowCalendarName}
+        dragSnapMinutes={dragSnapMinutes}
+        onChangeDragSnapMinutes={changeDragSnapMinutes}
+        timezoneNames={TIMEZONE_NAMES}
+        autoHideHeader={autoHideHeader}
+        onToggleAutoHideHeader={toggleAutoHideHeader}
+        calendars={calendars}
+        colorPickerCalId={colorPickerCalId}
+        onColorPickerToggle={setColorPickerCalId}
+        onToggleCalendarVisibility={toggleCalendarVisibility}
+        onChangeCalendarColor={changeCalendarColor}
+        onCalendarsChanged={loadCalendarsAndEvents}
+        onManageAccounts={() => {
+          setIsSettingsOpen(false)
+          setIsAccountModalOpen(true)
+        }}
+        onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
+        conflictCount={conflicts.length}
+        onOpenConflicts={() => setIsConflictsModalOpen(true)}
+        appVersion={appVersion}
+        platform={platform}
+      />
 
       <NotionToaster />
     </div>

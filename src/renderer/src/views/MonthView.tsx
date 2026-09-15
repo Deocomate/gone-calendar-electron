@@ -1,4 +1,6 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+import { compareOccurrencesWithinDay } from '@shared/occurrence-order'
+import { occurrenceDateKeys } from '@shared/all-day'
 import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
 import { Layers } from 'lucide-react'
@@ -9,7 +11,7 @@ import { useDisplayPreferences } from '../context/DisplayPreferencesContext'
 import LunarLabel from '../components/LunarLabel'
 import WeekNumber from '../components/WeekNumber'
 import EventPill from '../components/EventPill'
-import EventHoverFlyout, { type HoverFlyoutData } from '../components/EventHoverFlyout'
+import DayPeekPopover, { type DayPeekData } from '../components/DayPeekPopover'
 import { prepareDropEvent, type CalendarDropTarget } from '../dnd/drop-target'
 import { weekdayShortLabels } from '../i18n/weekday-labels'
 
@@ -52,8 +54,7 @@ interface MonthDayCellProps {
   onDragEnd?: () => void
   onDragOverTarget?: (target: CalendarDropTarget) => void
   onDropOnDate?: (e: React.DragEvent, targetDate: DateTime) => void
-  onShowFlyout: (data: HoverFlyoutData) => void
-  onHideFlyout: () => void
+  onPeekDay: (data: DayPeekData) => void
 }
 
 const MonthDayCell: React.FC<MonthDayCellProps> = ({
@@ -70,9 +71,9 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
   onDragEnd,
   onDragOverTarget,
   onDropOnDate,
-  onShowFlyout,
-  onHideFlyout
+  onPeekDay
 }) => {
+  const { t } = useTranslation()
   const { timeFormat } = useDisplayPreferences()
   const today = DateTime.local()
   const dayKey = day.toFormat('yyyy-MM-dd')
@@ -85,22 +86,8 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
   const highlights = React.useMemo(() => getDayHighlights(day, today), [day, today])
   const highlightBg = highlightBackground(highlights)
 
-  const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (totalItems > 0) {
-      const rect = e.currentTarget.getBoundingClientRect()
-      onShowFlyout({
-        title: day.toFormat('cccc, dd/MM/yyyy'),
-        subtitle: String(totalItems),
-        occurrences: dayOccurrences,
-        anchorRect: rect
-      })
-    }
-  }
-
   return (
     <div
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={onHideFlyout}
       onClick={() => onSelectDate?.(day)}
       onDragOver={(e) => {
         prepareDropEvent(e)
@@ -123,13 +110,22 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
         </span>
         <div className="flex items-center gap-1">
           {totalItems >= 2 && (
-            <span
-              className="flex items-center gap-0.5 px-1 py-0.5 rounded-[3px] bg-hover text-muted border border-hairline font-mono text-[9px] font-medium"
-              title={String(totalItems)}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onPeekDay({
+                  day,
+                  occurrences: dayOccurrences,
+                  anchorRect: e.currentTarget.closest('.gc-cell')!.getBoundingClientRect()
+                })
+              }}
+              className="flex cursor-pointer items-center gap-0.5 rounded-[3px] border border-hairline bg-hover px-1 py-0.5 font-mono text-[9px] font-medium text-muted transition-colors hover:text-primary"
+              title={t('month.moreCount', { count: totalItems })}
             >
               <Layers className="w-2.5 h-2.5" />
               {totalItems}
-            </span>
+            </button>
           )}
           {showLunar && <LunarLabel day={day.day} month={day.month} year={day.year} />}
         </div>
@@ -159,9 +155,22 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
         })}
 
         {overflow > 0 && (
-          <div className="px-1 text-[10px] font-medium text-muted truncate">
-            +{overflow}
-          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onPeekDay({
+                day,
+                occurrences: dayOccurrences,
+                anchorRect: e.currentTarget
+                  .closest('.gc-cell')!
+                  .getBoundingClientRect()
+              })
+            }}
+            className="w-full cursor-pointer truncate rounded-[3px] px-1 py-0.5 text-left text-[10px] font-medium text-muted transition-colors hover:bg-hover hover:text-primary"
+          >
+            {t('month.moreCount', { count: overflow })}
+          </button>
         )}
       </div>
     </div>
@@ -188,16 +197,13 @@ export const MonthView: React.FC<MonthViewProps> = ({
   onDropOnDate
 }) => {
   const { t } = useTranslation()
-  const [hoverData, setHoverData] = useState<HoverFlyoutData | null>(null)
-  const hoverTimerRef = useRef<any>(null)
+  const [peek, setPeek] = useState<DayPeekData | null>(null)
   const weeksGridRef = useRef<HTMLDivElement>(null)
   const [maxVisible, setMaxVisible] = useState(2)
 
+  // Dragging an event out of the peek should dismiss it.
   useEffect(() => {
-    if (draggedOccurrenceId) {
-      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
-      setHoverData(null)
-    }
+    if (draggedOccurrenceId) setPeek(null)
   }, [draggedOccurrenceId])
 
   // Fit as many events as the row's actual height allows instead of a hardcoded cap.
@@ -217,32 +223,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
     return () => ro.disconnect()
   }, [])
 
-  const handleShowFlyout = useCallback(
-    (data: HoverFlyoutData) => {
-      if (draggedOccurrenceId) return
-      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
-      hoverTimerRef.current = setTimeout(() => {
-        if (!draggedOccurrenceId) {
-          setHoverData(data)
-        }
-      }, 120)
-    },
-    [draggedOccurrenceId]
-  )
-
-  const handleHideFlyout = useCallback(() => {
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
-    hoverTimerRef.current = setTimeout(() => {
-      setHoverData(null)
-    }, 180)
-  }, [])
-
-  const handleDragStartWithDismiss = (e: React.DragEvent, occ: ExpandedOccurrence) => {
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
-    setHoverData(null)
-    onDragStart?.(e, occ)
-  }
-
   const monthStart = anchorDate.startOf('month')
   const startDayOfWeek = monthStart.weekday
   const gridStart = monthStart.minus({ days: startDayOfWeek - 1 }).startOf('day')
@@ -260,24 +240,14 @@ export const MonthView: React.FC<MonthViewProps> = ({
       map.set(dayKey, list)
     }
     for (const occ of occurrences) {
-      const startDt = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
-      if (occ.allDay) {
-        // All-day end is inclusive - a multi-day event must land in every day it
-        // spans, not just its start day. Capped so a malformed/corrupt event with an
-        // absurd end date can't spin this loop for years and stall rendering.
-        const MAX_SPAN_DAYS = 366
-        const lastDay = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local').startOf('day')
-        let cursor = startDt.startOf('day')
-        let daysWalked = 0
-        while (cursor <= lastDay && daysWalked < MAX_SPAN_DAYS) {
-          addTo(cursor.toFormat('yyyy-MM-dd'), occ)
-          cursor = cursor.plus({ days: 1 })
-          daysWalked++
-        }
-      } else {
-        addTo(startDt.toFormat('yyyy-MM-dd'), occ)
+      // A multi-day event belongs to every day it covers, not just its first.
+      for (const key of occurrenceDateKeys(occ.allDay, occ.startUtc, occ.endUtc)) {
+        addTo(key, occ)
       }
     }
+    // The incoming list is globally ordered by startUtc, which mixes floating
+    // all-day dates with real instants; each day needs its own ordering.
+    for (const [key, list] of map) map.set(key, list.sort(compareOccurrencesWithinDay))
     return map
   }, [occurrences])
 
@@ -334,12 +304,14 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     draggedOccurrenceId={draggedOccurrenceId}
                     onSelectDate={onSelectDate}
                     onSelectOccurrence={onSelectOccurrence}
-                    onDragStart={handleDragStartWithDismiss}
+                    onDragStart={(e, occ) => {
+                setPeek(null)
+                onDragStart?.(e, occ)
+              }}
                     onDragEnd={onDragEnd}
                     onDragOverTarget={onDragOverTarget}
                     onDropOnDate={onDropOnDate}
-                    onShowFlyout={handleShowFlyout}
-                    onHideFlyout={handleHideFlyout}
+              onPeekDay={setPeek}
                   />
                 )
               })}
@@ -348,19 +320,12 @@ export const MonthView: React.FC<MonthViewProps> = ({
         })}
       </div>
 
-      {/* Floating Side Popover */}
-      <EventHoverFlyout
-        data={hoverData}
-        onMouseEnter={() => {
-          if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
-        }}
-        onMouseLeave={handleHideFlyout}
-        onSelectOccurrence={(occ) => {
-          setHoverData(null)
-          onSelectOccurrence?.(occ)
-        }}
-        onDragStart={handleDragStartWithDismiss}
-        onDragEnd={onDragEnd}
+      <DayPeekPopover
+        data={peek}
+        onClose={() => setPeek(null)}
+        onSelectOccurrence={onSelectOccurrence}
+        onAddEvent={onSelectDate}
+        onOpenDay={onSelectDate}
         draggedOccurrenceId={draggedOccurrenceId}
       />
     </div>

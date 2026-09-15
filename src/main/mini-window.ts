@@ -9,9 +9,6 @@ import { DateTime } from 'luxon'
 let miniWindow: BrowserWindow | null = null
 let mainWindowRef: BrowserWindow | null = null
 
-export function getMiniWindow(): BrowserWindow | null {
-  return miniWindow
-}
 
 export function createMiniWindow(mainWin: BrowserWindow): BrowserWindow {
   mainWindowRef = mainWin

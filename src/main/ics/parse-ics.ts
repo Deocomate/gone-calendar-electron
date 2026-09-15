@@ -1,4 +1,5 @@
 import ICAL from 'ical.js'
+import { exclusiveEndToInclusive } from '@shared/all-day'
 import { DateTime } from 'luxon'
 import type { CreateEventInput, EventException } from '@shared/event-model'
 
@@ -29,6 +30,19 @@ function icalTimeToIso(time: any): { iso: string; allDay: boolean; tzid: string 
 /**
  * Safely parse an iCalendar (.ics) string with size limits
  */
+/**
+ * RFC 5545 DTEND is exclusive for DATE values, like every other interchange
+ * format; the app stores an inclusive end. Timed events pass through unchanged.
+ */
+function normaliseIcsEnd(
+  startInfo: { iso: string; allDay: boolean },
+  endInfo: { iso: string }
+): string {
+  return startInfo.allDay
+    ? exclusiveEndToInclusive(startInfo.iso, endInfo.iso)
+    : endInfo.iso
+}
+
 export function parseIcsContent(icsContent: string, targetCalendarId: string): ParsedIcsData {
   if (typeof icsContent !== 'string') {
     throw new Error('Invalid ICS content: expected string')
@@ -85,7 +99,7 @@ export function parseIcsContent(icsContent: string, targetCalendarId: string): P
           notes: description,
           location,
           dtStartUtc: startInfo.iso,
-          dtEndUtc: endInfo.iso,
+          dtEndUtc: normaliseIcsEnd(startInfo, endInfo),
           tzid: startInfo.tzid
         })
         continue
@@ -125,7 +139,7 @@ export function parseIcsContent(icsContent: string, targetCalendarId: string): P
         notes: description,
         location,
         dtStartUtc: startInfo.iso,
-        dtEndUtc: endInfo.iso,
+        dtEndUtc: normaliseIcsEnd(startInfo, endInfo),
         tzid: startInfo.tzid,
         allDay: startInfo.allDay,
         rrule: rruleString,

@@ -22,6 +22,9 @@ export interface Calendar {
   isVisible: boolean
   isReadOnly: boolean
   isDefault: boolean
+  /** True once the user has picked this calendar's colour themselves; provider
+   *  syncs then stop overwriting it. */
+  colorIsCustom?: boolean
   syncToken?: string
   createdAt: string
   updatedAt: string
@@ -49,6 +52,9 @@ export interface LunarRecurrenceSpec {
 }
 
 export interface CalendarEvent {
+  /** The id the provider knows this event by. Absent until the event has been
+   *  pushed once; `id` is ours and never changes. */
+  providerEventId?: string
   id: string
   calendarId: string
   uid: string
@@ -96,6 +102,8 @@ export interface EventException {
   dtStartUtc?: string
   dtEndUtc?: string
   tzid?: string
+  /** Overrides the master's all-day flag for this occurrence only; undefined inherits it. */
+  allDay?: boolean
   color?: string
   createdAt: string
   updatedAt: string
@@ -140,6 +148,8 @@ export interface CreateEventInput {
 }
 
 export interface UpdateEventInput {
+  /** Move the event to another calendar. Omitted leaves it where it is. */
+  calendarId?: string
   title?: string
   notes?: string
   location?: string
@@ -173,6 +183,8 @@ export interface MoveEventInput {
   dtStartUtc: string
   dtEndUtc: string
   targetCalendarId?: string
+  /** Set when the move also changes all-day-ness (dropping onto the time grid). */
+  allDay?: boolean
 }
 
 export interface CopyEventInput {
@@ -181,6 +193,12 @@ export interface CopyEventInput {
   dtEndUtc: string
   targetCalendarId?: string
   copyInstanceOnly?: boolean
+  /** Override the source's all-day-ness - set when an all-day event is
+   *  alt-dragged onto the hourly grid. Omitted keeps the source's. */
+  allDay?: boolean
+  /** Keep only the title and the calendar. Drag-copy makes a fresh event rather
+   *  than a duplicate carrying the original's notes, location and meeting link. */
+  bare?: boolean
 }
 
 export interface UpdateRecurringScopeInput {

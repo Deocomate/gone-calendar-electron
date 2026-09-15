@@ -88,7 +88,7 @@ export function EventPill({ event, onClick }: EventPillProps) {
 
 - Prefer named exports over default exports for components.
 - Co-locate styles with components using Tailwind utility classes.
-- Use `clsx` + `tailwind-merge` (`cn()` helper) for conditional classes.
+- Build conditional classes with template literals; there is no `clsx`/`cn()` helper in this project.
 
 ### Hooks
 
@@ -170,7 +170,7 @@ IPC handlers should `try/catch` and return a typed error shape rather than throw
 - **Adapters normalize** provider data into the canonical `CalendarEvent` model. Provider-specific JSON must not leak into the renderer.
 - **Dirty flag**: events modified locally are marked `dirty = 1` in SQLite. The sync engine pushes dirty events before pulling.
 - **Conflict strategy**: last-write-wins. If the provider rejects with 412 (Precondition Failed), surface a visible error to the user; do not silently overwrite.
-- **Adaptive poll interval**: 60 seconds when the main window is focused; 5 minutes when blurred/minimized. Controlled via `SyncWorker.setFocusState()`.
+- **Adaptive poll interval**: 20 seconds when the main window is focused; 5 minutes when blurred/minimized. Controlled via `SyncWorker.setFocusState()`.
 
 ---
 

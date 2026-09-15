@@ -8,6 +8,7 @@ import { SecureStore } from '../secure-store'
 import { normalizeCalDavUrl } from '../sync/caldav-discover'
 import { CalDavAdapter } from '../sync/caldav-adapter'
 import { SyncWorker } from '../sync/sync-worker'
+import { detachAccount } from '../db/repos/detach-account'
 import { ReminderScheduler } from '../notifications/reminder-scheduler'
 import type { CalendarAccount } from '@shared/event-model'
 
@@ -59,6 +60,7 @@ export function registerAuthSyncIpcHandlers(): void {
   ipcMain.removeHandler(IPC_CHANNELS.AUTH.CONNECT_CALDAV)
   ipcMain.removeHandler(IPC_CHANNELS.AUTH.DISCONNECT_CALDAV)
   ipcMain.removeHandler(IPC_CHANNELS.AUTH.LIST_ACCOUNTS)
+  ipcMain.removeHandler(IPC_CHANNELS.AUTH.DETACH_ACCOUNT)
   ipcMain.removeHandler(IPC_CHANNELS.SYNC.TRIGGER_NOW)
   ipcMain.removeHandler(IPC_CHANNELS.SYNC.GET_STATUS)
 
@@ -213,6 +215,14 @@ export function registerAuthSyncIpcHandlers(): void {
       createdAt: r.created_at,
       updatedAt: r.updated_at
     }))
+  })
+
+  // Keep the data, drop the provider. See detachAccount for why the account row
+  // can only be deleted after its calendars have been re-homed.
+  ipcMain.handle(IPC_CHANNELS.AUTH.DETACH_ACCOUNT, (_event, accountId: string) => {
+    // Nothing to sync afterwards - the point is that this data is now local -
+    // but the worker should stop polling an account that no longer exists.
+    return detachAccount(db, accountId)
   })
 
   ipcMain.handle(IPC_CHANNELS.SYNC.TRIGGER_NOW, async () => {

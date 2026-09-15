@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-31  
 **Version:** 0.1.0  
-**Build status:** All 10 phases complete, 290/290 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
+**Build status:** All 10 phases complete, 301/301 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
 
 ---
 
@@ -100,7 +100,7 @@ gone-calendar/
 │       ├── mini-calendar-grid.ts # Grid computation utilities
 │       ├── visible-range.ts     # Visible date range helpers
 │       └── ipc-contract.ts      # IPC_CHANNELS constants and GoneAPI interface
-├── tests/                       # Vitest unit tests (290 tests / 40 files)
+├── tests/                       # Vitest unit tests (301 tests / 40 files)
 │   └── stubs/electron.ts        # `electron` module stub for main-process tests
 ├── docs/
 │   ├── urd.md                   # User Requirements Document
@@ -205,7 +205,7 @@ Key types: `CalendarEvent`, `ExpandedOccurrence`, `Calendar`, `CalendarAccount`,
 tests/
 ├── lunar-vietnam.test.ts          # Lunar ↔ solar conversion accuracy
 ├── expand-occurrences.test.ts     # RRULE expansion correctness
-├── recurring-scope.test.ts        # this / this-and-future / all scope edits
+├── recurring-scope.test.ts        # this / this-and-future / all scope edits, and moving between calendars
 ├── occurrence-all-day-override.test.ts # Per-occurrence all-day detach (drag onto the hour grid)
 ├── occurrence-order.test.ts       # Within-day ordering: all-day first, then by time
 ├── title-suggestions.test.ts      # Title autocomplete ranking: frequency, recency, time and day fit
@@ -245,7 +245,7 @@ tests/
 └── ipc-contract.test.ts           # IPC channel and API surface contract
 ```
 
-**Total: 290 tests across 40 files. All passing.**
+**Total: 301 tests across 40 files. All passing.**
 
 Main-process tests run in plain Node; the `electron` module is aliased to
 `tests/stubs/electron.ts` in `vitest.config.ts` so they do not need the Electron

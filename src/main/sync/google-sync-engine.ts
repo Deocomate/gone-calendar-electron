@@ -332,6 +332,42 @@ export class GoogleSyncEngine {
             errorCount++
           }
         } else {
+          // A calendar change is a move, not an update: the event lives in a
+          // calendar, so PUTting it to the destination with an id that only
+          // exists in the origin returns 404 and the row stays dirty for ever.
+          // Google's move endpoint keeps the id, so the etag and any exception
+          // rows pointing at it stay valid.
+          if (row.moved_from_calendar_id && row.moved_from_calendar_id !== calendarId) {
+            const moveRes = await fetchWithTimeout(
+              `${GOOGLE_API_BASE}/calendars/${encodeURIComponent(row.moved_from_calendar_id)}` +
+                `/events/${encodeURIComponent(googleEventId)}/move` +
+                `?destination=${encodeURIComponent(calendarId)}`,
+              { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } }
+            )
+
+            if (moveRes.ok) {
+              this.db
+                .prepare('UPDATE events SET moved_from_calendar_id = NULL WHERE id = ?')
+                .run(row.id)
+            } else if (moveRes.status === 404 || moveRes.status === 410) {
+              // Already gone from the origin - somebody moved or deleted it
+              // there. Clearing the marker lets the normal push decide what to
+              // do next rather than retrying a move that can never succeed.
+              console.warn(
+                `Move origin missing for event ${row.id}; continuing as a plain update`
+              )
+              this.db
+                .prepare('UPDATE events SET moved_from_calendar_id = NULL WHERE id = ?')
+                .run(row.id)
+            } else {
+              const detail = await describeHttpFailure(moveRes)
+              console.error(`Failed to move event ${row.id} between calendars: ${detail}`)
+              lastError = detail
+              errorCount++
+              continue
+            }
+          }
+
           // INSERT or UPDATE
           const payload = mapDomainEventToGoogle({
             id: row.id,

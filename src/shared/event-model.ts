@@ -145,6 +145,8 @@ export interface CreateEventInput {
 }
 
 export interface UpdateEventInput {
+  /** Move the event to another calendar. Omitted leaves it where it is. */
+  calendarId?: string
   title?: string
   notes?: string
   location?: string

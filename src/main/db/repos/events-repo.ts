@@ -277,6 +277,11 @@ export class EventsRepo {
     const existing = existingResult.event
     this.checkReadOnlyCalendar(existing.calendarId)
 
+    const calendarId = input.calendarId ?? existing.calendarId
+    if (calendarId !== existing.calendarId) {
+      this.checkReadOnlyCalendar(calendarId)
+    }
+
     const now = new Date().toISOString()
     const title = input.title ?? existing.title
     const notes = input.notes !== undefined ? input.notes : (existing.notes || null)
@@ -302,12 +307,14 @@ export class EventsRepo {
     this.db
       .prepare(
         `UPDATE events SET
+          calendar_id = ?,
           title = ?, notes = ?, location = ?, dtstart_utc = ?, dtend_utc = ?,
           tzid = ?, all_day = ?, rrule = ?, exdate = ?, lunar_rule = ?, color = ?,
           meeting_url = ?, dirty = 1, is_deleted = ?, updated_at = ?
          WHERE id = ?`
       )
       .run(
+        calendarId,
         title,
         notes,
         location,
@@ -324,6 +331,8 @@ export class EventsRepo {
         now,
         id
       )
+
+    this.recordCalendarMove(id, existing.calendarId, calendarId)
 
     if (input.attendees !== undefined) {
       this.saveAttendees(id, input.attendees)
@@ -763,8 +772,41 @@ export class EventsRepo {
         input.eventId
       )
 
+    this.recordCalendarMove(input.eventId, existing.event.calendarId, targetCalendarId)
+
     const updated = this.getEventById(input.eventId)
     return updated!.event
+  }
+
+  /**
+   * Remember which calendar the provider still holds this event in.
+   *
+   * At the provider an event lives *in* a calendar, so a local calendar change
+   * cannot be pushed as a field update - the id does not exist in the
+   * destination and the PUT 404s. Google has a move endpoint that takes the
+   * origin, and by the time the push runs the local row has already been
+   * overwritten with the destination, so the origin has to be kept here.
+   *
+   * Only for events the provider has actually seen (`etag IS NOT NULL`); a row
+   * that has never synced just gets created in the right place. And only when
+   * the column is still empty, so moving A -> B -> C before the next poll still
+   * names A, which is where the event really is.
+   */
+  private recordCalendarMove(eventId: string, fromCalendarId: string, toCalendarId: string): void {
+    if (fromCalendarId === toCalendarId) return
+    this.db
+      .prepare(
+        `UPDATE events
+         SET moved_from_calendar_id = ?
+         WHERE id = ? AND etag IS NOT NULL AND moved_from_calendar_id IS NULL`
+      )
+      .run(fromCalendarId, eventId)
+    // Moving back where it came from is not a move at all.
+    this.db
+      .prepare(
+        'UPDATE events SET moved_from_calendar_id = NULL WHERE id = ? AND moved_from_calendar_id = ?'
+      )
+      .run(eventId, toCalendarId)
   }
 
   copyEvent(input: CopyEventInput): CalendarEvent {
@@ -821,6 +863,19 @@ export class EventsRepo {
       throw new Error(`Master event not found: ${input.masterEventId}`)
     }
     this.checkReadOnlyCalendar(master.event.calendarId)
+
+    // A calendar lives on the event row, and a single occurrence is an
+    // exception row - there is nowhere to record "this one instance belongs to
+    // another calendar", and no provider supports it either. Say so rather than
+    // dropping the change and reporting success.
+    if (input.updateInput.calendarId && input.scope !== 'all') {
+      const master = this.getEventById(input.masterEventId)
+      if (master && input.updateInput.calendarId !== master.event.calendarId) {
+        throw new Error(
+          'A single occurrence cannot be moved to another calendar. Apply the change to the whole series, or delete this occurrence and create a new event.'
+        )
+      }
+    }
 
     if (input.scope === 'all') {
       this.updateEvent(input.masterEventId, input.updateInput)

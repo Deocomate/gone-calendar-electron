@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createSqliteDriver } from '../src/main/db/sqlite-driver'
-import { runMigrations, seedDefaultData, MIGRATION_007_SQL } from '../src/main/db/database'
+import { runMigrations, seedDefaultData, MIGRATION_007_SQL, MIGRATION_013_SQL } from '../src/main/db/database'
 
 /**
  * Migration 007 ALTERs a table that already exists in every installed copy of
@@ -84,5 +84,37 @@ describe('migration 007 (exception sync columns)', () => {
     // of spurious pushes for exceptions that were already in sync.
     expect(row?.dirty).toBe(0)
     expect(row?.provider_instance_id).toBeNull()
+  })
+})
+
+describe('migration 013 - moved_from_calendar_id', () => {
+  it('is present after a full migration run, so the runner was wired up', () => {
+    // The SQL constant existing is not enough - it has to be listed in
+    // runMigrations. Migration 008 and 012 both broke this test file before by
+    // being added to one place and not the other.
+    const db = createSqliteDriver(':memory:')
+    runMigrations(db)
+
+    const columns = db
+      .prepare('PRAGMA table_info(events)')
+      .all<{ name: string }>()
+      .map((c) => c.name)
+
+    expect(columns).toContain('moved_from_calendar_id')
+    db.close()
+  })
+
+  it('adds the column to a database that predates it', () => {
+    const db = createSqliteDriver(':memory:')
+    db.exec(`CREATE TABLE events (id TEXT PRIMARY KEY, calendar_id TEXT NOT NULL)`)
+
+    db.exec(MIGRATION_013_SQL)
+
+    const columns = db
+      .prepare('PRAGMA table_info(events)')
+      .all<{ name: string }>()
+      .map((c) => c.name)
+    expect(columns).toContain('moved_from_calendar_id')
+    db.close()
   })
 })

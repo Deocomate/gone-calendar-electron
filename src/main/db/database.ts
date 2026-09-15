@@ -298,6 +298,21 @@ ALTER TABLE calendars ADD COLUMN color_is_custom INTEGER NOT NULL DEFAULT 0;
 `
 
 /**
+ * Moving an event between calendars is not a field update at the provider: the
+ * event lives *in* a calendar, so a push that PUTs to the new calendar with an
+ * id that only exists in the old one gets a 404 and the row stays dirty for
+ * ever. Google has a dedicated move endpoint that needs the origin, which is
+ * exactly what the local UPDATE has just overwritten - so remember it.
+ *
+ * Set only on the first move of an already-synced event and cleared once the
+ * provider has been told, so a second move before the next poll still names the
+ * calendar the provider actually holds the event in.
+ */
+export const MIGRATION_013_SQL = `
+ALTER TABLE events ADD COLUMN moved_from_calendar_id TEXT;
+`
+
+/**
  * Execute all schema migrations in order
  */
 export function runMigrations(db: ISqliteDatabase): void {
@@ -404,6 +419,14 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_012_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       12,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 13) {
+    db.exec(MIGRATION_013_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      13,
       new Date().toISOString()
     )
   }

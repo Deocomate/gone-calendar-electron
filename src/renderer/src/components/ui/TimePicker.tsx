@@ -12,23 +12,47 @@ export interface TimePickerProps {
   label?: string
   stepMinutes?: 15 | 30 | 60
   startTime?: string // Optional reference start time to display duration hints
-  showQuickDurations?: boolean
   disabled?: boolean
   className?: string
   align?: 'left' | 'right'
 }
 
-// Generate array of 24h slots e.g. ["00:00", "00:15", ..., "23:45"]
-function generateTimeSlots(step = 15): string[] {
-  const slots: string[] = []
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += step) {
-      const hh = h.toString().padStart(2, '0')
-      const mm = m.toString().padStart(2, '0')
-      slots.push(`${hh}:${mm}`)
-    }
+const MINUTES_IN_DAY = 24 * 60
+
+function toClock(totalMinutes: number): string {
+  const m = ((totalMinutes % MINUTES_IN_DAY) + MINUTES_IN_DAY) % MINUTES_IN_DAY
+  return `${Math.floor(m / 60)
+    .toString()
+    .padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`
+}
+
+function clockToMinutes(clock: string): number | null {
+  const [h, m] = clock.split(':').map(Number)
+  if (Number.isNaN(h) || Number.isNaN(m)) return null
+  return h * 60 + m
+}
+
+/**
+ * The times to offer.
+ *
+ * Without `after` this is the plain day, 00:00 onwards. With it - the end-time
+ * picker, handed the start - the list begins at the first slot *after* the start
+ * and wraps through midnight, so choosing an end never means scrolling past
+ * every hour that has already gone. A 15:00 start opens on 15:30, 16:00, ...
+ * 23:30, 00:00, 00:30, and round to 15:00 again a full day later.
+ */
+export function generateTimeSlots(step = 15, after?: string): string[] {
+  const count = Math.floor(MINUTES_IN_DAY / step)
+  const afterMinutes = after ? clockToMinutes(after) : null
+
+  if (afterMinutes === null) {
+    return Array.from({ length: count }, (_, i) => toClock(i * step))
   }
-  return slots
+
+  // Round the start onto the grid before stepping off it, so an event starting
+  // at 15:07 still offers 15:15 rather than 15:22.
+  const first = Math.ceil((afterMinutes + 1) / step) * step
+  return Array.from({ length: count }, (_, i) => toClock(first + i * step))
 }
 
 // Format duration between startTime and targetTime
@@ -101,14 +125,16 @@ export const TimePicker: React.FC<TimePickerProps> = ({
   onChange,
   placeholder = 'HH:mm',
   label,
-  stepMinutes = 15,
+  stepMinutes,
   startTime,
-  showQuickDurations = false,
   disabled = false,
   className = '',
   align = 'left'
 }) => {
-  const { timeFormat } = useDisplayPreferences()
+  const { timeFormat, dragSnapMinutes } = useDisplayPreferences()
+  // Same grid the calendar snaps to unless a caller insists otherwise, so the
+  // times offered here match the ones a drag can produce.
+  const step = stepMinutes ?? dragSnapMinutes
   const [isOpen, setIsOpen] = useState(false)
   const [inputValue, setInputValue] = useState(value ? formatClockTimeStr(value, timeFormat) : '')
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
@@ -117,7 +143,10 @@ export const TimePicker: React.FC<TimePickerProps> = ({
   const listRef = useRef<HTMLDivElement>(null)
   const activeItemRef = useRef<HTMLButtonElement>(null)
 
-  const timeSlots = useMemo(() => generateTimeSlots(stepMinutes), [stepMinutes])
+  const timeSlots = useMemo(
+    () => generateTimeSlots(step, startTime),
+    [step, startTime]
+  )
 
   useEffect(() => {
     setInputValue(value ? formatClockTimeStr(value, timeFormat) : '')
@@ -228,30 +257,7 @@ export const TimePicker: React.FC<TimePickerProps> = ({
     }
   }
 
-  // Quick duration presets (when startTime is provided)
-  const quickDurations = [
-    { label: '+15p', mins: 15 },
-    { label: '+30p', mins: 30 },
-    { label: '+45p', mins: 45 },
-    { label: '+1h', mins: 60 },
-    { label: '+1.5h', mins: 90 },
-    { label: '+2h', mins: 120 },
-    { label: '+3h', mins: 180 }
-  ]
 
-  const handleQuickDuration = (minsToAdd: number) => {
-    if (!startTime) return
-    const [sh, sm] = startTime.split(':').map(Number)
-    if (isNaN(sh) || isNaN(sm)) return
-
-    const totalMins = (sh * 60 + sm + minsToAdd) % (24 * 60)
-    const eh = Math.floor(totalMins / 60)
-    const em = totalMins % 60
-    const newTime = `${eh.toString().padStart(2, '0')}:${em.toString().padStart(2, '0')}`
-    onChange(newTime)
-    setInputValue(formatClockTimeStr(newTime, timeFormat))
-    setIsOpen(false)
-  }
 
   const popover =
     isOpen && coords && typeof document !== 'undefined'
@@ -267,22 +273,6 @@ export const TimePicker: React.FC<TimePickerProps> = ({
               boxShadow: '0 12px 32px rgba(0, 0, 0, 0.18), 0 0 0 1px var(--color-border)'
             }}
           >
-            {/* Quick Duration Chips (if enabled and startTime given) */}
-            {showQuickDurations && startTime && (
-              <div className="mb-1.5 flex flex-wrap gap-1 border-b border-hairline pb-1.5 px-0.5">
-                {quickDurations.map((d) => (
-                  <button
-                    key={d.label}
-                    type="button"
-                    onClick={() => handleQuickDuration(d.mins)}
-                    className="px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-hover hover:text-primary transition-colors cursor-pointer bg-hover/60"
-                    style={{ borderRadius: 'var(--radius-control)' }}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
-            )}
 
             {/* Time Slot List */}
             <div ref={listRef} className="max-h-52 overflow-y-auto space-y-0.5 pr-0.5">

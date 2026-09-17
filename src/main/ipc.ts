@@ -1,12 +1,14 @@
 import { app, ipcMain, dialog, BrowserWindow } from 'electron'
 import { readFile } from 'node:fs/promises'
-import { extname } from 'node:path'
-import { IPC_CHANNELS, type AppLocale } from '@shared/ipc-contract'
+import { extname, join } from 'node:path'
+import { IPC_CHANNELS, type AppLocale, type BackupResult } from '@shared/ipc-contract'
 import { registerCalendarIpcHandlers } from './ipc/calendar-ipc'
 import { registerSettingsIpcHandlers } from './ipc/settings-ipc'
 import { registerAuthSyncIpcHandlers } from './ipc/auth-sync-ipc'
 import { registerHolidayIpcHandlers } from './ipc/holiday-ipc'
 import { setMainLocale, loadMainLocaleFromDb, getMainLocale } from './i18n-main'
+import { getDatabase } from './db/database'
+import { backupDatabaseTo, defaultBackupFileName } from './db/backup'
 
 let currentLocale: AppLocale = 'en'
 
@@ -20,6 +22,7 @@ export function registerIpcHandlers(): void {
   ipcMain.removeHandler(IPC_CHANNELS.APP.SET_LOCALE)
   ipcMain.removeHandler(IPC_CHANNELS.APP.GET_PLATFORM)
   ipcMain.removeHandler(IPC_CHANNELS.APP.PICK_BACKGROUND_IMAGE)
+  ipcMain.removeHandler(IPC_CHANNELS.APP.BACKUP_DATABASE)
 
   // Return current application version
   ipcMain.handle(IPC_CHANNELS.APP.GET_VERSION, () => {
@@ -63,6 +66,29 @@ export function registerIpcHandlers(): void {
     const ext = extname(filePath).slice(1).toLowerCase()
     const mime = ext === 'jpg' ? 'jpeg' : ext || 'png'
     return { dataUrl: `data:image/${mime};base64,${buffer.toString('base64')}` }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.APP.BACKUP_DATABASE, async (): Promise<BackupResult> => {
+    const win = BrowserWindow.getFocusedWindow()
+    const options: Electron.SaveDialogOptions = {
+      title: 'Back up calendar database',
+      defaultPath: join(app.getPath('documents'), defaultBackupFileName()),
+      filters: [{ name: 'SQLite database', extensions: ['sqlite'] }]
+    }
+    const result = win
+      ? await dialog.showSaveDialog(win, options)
+      : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) {
+      return { success: false, message: 'cancelled' }
+    }
+
+    try {
+      const byteSize = backupDatabaseTo(getDatabase(), result.filePath)
+      return { success: true, filePath: result.filePath, byteSize }
+    } catch (err: any) {
+      console.error('Database backup failed:', err)
+      return { success: false, message: err?.message || String(err) }
+    }
   })
 
   // Register domain calendar, event, settings, auth, sync, and holiday IPC handlers

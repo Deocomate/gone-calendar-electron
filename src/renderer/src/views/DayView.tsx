@@ -1,4 +1,8 @@
 import React, { useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import { allDayCoversDate } from '@shared/all-day'
+import { sortOccurrencesWithinDay } from '@shared/occurrence-order'
+import HourGutter from '../components/HourGutter'
 import { DateTime } from 'luxon'
 import type { ExpandedOccurrence } from '@shared/event-model'
 import { TODAY_COLOR } from '@shared/mini-calendar-grid'
@@ -52,11 +56,10 @@ export const DayView: React.FC<DayViewProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
 
-  const { hourBlockSize, dayStartHour, secondaryTimezone } = useDisplayPreferences()
+  const { t } = useTranslation()
+  const { hourBlockSize, dayStartHour, dragSnapMinutes } = useDisplayPreferences()
   const HOUR_HEIGHT = HOUR_HEIGHT_BY_SIZE[hourBlockSize]
-  const gridColsClass = secondaryTimezone
-    ? 'grid-cols-[56px_68px_minmax(0,1fr)]'
-    : 'grid-cols-[68px_minmax(0,1fr)]'
+  const gridColsClass = 'grid-cols-[68px_minmax(0,1fr)]'
 
   const today = DateTime.local()
   const isToday = anchorDate.hasSame(today, 'day')
@@ -66,10 +69,9 @@ export const DayView: React.FC<DayViewProps> = ({
     const rect = columnRef.current?.getBoundingClientRect()
     return {
       gridTop: rect?.top ?? 0,
-      hourHeight: HOUR_HEIGHT,
-      columns: rect ? [{ left: rect.left, right: rect.right, day: anchorDate }] : []
+      hourHeight: HOUR_HEIGHT
     }
-  }, [anchorDate, HOUR_HEIGHT])
+  }, [HOUR_HEIGHT])
 
   const { preview, startResize, isResizing } = useEventResize({
     getGeometry,
@@ -97,7 +99,12 @@ export const DayView: React.FC<DayViewProps> = ({
         return startUtc && endUtc ? { ...occ, startUtc, endUtc } : occ
       })
     : occurrences
-  const allDayOccurrences = displayOccurrences.filter((o) => o.allDay)
+  // The query returns anything overlapping this local day as an instant, which
+  // east of GMT reaches back into the previous UTC date - so the day's own date
+  // has to be checked against the floating span, not the range.
+  const allDayOccurrences = sortOccurrencesWithinDay(
+    displayOccurrences.filter((o) => o.allDay && allDayCoversDate(o.startUtc, o.endUtc, dayKey))
+  )
   const timedOccurrences = displayOccurrences.filter((o) => !o.allDay)
   const daySegments = timedOccurrences
     .flatMap(segmentTimedOccurrence)
@@ -129,7 +136,7 @@ export const DayView: React.FC<DayViewProps> = ({
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-surface select-none relative">
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-hairline px-6 py-3.5 bg-app/40">
+      <div className="flex shrink-0 items-center border-b border-hairline bg-app/40 px-6 py-3.5">
         <div className="flex items-center gap-3.5 min-w-0">
           <span
             className={`flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold shrink-0 ${
@@ -164,7 +171,18 @@ export const DayView: React.FC<DayViewProps> = ({
             )}
           </div>
         </div>
+      </div>
 
+      {/* All-day lane - same grid columns as the hour grid below, so the label
+          lines up with the hour gutter and the events sit under the day column.
+          It previously lived inside the header row, floating beside the date and
+          aligned with nothing. */}
+      <div
+        className={`grid ${gridColsClass} shrink-0 items-start border-b border-hairline bg-app/40`}
+      >
+        <div className="py-2 pr-3 text-right text-[11px] font-medium text-muted select-none">
+          {t('list.allDay')}
+        </div>
         <div
           onDragOver={(e) => {
             prepareDropEvent(e)
@@ -175,7 +193,7 @@ export const DayView: React.FC<DayViewProps> = ({
             const dayStart = anchorDate.startOf('day')
             onSelectSlot?.(dayStart, dayStart, { clientX: e.clientX, allDay: true })
           }}
-          className={`gc-cell flex min-h-[2rem] max-w-md cursor-pointer items-center gap-2 overflow-x-auto rounded-lg p-1 min-w-0 ${
+          className={`gc-cell flex min-h-[2.5rem] min-w-0 cursor-pointer flex-wrap content-start items-start gap-1 p-1.5 ${
             dropTarget?.dateKey === dayKey && dropTarget.hour === undefined ? 'is-drop-target' : ''
           }`}
         >
@@ -203,49 +221,14 @@ export const DayView: React.FC<DayViewProps> = ({
           className={`relative grid ${gridColsClass} divide-x divide-hairline`}
           style={{ minHeight: `${24 * HOUR_HEIGHT}px` }}
         >
-          {secondaryTimezone && (
-            <div className="bg-app pr-1.5 text-right select-none min-w-0">
-              {hours.map((hour) => {
-                const secondaryLabel = anchorDate
-                  .startOf('day')
-                  .plus({ hours: hour })
-                  .setZone(secondaryTimezone)
-                  .toFormat('HH:mm')
-                return (
-                  <div
-                    key={hour}
-                    style={{ height: `${HOUR_HEIGHT}px` }}
-                    className={`font-mono text-[10px] text-muted/70 truncate ${
-                      hour === 0 ? 'pt-1' : '-translate-y-2.5 pt-1'
-                    }`}
-                  >
-                    {secondaryLabel}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          <div className="bg-app pr-3 text-right select-none min-w-0">
-              {hours.map((hour) => (
-                <div
-                  key={hour}
-                  style={{ height: `${HOUR_HEIGHT}px` }}
-                  className={`font-mono text-xs text-muted truncate ${
-                    hour === 0 ? 'pt-1' : '-translate-y-2.5 pt-1'
-                  }`}
-                >
-                  {hour.toString().padStart(2, '0')}:00
-                </div>
-              ))}
-          </div>
-
+          <HourGutter hours={hours} hourHeight={HOUR_HEIGHT} referenceDay={anchorDate} dense />
           <div
             ref={columnRef}
             className={`relative min-w-0 cursor-pointer overflow-visible ${isToday ? 'bg-today/5' : ''}`}
             onDragOver={(e) => {
               prepareDropEvent(e)
               const rect = e.currentTarget.getBoundingClientRect()
-              const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT)
+              const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT, dragSnapMinutes)
               onDragOverTarget?.({
                 dateKey: dayKey,
                 hour: Math.floor(minutes / 60),
@@ -254,7 +237,7 @@ export const DayView: React.FC<DayViewProps> = ({
             }}
             onDrop={(e) => {
               const rect = e.currentTarget.getBoundingClientRect()
-              const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT)
+              const minutes = minutesFromPointer(e.clientY, rect.top, HOUR_HEIGHT, dragSnapMinutes)
               onDropOnDate?.(e, anchorDate, minutes)
             }}
             onMouseDown={(e) => {
@@ -308,7 +291,6 @@ export const DayView: React.FC<DayViewProps> = ({
                 layout={layout}
                 segment={layout.segment}
                 minHeight={26}
-                allowHorizontal={false}
                 isDragging={draggedOccurrenceId === layout.occ.id}
                 isResizing={preview?.occId === layout.occ.id}
                 onSelect={(occ) => onSelectOccurrence?.(occ)}

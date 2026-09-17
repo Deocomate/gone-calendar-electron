@@ -8,7 +8,8 @@ const goneApi: GoneAPI = {
     getLocale: () => ipcRenderer.invoke(IPC_CHANNELS.APP.GET_LOCALE),
     setLocale: (locale: AppLocale) => ipcRenderer.invoke(IPC_CHANNELS.APP.SET_LOCALE, locale),
     getPlatform: () => ipcRenderer.invoke(IPC_CHANNELS.APP.GET_PLATFORM),
-    pickBackgroundImage: () => ipcRenderer.invoke(IPC_CHANNELS.APP.PICK_BACKGROUND_IMAGE)
+    pickBackgroundImage: () => ipcRenderer.invoke(IPC_CHANNELS.APP.PICK_BACKGROUND_IMAGE),
+    backupDatabase: () => ipcRenderer.invoke(IPC_CHANNELS.APP.BACKUP_DATABASE)
   },
   settings: {
     getAll: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.GET_ALL),
@@ -22,11 +23,20 @@ const goneApi: GoneAPI = {
     disconnectMicrosoft: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_MICROSOFT, accountId),
     connectCalDav: (input) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.CONNECT_CALDAV, input),
     disconnectCalDav: (accountId) => ipcRenderer.invoke(IPC_CHANNELS.AUTH.DISCONNECT_CALDAV, accountId),
-    listAccounts: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.LIST_ACCOUNTS)
+    listAccounts: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH.LIST_ACCOUNTS),
+    detachAccount: (accountId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTH.DETACH_ACCOUNT, accountId)
   },
   sync: {
     triggerNow: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC.TRIGGER_NOW),
-    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC.GET_STATUS)
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC.GET_STATUS),
+    onChanged: (callback: () => void) => {
+      // The renderer never sees the raw IpcRendererEvent - passing the sender
+      // across the bridge would hand it a live handle into main.
+      const listener = (): void => callback()
+      ipcRenderer.on(IPC_CHANNELS.SYNC.CHANGED, listener)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.SYNC.CHANGED, listener)
+    }
   },
   calendars: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.CALENDAR.LIST),
@@ -54,6 +64,7 @@ const goneApi: GoneAPI = {
     detachLunar: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.DETACH_LUNAR, input),
     search: (query: string, limit?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.EVENT.SEARCH, query, limit),
+    suggestTitles: (options) => ipcRenderer.invoke(IPC_CHANNELS.EVENT.SUGGEST_TITLES, options),
     shareIcs: (eventId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.EVENT.SHARE_ICS, eventId),
     listConflicts: () => ipcRenderer.invoke(IPC_CHANNELS.EVENT.LIST_CONFLICTS),
@@ -88,6 +99,6 @@ if (process.contextIsolated) {
     console.error('Failed to expose gone API in context bridge:', error)
   }
 } else {
-  // @ts-ignore (for non-context isolated fallback in testing)
+  // @ts-expect-error - fallback for non-context-isolated test renderers
   window.gone = goneApi
 }

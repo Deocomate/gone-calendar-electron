@@ -39,7 +39,11 @@ describe('Google Event Mapper', () => {
     expect(backToGoogle.start?.dateTime).toBe('2026-08-18T07:00:00.000Z')
   })
 
-  it('should map an all-day Google event correctly', () => {
+  // Google's all-day end.date is EXCLUSIVE: a single-day event on the 1st is
+  // sent as end 2026-09-02. The app stores an inclusive end (the editor writes
+  // endOf('day')), so storing Google's value verbatim rendered every imported
+  // all-day event as spanning two days.
+  it('converts an exclusive all-day end into the inclusive end of the last day', () => {
     const fixture: GoogleCalendarApiEvent = {
       id: 'g_evt_allday',
       summary: 'Company Offsite Day 1',
@@ -51,11 +55,27 @@ describe('Google Event Mapper', () => {
     expect(domain.isException).toBe(false)
     expect(domain.event!.allDay).toBe(true)
     expect(domain.event!.dtStartUtc).toBe('2026-09-01T00:00:00.000Z')
-    expect(domain.event!.dtEndUtc).toBe('2026-09-02T00:00:00.000Z')
+    // One day long, not two.
+    expect(domain.event!.dtEndUtc).toBe('2026-09-01T23:59:59.999Z')
 
+    // ...and the exclusive form is restored on the way back out.
     const backToGoogle = mapDomainEventToGoogle(domain.event! as any)
     expect(backToGoogle.start?.date).toBe('2026-09-01')
     expect(backToGoogle.end?.date).toBe('2026-09-02')
+  })
+
+  it('keeps a genuine multi-day all-day event spanning its full range', () => {
+    const fixture: GoogleCalendarApiEvent = {
+      id: 'g_evt_allday_multi',
+      summary: 'Offsite',
+      start: { date: '2026-09-01' },
+      end: { date: '2026-09-04' } // exclusive: 1st, 2nd, 3rd
+    }
+
+    const domain = mapGoogleEventToDomain(fixture, targetCalendarId)
+    expect(domain.event!.dtStartUtc).toBe('2026-09-01T00:00:00.000Z')
+    expect(domain.event!.dtEndUtc).toBe('2026-09-03T23:59:59.999Z')
+    expect(mapDomainEventToGoogle(domain.event! as any).end?.date).toBe('2026-09-04')
   })
 
   it('should map a recurring master Google event with RRULE', () => {

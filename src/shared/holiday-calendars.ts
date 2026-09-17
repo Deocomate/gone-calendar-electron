@@ -9,12 +9,6 @@ export const HOLIDAY_CALENDAR_META = {
 
 export type HolidayCalendarType = keyof typeof HOLIDAY_CALENDAR_META
 
-export interface HolidayDefinition {
-  title: string
-  notes?: string
-  color: string
-}
-
 export function getVietnamHolidays(year: number): Array<{
   title: string
   solarDate: string // YYYY-MM-DD

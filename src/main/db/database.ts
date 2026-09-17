@@ -168,6 +168,185 @@ CREATE INDEX IF NOT EXISTS idx_events_has_conflict ON events (has_conflict) WHER
 `
 
 /**
+ * Occurrence exceptions (a single edited or cancelled instance of a recurring
+ * series) had no push-tracking columns, so they were written locally and never
+ * sent to any provider. `dirty` puts them in the push set the same way events
+ * use it; `provider_instance_id` caches the provider's id for the instance so a
+ * repeat push does not have to re-resolve it.
+ */
+export const MIGRATION_007_SQL = `
+ALTER TABLE event_exceptions ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE event_exceptions ADD COLUMN etag TEXT;
+ALTER TABLE event_exceptions ADD COLUMN provider_instance_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_event_exceptions_dirty ON event_exceptions (dirty) WHERE dirty = 1;
+`
+
+/**
+ * `sync_state` as created in 001 cannot store a sync token: it has no
+ * `updated_at` column, its NOT NULL `id`/`account_id` are never supplied by the
+ * writer, and `calendar_id` carries no unique constraint for ON CONFLICT. The
+ * token upsert therefore always threw - and because it runs inside the same
+ * transaction as the pulled events, it rolled back the whole page. Any calendar
+ * small enough to return nextSyncToken on its first page imported zero events.
+ *
+ * Rebuilt keyed on calendar_id, which is how every reader addresses it.
+ */
+const MIGRATION_008_SQL = `
+CREATE TABLE sync_state_new (
+  calendar_id TEXT PRIMARY KEY REFERENCES calendars(id) ON DELETE CASCADE,
+  account_id TEXT,
+  last_synced_at TEXT,
+  sync_token TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'idle',
+  error_message TEXT,
+  updated_at TEXT
+);
+
+INSERT OR IGNORE INTO sync_state_new
+  (calendar_id, account_id, last_synced_at, sync_token, sync_status, error_message)
+SELECT calendar_id, account_id, last_synced_at, sync_token, sync_status, error_message
+FROM sync_state
+WHERE calendar_id IS NOT NULL;
+
+DROP TABLE sync_state;
+ALTER TABLE sync_state_new RENAME TO sync_state;
+`
+
+/**
+ * `idx_event_exceptions_master` was created non-unique in 001, but both provider
+ * pulls upsert onto those columns with ON CONFLICT(master_event_id,
+ * original_start_utc). SQLite requires a UNIQUE index for that, so every page of
+ * events containing a recurring-occurrence exception threw "ON CONFLICT clause
+ * does not match any PRIMARY KEY or UNIQUE constraint", rolled back its
+ * transaction, and aborted the whole calendar. Calendars therefore imported only
+ * the whole pages preceding their first exception - or nothing at all.
+ *
+ * The pair is genuinely unique (one override per occurrence of a series), so any
+ * duplicates are historical noise; keep the newest and enforce it from here on.
+ */
+const MIGRATION_009_SQL = `
+DELETE FROM event_exceptions
+WHERE rowid NOT IN (
+  SELECT MAX(rowid) FROM event_exceptions GROUP BY master_event_id, original_start_utc
+);
+
+DROP INDEX IF EXISTS idx_event_exceptions_master;
+
+CREATE UNIQUE INDEX idx_event_exceptions_master
+  ON event_exceptions (master_event_id, original_start_utc);
+`
+
+/**
+ * Repair all-day events imported before the exclusive/inclusive end conversion
+ * existed. Providers send an exclusive end date (a single-day event on the 14th
+ * ends on the 15th); the app stores an inclusive end (23:59:59.999 of the last
+ * day), and the importers stored the provider value verbatim - so every imported
+ * all-day event rendered one day too long.
+ *
+ * Only rows still in the exclusive shape are touched: all_day, an end at exactly
+ * midnight, and an end strictly after the start. Locally created rows already
+ * end at 23:59:59.999 and are left alone, as are any zero-length oddities.
+ */
+export const MIGRATION_010_SQL = `
+UPDATE events
+SET dtend_utc = strftime('%Y-%m-%dT23:59:59.999Z', datetime(dtend_utc, '-1 day'))
+WHERE all_day = 1
+  AND dtend_utc LIKE '%T00:00:00.000Z'
+  AND dtend_utc > dtstart_utc;
+`
+
+/**
+ * An occurrence override can differ from its series in whether it is all-day:
+ * Google and Outlook both let you convert a single occurrence of an all-day
+ * series into a timed one (and back). `event_exceptions` had no way to express
+ * that, so expand-occurrences fell back to the master's flag and such
+ * occurrences kept rendering in the all-day bar despite carrying real times.
+ *
+ * NULL means "inherit from the master", which is what every existing row does.
+ */
+export const MIGRATION_011_SQL = `
+ALTER TABLE event_exceptions ADD COLUMN all_day INTEGER;
+
+-- Backfill overrides already imported from a provider. Calendars now hold sync
+-- tokens, so an incremental pull will never revisit these rows and they would
+-- otherwise keep inheriting the series' all-day flag forever. An override of an
+-- all-day series whose stored times are not a whole-day span (midnight to
+-- 23:59:59.999) is a timed occurrence.
+UPDATE event_exceptions
+SET all_day = 0
+WHERE all_day IS NULL
+  AND is_cancelled = 0
+  AND dtstart_utc IS NOT NULL
+  AND dtend_utc IS NOT NULL
+  AND master_event_id IN (SELECT id FROM events WHERE all_day = 1)
+  AND NOT (dtstart_utc LIKE '%T00:00:00.000Z' AND dtend_utc LIKE '%T23:59:59.999Z');
+`
+
+/**
+ * Every provider's calendar-list sync rewrites name/colour/read-only for all of
+ * its calendars on every poll - 20 seconds apart while the window is focused.
+ * A colour the user picked was therefore reverted almost immediately, and
+ * because the sync rewrites the whole list at once, every other customisation
+ * went with it: changing one calendar appeared to change them all.
+ *
+ * This flag marks a colour as user-owned. The pull leaves those alone and keeps
+ * refreshing everything else, so renames on the provider still come through.
+ */
+const MIGRATION_012_SQL = `
+ALTER TABLE calendars ADD COLUMN color_is_custom INTEGER NOT NULL DEFAULT 0;
+`
+
+/**
+ * Moving an event between calendars is not a field update at the provider: the
+ * event lives *in* a calendar, so a push that PUTs to the new calendar with an
+ * id that only exists in the old one gets a 404 and the row stays dirty for
+ * ever. Google has a dedicated move endpoint that needs the origin, which is
+ * exactly what the local UPDATE has just overwritten - so remember it.
+ *
+ * Set only on the first move of an already-synced event and cleared once the
+ * provider has been told, so a second move before the next poll still names the
+ * calendar the provider actually holds the event in.
+ */
+export const MIGRATION_013_SQL = `
+ALTER TABLE events ADD COLUMN moved_from_calendar_id TEXT;
+`
+
+/**
+ * Stop a provider's id from becoming the local primary key.
+ *
+ * An event created here gets `evt_...`; the first successful push replaced that
+ * with the id the provider assigned, so the renderer - still holding the row it
+ * loaded a moment earlier - failed with "Event not found" on the next move,
+ * edit or delete. Every new event went through that window, and the window is
+ * however long it takes the next poll to run.
+ *
+ * The provider's id now lives in its own column and `events.id` never changes.
+ *
+ * Deliberately no backfill. Rows that synced before this carry the provider id
+ * as their primary key, and both code paths already fall back to it - a push
+ * addresses `provider_event_id || id`, and a pull that finds no row for a
+ * provider id uses that id as the local one, which is exactly what those rows
+ * are keyed by. The column fills itself in as each event is next pulled or
+ * pushed.
+ *
+ * The backfill was written and then removed: `UPDATE events SET
+ * provider_event_id = id WHERE etag IS NOT NULL` took 73 seconds on a real
+ * 7,800-event database, because trg_events_fts_update fires on any column
+ * change and re-indexes the row in FTS5. That would have hung startup for over
+ * a minute for no gain.
+ *
+ * CalDAV is unaffected either way: it addresses events by UID, which is ours.
+ */
+export const MIGRATION_014_SQL = `
+ALTER TABLE events ADD COLUMN provider_event_id TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_provider_id
+  ON events(calendar_id, provider_event_id)
+  WHERE provider_event_id IS NOT NULL;
+`
+
+/**
  * Execute all schema migrations in order
  */
 export function runMigrations(db: ISqliteDatabase): void {
@@ -226,6 +405,70 @@ export function runMigrations(db: ISqliteDatabase): void {
     db.exec(MIGRATION_006_SQL)
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
       6,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 7) {
+    db.exec(MIGRATION_007_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      7,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 8) {
+    db.exec(MIGRATION_008_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      8,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 9) {
+    db.exec(MIGRATION_009_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      9,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 10) {
+    db.exec(MIGRATION_010_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      10,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 11) {
+    db.exec(MIGRATION_011_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      11,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 12) {
+    db.exec(MIGRATION_012_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      12,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 13) {
+    db.exec(MIGRATION_013_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      13,
+      new Date().toISOString()
+    )
+  }
+
+  if (currentVersion < 14) {
+    db.exec(MIGRATION_014_SQL)
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+      14,
       new Date().toISOString()
     )
   }

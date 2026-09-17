@@ -43,8 +43,10 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
   if (!pendingDrop) return null
 
   // Ensure popover remains on-screen
-  const x = Math.min(window.innerWidth - 280, Math.max(16, pendingDrop.position.x))
-  const y = Math.min(window.innerHeight - 240, Math.max(16, pendingDrop.position.y))
+  // Matches the w-64 below; the old figure was for a wider popover and left a
+  // gap on the right.
+  const x = Math.min(window.innerWidth - 272, Math.max(16, pendingDrop.position.x))
+  const y = Math.min(window.innerHeight - 200, Math.max(16, pendingDrop.position.y))
 
   const isRecurring = pendingDrop.occurrence.isRecurring
   const targetTimeStr = pendingDrop.occurrence.allDay
@@ -54,81 +56,82 @@ export const DropActionPopover: React.FC<DropActionPopoverProps> = ({
   return (
     <div className="gc-dnd-overlay pointer-events-auto select-none" onClick={onCancel}>
       <div
-        style={{ left: `${x}px`, top: `${y}px` }}
+        style={{
+          left: `${x}px`,
+          top: `${y}px`,
+          borderRadius: 'var(--radius-dialog)',
+          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.18), 0 0 0 1px var(--color-border)'
+        }}
         onClick={(e) => e.stopPropagation()}
-        className="animate-popover fixed w-72 rounded-xl border border-hairline bg-surface p-4 text-primary shadow-2xl"
+        className="animate-popover fixed w-64 border border-hairline bg-dialog p-1.5 text-primary"
       >
-        <div className="flex items-center justify-between mb-3 border-b border-slate-100 dark:border-slate-800 pb-2">
-          <div className="truncate pr-2">
-            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+        <div className="flex items-start gap-2 px-2 pb-1.5 pt-1">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-medium text-primary">
               {pendingDrop.occurrence.title}
-            </h4>
-            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
-              📍 {targetTimeStr}
-            </span>
+            </div>
+            <div className="truncate text-[10px] tabular-nums text-muted">{targetTimeStr}</div>
           </div>
-          <button
-            onClick={onCancel}
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-          >
+          <button onClick={onCancel} className="gc-icon-btn shrink-0" title={t('common.cancel')}>
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        <div className="space-y-1.5 text-xs">
-          <button
-            onClick={() => onMove(pendingDrop)}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white border border-indigo-200 dark:border-indigo-500/30 transition-all font-semibold cursor-pointer"
-          >
-            <Move className="h-4 w-4 shrink-0" />
-            <span>{t('drop.moveHere')}</span>
-          </button>
+        <div className="mt-0.5 border-t border-hairline pt-1.5">
+          <Action icon={<Move className="h-3.5 w-3.5" />} onClick={() => onMove(pendingDrop)} primary>
+            {t('drop.moveHere')}
+          </Action>
 
           {isRecurring ? (
             <>
-              <button
+              <Action
+                icon={<CalendarCheck className="h-3.5 w-3.5" />}
                 onClick={() => onCopy(pendingDrop, true)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 border border-emerald-500/30 transition-all font-medium cursor-pointer text-left"
-                title={t('drop.copyStandaloneHint')}
+                hint={t('drop.copyStandalone')}
               >
-                <CalendarCheck className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
-                <div>
-                  <span className="block font-semibold">{t('drop.copyThisOnly')}</span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{t('drop.copyStandalone')}</span>
-                </div>
-              </button>
-
-              <button
+                {t('drop.copyThisOnly')}
+              </Action>
+              <Action
+                icon={<Copy className="h-3.5 w-3.5" />}
                 onClick={() => onCopy(pendingDrop, false)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/60 transition-all font-medium cursor-pointer text-left"
+                hint={t('drop.copyWholeSeriesHint')}
               >
-                <Copy className="h-4 w-4 shrink-0 text-slate-400" />
-                <div>
-                  <span className="block font-semibold">{t('drop.copyWholeSeries')}</span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{t('drop.copyWholeSeriesHint')}</span>
-                </div>
-              </button>
+                {t('drop.copyWholeSeries')}
+              </Action>
             </>
           ) : (
-            <button
-              onClick={() => onCopy(pendingDrop, false)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/60 transition-all font-medium cursor-pointer"
-            >
-              <Copy className="h-4 w-4 shrink-0 text-slate-400" />
-              <span>{t('drop.copyHere')}</span>
-            </button>
+            <Action icon={<Copy className="h-3.5 w-3.5" />} onClick={() => onCopy(pendingDrop, false)}>
+              {t('drop.copyHere')}
+            </Action>
           )}
-
-          <button
-            onClick={onCancel}
-            className="w-full text-center py-1.5 text-[11px] text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-medium cursor-pointer"
-          >
-            {t('common.cancel')}
-          </button>
         </div>
       </div>
     </div>
   )
 }
+
+/** One row of the popover, styled like the rest of the app's menus. */
+const Action: React.FC<{
+  icon: React.ReactNode
+  onClick: () => void
+  hint?: string
+  primary?: boolean
+  children: React.ReactNode
+}> = ({ icon, onClick, hint, primary, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    style={{ borderRadius: 'var(--radius-control)' }}
+    className={`flex w-full items-center gap-2.5 px-2 py-1.5 text-left transition-colors hover:bg-hover ${
+      primary ? 'text-primary' : 'text-primary'
+    }`}
+  >
+    <span className={`shrink-0 ${primary ? 'text-accent' : 'text-muted'}`}>{icon}</span>
+    <span className="min-w-0 flex-1">
+      <span className={`block truncate text-xs ${primary ? 'font-medium' : ''}`}>{children}</span>
+      {hint && <span className="block truncate text-[10px] text-muted">{hint}</span>}
+    </span>
+  </button>
+)
 
 export default DropActionPopover

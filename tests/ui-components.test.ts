@@ -42,7 +42,6 @@ describe('UI Components SSR Render & Lifecycle', () => {
       React.createElement(TimePicker, {
         value: '10:00',
         startTime: '09:00',
-        showQuickDurations: true,
         onChange: () => {}
       })
     )

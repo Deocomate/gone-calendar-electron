@@ -18,3 +18,13 @@ export function applyDocumentTheme(isDark: boolean): void {
   if (typeof document === 'undefined') return
   document.documentElement.classList.toggle('dark', isDark)
 }
+
+/**
+ * Marks the document as having a custom background image so the chrome can go
+ * translucent (see `.gc-custom-bg` in the stylesheet). Without this the image is
+ * painted behind fully opaque panels and is never visible.
+ */
+export function applyCustomBackground(hasBackground: boolean): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.classList.toggle('gc-custom-bg', hasBackground)
+}

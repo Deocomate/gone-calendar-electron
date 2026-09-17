@@ -1,3 +1,4 @@
+import { fetchWithTimeout, describeHttpFailure } from './http'
 import type { ISqliteDatabase } from '../db/sqlite-driver'
 import { MicrosoftOAuthManager } from '../oauth/microsoft-oauth'
 import {
@@ -5,22 +6,32 @@ import {
   mapDomainEventToGraph,
   type MicrosoftGraphApiEvent
 } from './microsoft-event-mapper'
+import { EventsRepo } from '../db/repos/events-repo'
+import { SyncStateRepo } from '../db/repos/sync-state-repo'
 import type { SyncResult } from '@shared/event-model'
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
+/** Events requested per page. */
+const PAGE_SIZE = 250
+/** Safety stop so a pathological calendar cannot spin forever. */
+const MAX_SYNC_PAGES = 200
 
 export class MicrosoftSyncEngine {
   private oauthManager: MicrosoftOAuthManager
+  private eventsRepo: EventsRepo
+  private syncStateRepo: SyncStateRepo
 
   constructor(private db: ISqliteDatabase) {
     this.oauthManager = new MicrosoftOAuthManager(db)
+    this.eventsRepo = new EventsRepo(db)
+    this.syncStateRepo = new SyncStateRepo(db)
   }
 
   /**
    * Sync calendars list from Microsoft Graph
    */
   async syncCalendarList(accountId: string, accessToken: string): Promise<string[]> {
-    const res = await fetch(`${GRAPH_BASE}/me/calendars`, {
+    const res = await fetchWithTimeout(`${GRAPH_BASE}/me/calendars`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     })
 
@@ -53,9 +64,14 @@ export class MicrosoftSyncEngine {
       } else {
         this.db
           .prepare(
-            `UPDATE calendars SET name = ?, color = ?, is_read_only = ?, updated_at = ? WHERE id = ?`
+            // Colour is local-only: the provider seeds it when the calendar is
+            // first discovered and never overwrites it again, so what you pick
+            // here stays picked.
+            `UPDATE calendars
+             SET name = ?, is_read_only = ?, updated_at = ?
+             WHERE id = ?`
           )
-          .run(name, color, isReadOnly ? 1 : 0, now, item.id)
+          .run(name, isReadOnly ? 1 : 0, now, item.id)
       }
 
       syncedCalIds.push(item.id)
@@ -71,36 +87,69 @@ export class MicrosoftSyncEngine {
     calendarId: string,
     accessToken: string
   ): Promise<{ pulledCount: number }> {
-    const url = `${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`
+    // Walk every page: Graph caps a response at $top and returns the rest behind
+    // @odata.nextLink. Reading one page and stopping capped each calendar at
+    // PAGE_SIZE events, silently dropping everything past it.
+    let nextUrl: string | undefined =
+      `${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/events?$top=${PAGE_SIZE}`
+    let pulledCount = 0
+    let pages = 0
 
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.timezone="UTC"' }
-    })
+    while (nextUrl) {
+      const res = await fetchWithTimeout(nextUrl, {
+        headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.timezone="UTC"' }
+      })
 
-    if (!res.ok) {
-      throw new Error(`Microsoft event pull failed for ${calendarId}: ${await res.text()}`)
+      if (!res.ok) {
+        throw new Error(`Microsoft event pull failed for ${calendarId}: ${await res.text()}`)
+      }
+
+      const data = await res.json()
+      pulledCount += this.applyPulledPage(calendarId, data)
+
+      // nextLink is an absolute URL carrying its own paging state.
+      nextUrl = data['@odata.nextLink']
+      if (!nextUrl) break
+      if (++pages >= MAX_SYNC_PAGES) {
+        console.warn(
+          `Microsoft pull for ${calendarId} stopped at ${MAX_SYNC_PAGES} pages; remaining events follow next sync`
+        )
+        break
+      }
     }
 
-    const data = await res.json()
+    return { pulledCount }
+  }
+
+  /** Apply one page of listing results. Returns how many rows it touched. */
+  private applyPulledPage(calendarId: string, data: any): number {
     const items: MicrosoftGraphApiEvent[] = data.value || []
     let pulledCount = 0
 
     this.db.transaction(() => {
+      // A locally created event keeps its own id, so the provider's id no longer
+      // finds it by primary key; without this the next pull inserts a duplicate.
+      const localIdFor = (providerId: string): string =>
+        this.db
+          .prepare('SELECT id FROM events WHERE calendar_id = ? AND provider_event_id = ?')
+          .get<{ id: string }>(calendarId, providerId)?.id ?? providerId
+
       for (const gEvent of items) {
         const mapped = mapGraphEventToDomain(gEvent, calendarId)
 
         if (mapped.isException && mapped.exception) {
           const exc = mapped.exception
           const now = new Date().toISOString()
-          const excId = `exc_${exc.masterEventId}_${exc.originalStartUtc.replace(/[:.]/g, '')}`
+          const masterLocalId = localIdFor(exc.masterEventId)
+          const excId = `exc_${masterLocalId}_${exc.originalStartUtc.replace(/[:.]/g, '')}`
 
           this.db
             .prepare(
               `INSERT INTO event_exceptions (
                 id, master_event_id, original_start_utc, is_cancelled,
-                title, notes, location, dtstart_utc, dtend_utc, tzid, color,
+                title, notes, location, dtstart_utc, dtend_utc, tzid, all_day, color,
                 created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(master_event_id, original_start_utc) DO UPDATE SET
                 is_cancelled = excluded.is_cancelled,
                 title = excluded.title,
@@ -109,12 +158,14 @@ export class MicrosoftSyncEngine {
                 dtstart_utc = excluded.dtstart_utc,
                 dtend_utc = excluded.dtend_utc,
                 tzid = excluded.tzid,
+                all_day = excluded.all_day,
                 color = excluded.color,
-                updated_at = excluded.updated_at`
+                updated_at = excluded.updated_at
+              WHERE event_exceptions.dirty = 0`
             )
             .run(
               excId,
-              exc.masterEventId,
+              masterLocalId,
               exc.originalStartUtc,
               exc.isCancelled ? 1 : 0,
               exc.title || null,
@@ -123,6 +174,7 @@ export class MicrosoftSyncEngine {
               exc.dtStartUtc || null,
               exc.dtEndUtc || null,
               exc.tzid || null,
+              exc.allDay === undefined ? null : exc.allDay ? 1 : 0,
               exc.color || null,
               now,
               now
@@ -135,11 +187,12 @@ export class MicrosoftSyncEngine {
           this.db
             .prepare(
               `INSERT INTO events (
-                id, calendar_id, uid, title, notes, location,
+                id, provider_event_id, calendar_id, uid, title, notes, location,
                 dtstart_utc, dtend_utc, tzid, all_day, rrule, color,
                 meeting_url, etag, dirty, is_deleted, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
               ON CONFLICT(id) DO UPDATE SET
+                provider_event_id = excluded.provider_event_id,
                 title = excluded.title,
                 notes = excluded.notes,
                 location = excluded.location,
@@ -157,6 +210,7 @@ export class MicrosoftSyncEngine {
               WHERE events.dirty = 0 AND events.has_conflict = 0`
             )
             .run(
+              localIdFor(evt.id),
               evt.id,
               evt.calendarId,
               evt.uid || `${evt.id}@outlook.com`,
@@ -180,7 +234,7 @@ export class MicrosoftSyncEngine {
       }
     })()
 
-    return { pulledCount }
+    return pulledCount
   }
 
   /**
@@ -189,28 +243,40 @@ export class MicrosoftSyncEngine {
   async pushDirtyEvents(
     calendarId: string,
     accessToken: string
-  ): Promise<{ pushedCount: number; errorCount: number }> {
+  ): Promise<{ pushedCount: number; errorCount: number; lastError: string | null }> {
     const dirtyRows = this.db
-      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1')
+      .prepare('SELECT * FROM events WHERE calendar_id = ? AND dirty = 1 AND has_conflict = 0')
       .all<any>(calendarId)
 
     let pushedCount = 0
     let errorCount = 0
+    let lastError: string | null = null
 
     for (const row of dirtyRows) {
       try {
         const isDeleted = row.is_deleted === 1
-        const eventId = row.id
+        // Graph's id, not ours; identical only for rows that synced before the
+        // two were separated.
+        const eventId = row.provider_event_id || row.id
 
         if (isDeleted) {
-          const delRes = await fetch(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
+          const delRes = await fetchWithTimeout(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
             method: 'DELETE',
-            headers: { Authorization: `Bearer ${accessToken}` }
+            headers: row.etag
+              ? { Authorization: `Bearer ${accessToken}`, 'if-match': row.etag }
+              : { Authorization: `Bearer ${accessToken}` }
           })
           if (delRes.ok || delRes.status === 404) {
             this.db.prepare('DELETE FROM events WHERE id = ?').run(row.id)
             pushedCount++
+          } else if (delRes.status === 412) {
+            console.warn(`Conflict deleting event ${row.id}: ETag precondition failed (412)`)
+            this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
+            errorCount++
           } else {
+            const detail = await describeHttpFailure(delRes)
+            console.error(`Failed to delete Microsoft event ${row.id}: ${detail}`)
+            lastError = detail
             errorCount++
           }
         } else {
@@ -231,17 +297,20 @@ export class MicrosoftSyncEngine {
           let res: Response
           if (row.etag) {
             // PATCH existing
-            res = await fetch(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
+            res = await fetchWithTimeout(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
               method: 'PATCH',
               headers: {
                 Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                // Graph honours the precondition only as a header; without it
+                // the 412 branch below is unreachable.
+                'if-match': row.etag
               },
               body: JSON.stringify(payload)
             })
           } else {
             // POST new event to calendar
-            res = await fetch(`${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/events`, {
+            res = await fetchWithTimeout(`${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/events`, {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -254,36 +323,157 @@ export class MicrosoftSyncEngine {
           if (res.ok) {
             const resJson = await res.json()
             const now = new Date().toISOString()
-            if (resJson.id && resJson.id !== row.id) {
-              this.db
-                .prepare('UPDATE event_exceptions SET master_event_id = ? WHERE master_event_id = ?')
-                .run(resJson.id, row.id)
-              this.db
-                .prepare(
-                  'UPDATE events SET id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?'
-                )
-                .run(resJson.id, resJson['@odata.etag'], now, row.id)
-            } else {
-              this.db
-                .prepare('UPDATE events SET etag = ?, dirty = 0, has_conflict = 0, updated_at = ? WHERE id = ?')
-                .run(resJson['@odata.etag'] || row.etag, now, row.id)
-            }
+            // Ours stays ours; only the provider's id is recorded.
+            this.db
+              .prepare(
+                `UPDATE events
+                 SET provider_event_id = ?, etag = ?, dirty = 0, has_conflict = 0, updated_at = ?
+                 WHERE id = ?`
+              )
+              .run(resJson.id || eventId, resJson['@odata.etag'] || row.etag, now, row.id)
             pushedCount++
           } else if (res.status === 412) {
             console.warn(`ETag conflict on Microsoft event ${row.id}`)
             this.db.prepare('UPDATE events SET has_conflict = 1 WHERE id = ?').run(row.id)
             errorCount++
           } else {
+            const detail = await describeHttpFailure(res)
+            console.error(`Failed to push Microsoft event ${row.id}: ${detail}`)
+            lastError = detail
             errorCount++
           }
         }
       } catch (err) {
         console.error(`Failed to push Microsoft event ${row.id}:`, err)
+        lastError = err instanceof Error ? err.message : String(err)
+        errorCount++
+      }
+    }
+
+    const excRes = await this.pushDirtyExceptions(calendarId, accessToken)
+    return {
+      lastError,
+      pushedCount: pushedCount + excRes.pushedCount,
+      errorCount: errorCount + excRes.errorCount
+    }
+  }
+
+  /**
+   * Push per-occurrence overrides and cancellations.
+   *
+   * Graph exposes the occurrences of a series through the master's /instances
+   * collection, each with its own event id. A cancelled occurrence is a DELETE
+   * on that instance; an edited one is a PATCH - patching the master carries no
+   * occurrence information at all.
+   */
+  private async pushDirtyExceptions(
+    calendarId: string,
+    accessToken: string
+  ): Promise<{ pushedCount: number; errorCount: number }> {
+    const pending = this.eventsRepo.listDirtyExceptions(calendarId)
+    let pushedCount = 0
+    let errorCount = 0
+
+    for (const { exception, master, providerInstanceId } of pending) {
+      try {
+        let instanceId = providerInstanceId
+        if (!instanceId) {
+          instanceId = await this.findInstanceId(
+            // The /instances collection is the provider's, so it wants the
+            // provider's id for the series.
+            master.providerEventId || master.id,
+            exception.originalStartUtc,
+            accessToken
+          )
+        }
+        if (!instanceId) {
+          errorCount++
+          continue
+        }
+
+        let res: Response
+        if (exception.isCancelled) {
+          res = await fetchWithTimeout(
+            `${GRAPH_BASE}/me/events/${encodeURIComponent(instanceId)}`,
+            { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+        } else {
+          const tz = exception.tzid || master.tzid || 'UTC'
+          const startIso = exception.dtStartUtc || exception.originalStartUtc
+          const endIso = exception.dtEndUtc || master.dtEndUtc
+          res = await fetchWithTimeout(
+            `${GRAPH_BASE}/me/events/${encodeURIComponent(instanceId)}`,
+            {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                subject: exception.title || master.title,
+                body: {
+                  contentType: 'text',
+                  content: exception.notes ?? master.notes ?? ''
+                },
+                location: { displayName: exception.location ?? master.location ?? '' },
+                start: { dateTime: startIso, timeZone: tz },
+                end: { dateTime: endIso, timeZone: tz }
+              })
+            }
+          )
+        }
+
+        // A cancelled instance that is already gone counts as delivered.
+        if (res.ok || res.status === 204 || res.status === 404) {
+          this.eventsRepo.markExceptionSynced(exception.id, instanceId, null)
+          pushedCount++
+        } else {
+          console.warn(`Failed to push occurrence override ${exception.id}: HTTP ${res.status}`)
+          errorCount++
+        }
+      } catch (err) {
+        console.error(`Failed to push occurrence override ${exception.id}:`, err)
         errorCount++
       }
     }
 
     return { pushedCount, errorCount }
+  }
+
+  /** Resolve a master + original start time to Graph's own id for that instance. */
+  private async findInstanceId(
+    masterEventId: string,
+    originalStartUtc: string,
+    accessToken: string
+  ): Promise<string | null> {
+    const origin = new Date(originalStartUtc)
+    const from = new Date(origin.getTime() - 1000).toISOString()
+    const to = new Date(origin.getTime() + 1000).toISOString()
+
+    const res = await fetchWithTimeout(
+      `${GRAPH_BASE}/me/events/${encodeURIComponent(masterEventId)}/instances` +
+        `?startDateTime=${encodeURIComponent(from)}&endDateTime=${encodeURIComponent(to)}&$top=10`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Prefer: 'outlook.timezone="UTC"'
+        }
+      }
+    )
+    if (!res.ok) return null
+
+    const data = await res.json()
+    const items: MicrosoftGraphApiEvent[] = data.value || []
+    const targetMs = origin.getTime()
+
+    for (const item of items) {
+      const raw = item.start?.dateTime
+      if (!raw) continue
+      // Graph returns a zone-less local string alongside the requested timeZone.
+      const parsed = new Date(raw.endsWith('Z') ? raw : `${raw}Z`)
+      if (Math.abs(parsed.getTime() - targetMs) < 1000) return item.id
+    }
+    return items[0]?.id ?? null
   }
 
   /**
@@ -308,12 +498,32 @@ export class MicrosoftSyncEngine {
         const calendarIds = await this.syncCalendarList(acc.id, token)
 
         for (const calId of calendarIds) {
-          const pushRes = await this.pushDirtyEvents(calId, token)
-          totalPushed += pushRes.pushedCount
-          totalErrors += pushRes.errorCount
+          // Isolate each calendar. Some entries the calendar list returns are not
+          // real event collections (Google's "Tasks" pseudo-calendar, for one) and
+          // reject the events endpoint; without this, the first such calendar threw
+          // and every remaining calendar on the account was silently skipped.
+          try {
+            const pushRes = await this.pushDirtyEvents(calId, token)
+            totalPushed += pushRes.pushedCount
+            totalErrors += pushRes.errorCount
 
-          const pullRes = await this.pullCalendarEvents(calId, token)
-          totalPulled += pullRes.pulledCount
+            const pullRes = await this.pullCalendarEvents(calId, token)
+            totalPulled += pullRes.pulledCount
+
+            // A calendar that pulled cleanly but could not push is not "ok".
+            if (pushRes.errorCount > 0) {
+              this.syncStateRepo.recordFailure(
+                calId,
+                `push failed for ${pushRes.errorCount} event(s): ${pushRes.lastError ?? 'unknown error'}`
+              )
+            } else {
+              this.syncStateRepo.recordSuccess(calId, pullRes.pulledCount)
+            }
+          } catch (calErr: any) {
+            console.error(`Microsoft sync failed for calendar ${calId}:`, calErr)
+            this.syncStateRepo.recordFailure(calId, calErr)
+            totalErrors++
+          }
         }
       } catch (err: any) {
         console.error(`Microsoft sync failed for account ${acc.id}:`, err)

@@ -181,24 +181,66 @@ function expandRruleOccurrences(
 
   // Construct RRULE
   try {
-    // Format DTSTART for RRULE string if needed
-    const dtstartUtcStr = masterStart.toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")
+    // Expand against the event's own zone, not UTC.
+    //
+    // A weekly 09:00 meeting is 09:00 every week *where it lives*. Expanding the
+    // rule in UTC pins it to a fixed offset instead, so the moment that zone
+    // changes offset the whole series slides: a 09:00 Sydney standup started in
+    // September became 10:00 from October onwards, for half the year, silently.
+    //
+    // rrule.js has no timezone of its own, so the trick is to hand it wall-clock
+    // times dressed as UTC, let it do the calendar arithmetic, then read each
+    // result's fields back as wall-clock in the real zone. Luxon resolves the
+    // offset per occurrence, which is what makes the series hold its clock time.
+    const zone = event.tzid || 'utc'
+    const toWallClockUtc = (dt: DateTime): Date =>
+      new Date(
+        Date.UTC(
+          dt.year,
+          dt.month - 1,
+          dt.day,
+          dt.hour,
+          dt.minute,
+          dt.second,
+          dt.millisecond
+        )
+      )
+    const fromWallClockUtc = (d: Date): DateTime =>
+      DateTime.fromObject(
+        {
+          year: d.getUTCFullYear(),
+          month: d.getUTCMonth() + 1,
+          day: d.getUTCDate(),
+          hour: d.getUTCHours(),
+          minute: d.getUTCMinutes(),
+          second: d.getUTCSeconds(),
+          millisecond: d.getUTCMilliseconds()
+        },
+        { zone }
+      ).toUTC()
+
+    const masterLocal = masterStart.setZone(zone)
+    const dtstartWall = toWallClockUtc(masterLocal)
+    const dtstartUtcStr = DateTime.fromJSDate(dtstartWall, { zone: 'utc' }).toFormat(
+      "yyyyMMdd'T'HHmmss'Z'"
+    )
     const ruleString = rrule.includes('DTSTART')
       ? rrule
       : `DTSTART:${dtstartUtcStr}\nRRULE:${rrule}`
 
-    const rule = rrulestr(ruleString, { dtstart: masterStart.toJSDate() })
+    const rule = rrulestr(ruleString, { dtstart: dtstartWall })
 
-    // Expand between rangeStart and rangeEnd (convert to JS Dates)
-    // Expand a bit earlier/later to account for duration overlap
-    const searchStart = rangeStart.minus({ milliseconds: Math.max(0, durationMillis) }).toJSDate()
-    const searchEnd = rangeEnd.toJSDate()
+    // Expand between rangeStart and rangeEnd, in the same wall-clock space.
+    // Expand a bit earlier/later to account for duration overlap.
+    const searchStart = toWallClockUtc(
+      rangeStart.minus({ milliseconds: Math.max(0, durationMillis) }).setZone(zone)
+    )
+    const searchEnd = toWallClockUtc(rangeEnd.setZone(zone))
 
-    const dates = rule.between(searchStart, searchEnd, true)
+    const dates = rule.between(searchStart, searchEnd, true).map(fromWallClockUtc)
 
-    for (const d of dates) {
-      const occurrenceStart = DateTime.fromJSDate(d, { zone: 'utc' })
-      const originalIso = occurrenceStart.toISO() || d.toISOString()
+    for (const occurrenceStart of dates) {
+      const originalIso = occurrenceStart.toISO()!
       const originalTimestamp = occurrenceStart.toMillis().toString()
 
       // 1. Check EXDATE
@@ -231,7 +273,10 @@ function expandRruleOccurrences(
             startUtc: effectiveStartIso,
             endUtc: effectiveEndIso,
             tzid: exception.tzid || event.tzid,
-            allDay: event.allDay,
+            // An override may flip all-day-ness for this occurrence alone -
+            // Google and Outlook both allow converting a single occurrence of an
+            // all-day series into a timed one. undefined inherits the master.
+            allDay: exception.allDay !== undefined ? exception.allDay : event.allDay,
             color: exception.color || event.color,
             meetingUrl: event.meetingUrl,
             isRecurring: true,

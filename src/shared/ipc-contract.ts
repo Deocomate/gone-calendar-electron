@@ -20,6 +20,7 @@ import type {
   SyncResult,
   SyncConflict
 } from './event-model'
+import type { SuggestTitlesOptions, TitleSuggestion } from './title-suggestions'
 import type { AppSettings } from './settings-contract'
 
 export const IPC_CHANNELS = {
@@ -28,7 +29,8 @@ export const IPC_CHANNELS = {
     GET_LOCALE: 'gone:app:get-locale',
     SET_LOCALE: 'gone:app:set-locale',
     GET_PLATFORM: 'gone:app:get-platform',
-    PICK_BACKGROUND_IMAGE: 'gone:app:pick-background-image'
+    PICK_BACKGROUND_IMAGE: 'gone:app:pick-background-image',
+    BACKUP_DATABASE: 'gone:app:backup-database'
   },
   SETTINGS: {
     GET_ALL: 'gone:settings:get-all',
@@ -42,11 +44,15 @@ export const IPC_CHANNELS = {
     DISCONNECT_MICROSOFT: 'gone:auth:disconnect-microsoft',
     CONNECT_CALDAV: 'gone:auth:connect-caldav',
     DISCONNECT_CALDAV: 'gone:auth:disconnect-caldav',
-    LIST_ACCOUNTS: 'gone:auth:list-accounts'
+    LIST_ACCOUNTS: 'gone:auth:list-accounts',
+    DETACH_ACCOUNT: 'gone:auth:detach-account'
   },
   SYNC: {
     TRIGGER_NOW: 'gone:sync:trigger-now',
-    GET_STATUS: 'gone:sync:get-status'
+    GET_STATUS: 'gone:sync:get-status',
+    /** main -> renderer. The only push channel in the app; everything else is
+     *  invoke/handle. Sent after a background sync that actually changed rows. */
+    CHANGED: 'gone:sync:changed'
   },
   CALENDAR: {
     LIST: 'gone:calendar:list',
@@ -68,6 +74,7 @@ export const IPC_CHANNELS = {
     MATERIALIZE_LUNAR: 'gone:event:materialize-lunar',
     DETACH_LUNAR: 'gone:event:detach-lunar',
     SEARCH: 'gone:event:search',
+    SUGGEST_TITLES: 'gone:event:suggest-titles',
     SHARE_ICS: 'gone:event:share-ics',
     LIST_CONFLICTS: 'gone:event:list-conflicts',
     RESOLVE_CONFLICT: 'gone:event:resolve-conflict'
@@ -90,10 +97,22 @@ export const IPC_CHANNELS = {
 
 export type AppLocale = 'vi' | 'en'
 
-export interface AppInfo {
-  version: string
-  locale: AppLocale
-  platform: NodeJS.Platform
+export interface DetachAccountResult {
+  success: boolean
+  /** Calendars converted to local ownership. */
+  calendarCount: number
+  /** Events kept (none are deleted by detaching). */
+  eventCount: number
+  message?: string
+}
+
+export interface BackupResult {
+  success: boolean
+  /** Absolute path of the snapshot that was written. */
+  filePath?: string
+  /** Size of the snapshot in bytes. */
+  byteSize?: number
+  message?: string
 }
 
 export interface IcsImportResult {
@@ -118,6 +137,8 @@ export interface GoneAPI {
     setLocale: (locale: AppLocale) => Promise<boolean>
     getPlatform: () => Promise<string>
     pickBackgroundImage: () => Promise<{ dataUrl: string } | null>
+    /** Write a consistent snapshot of the whole database to a file the user picks. */
+    backupDatabase: () => Promise<BackupResult>
   }
   settings: {
     getAll: () => Promise<AppSettings>
@@ -132,10 +153,15 @@ export interface GoneAPI {
     connectCalDav: (input: ConnectCalDavInput) => Promise<{ success: boolean; account?: CalendarAccount; message?: string }>
     disconnectCalDav: (accountId: string) => Promise<boolean>
     listAccounts: () => Promise<CalendarAccount[]>
+    /** Keep this account's calendars and events but sever the provider link,
+     *  turning them into ordinary local data. */
+    detachAccount: (accountId: string) => Promise<DetachAccountResult>
   }
   sync: {
     triggerNow: () => Promise<SyncResult>
     getStatus: () => Promise<SyncStatus>
+    /** Fires when a background sync changed the database. Returns an unsubscribe. */
+    onChanged: (callback: () => void) => () => void
   }
   calendars: {
     list: () => Promise<Calendar[]>
@@ -157,6 +183,9 @@ export interface GoneAPI {
     materializeLunar: (input: MaterializeLunarInput) => Promise<{ count: number }>
     detachLunar: (input: DetachLunarInput) => Promise<{ count: number }>
     search: (query: string, limit?: number) => Promise<CalendarEvent[]>
+    /** Ranked title autocomplete for the event editor, with the calendar each
+     *  title normally lives on. */
+    suggestTitles: (options: SuggestTitlesOptions) => Promise<TitleSuggestion[]>
     shareIcs: (eventId: string) => Promise<{ success: boolean; filePath?: string; icsContent?: string; message?: string }>
     listConflicts: () => Promise<SyncConflict[]>
     resolveConflict: (eventId: string, resolution: 'keepMine' | 'keepTheirs') => Promise<boolean>

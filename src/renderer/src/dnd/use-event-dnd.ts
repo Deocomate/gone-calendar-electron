@@ -4,21 +4,36 @@ import type { ExpandedOccurrence } from '@shared/event-model'
 import type { TimedSegment } from '@shared/timed-event-segments'
 import type { PendingDropAction } from './DropActionPopover'
 import {
+  dropNeedsMoveOrCopyChoice,
   grabOffsetMinutes,
+  resolveDropRange,
   sameDropTarget,
-  shiftOccurrenceByDrop,
   type CalendarDropTarget
 } from './drop-target'
-import { RESIZE_SNAP_MINUTES, snapMinutes } from './resize-math'
+import { snapMinutes } from './resize-math'
 
+/**
+ * `snapStepMinutes` is a required argument rather than a read of
+ * DisplayPreferencesContext, which is what this hook used to do. App calls it
+ * from its own body, above the provider it renders in its JSX, so the context
+ * read silently returned the default 15 no matter what the setting said -
+ * dragging snapped to quarter hours while resizing, done from inside the views,
+ * correctly used the configured step. Taking it as an argument makes the
+ * mismatch impossible: there is no default to fall back to.
+ */
 export function useEventDnD(
+  snapStepMinutes: number,
   onDirectMove?: (
     occ: ExpandedOccurrence,
     targetStart: DateTime,
     targetEnd: DateTime,
-    isCopy: boolean
+    isCopy: boolean,
+    /** What the drop should make the occurrence: false = timed, true = all-day,
+     *  undefined = leave it as it is. */
+    targetAllDay?: boolean
   ) => void
 ) {
+  const dragSnapMinutes = snapStepMinutes
   const [draggedOccurrence, setDraggedOccurrence] = useState<ExpandedOccurrence | null>(null)
   const [dropTarget, setDropTarget] = useState<CalendarDropTarget | null>(null)
   const [pendingDrop, setPendingDrop] = useState<PendingDropAction | null>(null)
@@ -38,30 +53,38 @@ export function useEventDnD(
       const origStart = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
       const origEnd = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local')
       const visualDuration = segment
-        ? Math.max(RESIZE_SNAP_MINUTES, segment.endLocal.diff(segment.startLocal, 'minutes').minutes)
-        : Math.max(RESIZE_SNAP_MINUTES, origEnd.diff(origStart, 'minutes').minutes)
+        ? Math.max(dragSnapMinutes, segment.endLocal.diff(segment.startLocal, 'minutes').minutes)
+        : Math.max(dragSnapMinutes, origEnd.diff(origStart, 'minutes').minutes)
       segmentStartRef.current = segment?.startLocal ?? origStart
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-      grabOffsetRef.current = grabOffsetMinutes(e.clientY, rect.top, rect.height, visualDuration)
+      // An all-day pill is a short bar with a 24-hour span, so where you grabbed
+      // it says nothing about a time of day. Measuring an offset from it put the
+      // drop preview - and the drop - hours away from the cursor.
+      grabOffsetRef.current = occ.allDay
+        ? 0
+        : grabOffsetMinutes(e.clientY, rect.top, rect.height, visualDuration, dragSnapMinutes)
     },
-    []
+    [dragSnapMinutes]
   )
 
-  const handleDragOverTarget = useCallback((target: CalendarDropTarget) => {
-    let next = target
-    if (target.minutes !== undefined) {
-      const startMinutes = Math.max(
-        0,
-        snapMinutes(target.minutes - grabOffsetRef.current, RESIZE_SNAP_MINUTES)
-      )
-      next = {
-        ...target,
-        minutes: startMinutes,
-        hour: Math.floor(startMinutes / 60)
+  const handleDragOverTarget = useCallback(
+    (target: CalendarDropTarget) => {
+      let next = target
+      if (target.minutes !== undefined) {
+        const startMinutes = Math.max(
+          0,
+          snapMinutes(target.minutes - grabOffsetRef.current, dragSnapMinutes)
+        )
+        next = {
+          ...target,
+          minutes: startMinutes,
+          hour: Math.floor(startMinutes / 60)
+        }
       }
-    }
-    setDropTarget((current) => (sameDropTarget(current, next) ? current : next))
-  }, [])
+      setDropTarget((current) => (sameDropTarget(current, next) ? current : next))
+    },
+    [dragSnapMinutes]
+  )
 
   const clearDragState = useCallback(() => {
     document.body.classList.remove('is-dnd-active')
@@ -85,7 +108,12 @@ export function useEventDnD(
   }, [])
 
   const handleDropOnDate = useCallback(
-    (e: DragEvent, targetDate: DateTime, targetMinutes?: number, forceCopy = false) => {
+    (
+      e: DragEvent,
+      targetDate: DateTime,
+      targetMinutes?: number,
+      options?: { forceCopy?: boolean; toAllDayLane?: boolean }
+    ) => {
       e.preventDefault()
       e.stopPropagation()
 
@@ -108,44 +136,45 @@ export function useEventDnD(
 
       const origStart = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
       const origEnd = DateTime.fromISO(occ.endUtc, { zone: 'utc' }).setZone('local')
-      const durationMinutes = Math.max(
-        RESIZE_SNAP_MINUTES,
-        origEnd.diff(origStart, 'minutes').minutes
-      )
 
-      let newStart: DateTime
-      let newEnd: DateTime
-
-      if (targetMinutes !== undefined) {
-        const shifted = shiftOccurrenceByDrop({
-          origStart,
-          origEnd,
-          segmentStart: segmentStart ?? origStart,
-          targetDate,
-          pointerMinutes: targetMinutes,
-          grabOffsetMinutes: grabOffsetMinutesValue
-        })
-        newStart = shifted.start
-        newEnd = shifted.end
-      } else {
-        newStart = targetDate.set({
-          hour: origStart.hour,
-          minute: origStart.minute,
-          second: 0,
-          millisecond: 0
-        })
-        newEnd = newStart.plus({ minutes: durationMinutes })
-      }
+      const { start: newStart, end: newEnd } = resolveDropRange({
+        allDay: Boolean(occ.allDay),
+        origStart,
+        origEnd,
+        segmentStart: segmentStart ?? origStart,
+        targetDate,
+        targetMinutes,
+        grabOffsetMinutes: grabOffsetMinutesValue,
+        snapStepMinutes: dragSnapMinutes,
+        toAllDayLane: options?.toAllDayLane
+      })
 
       if (newStart.toMillis() === origStart.toMillis() && newEnd.toMillis() === origEnd.toMillis()) {
         return
       }
 
-      const isCopy = forceCopy || e.altKey
+      const isCopy = options?.forceCopy === true || e.altKey
 
-      // Execute direct move/copy immediately without modal interruption
-      if (onDirectMove) {
-        onDirectMove(occ, newStart, newEnd, isCopy)
+      // The lane a drop lands in decides what the occurrence becomes: the hourly
+      // grid makes it timed, the all-day lane makes it all-day, and a plain day
+      // cell (Month view) leaves it as it was.
+      const targetAllDay =
+        options?.toAllDayLane === true ? true : targetMinutes !== undefined ? false : undefined
+
+      // Only a timed drop that stays timed is genuinely ambiguous between moving
+      // and copying, so only that one asks. Anything crossing the lanes is a
+      // conversion the user just performed, and an all-day event landing on
+      // another day is an unambiguous move - a prompt there is noise.
+      //
+      // Alt still copies outright; the drag has been showing the copy cursor the
+      // whole way, so stopping to ask would contradict it.
+      const isAmbiguous = dropNeedsMoveOrCopyChoice({
+        sourceAllDay: Boolean(occ.allDay),
+        targetAllDay
+      })
+
+      if (onDirectMove && (isCopy || !isAmbiguous)) {
+        onDirectMove(occ, newStart, newEnd, isCopy, targetAllDay)
         return
       }
 
@@ -156,7 +185,7 @@ export function useEventDnD(
         position: { x: e.clientX, y: e.clientY }
       })
     },
-    [clearDragState, draggedOccurrence, onDirectMove]
+    [clearDragState, draggedOccurrence, dragSnapMinutes, onDirectMove]
   )
 
   return {

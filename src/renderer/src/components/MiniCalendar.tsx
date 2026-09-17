@@ -1,4 +1,5 @@
 import React from 'react'
+import { occurrenceDateKeys } from '@shared/all-day'
 import { useTranslation } from 'react-i18next'
 import { DateTime } from 'luxon'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -34,12 +35,13 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = ({
   const colorsByDay = React.useMemo(() => {
     const map = new Map<string, string[]>()
     for (const occ of occurrences) {
-      const dt = DateTime.fromISO(occ.startUtc, { zone: 'utc' }).setZone('local')
-      const key = dt.toFormat('yyyy-MM-dd')
-      const list = map.get(key) || []
       const color = occ.color || DEFAULT_EVENT_COLOR
-      if (!list.includes(color)) list.push(color)
-      map.set(key, list.slice(0, 3))
+      // A multi-day event gets a dot on every day it covers, not just its first.
+      for (const key of occurrenceDateKeys(occ.allDay, occ.startUtc, occ.endUtc)) {
+        const list = map.get(key)
+        if (!list) map.set(key, [color])
+        else if (list.length < 3 && !list.includes(color)) list.push(color)
+      }
     }
     return map
   }, [occurrences])

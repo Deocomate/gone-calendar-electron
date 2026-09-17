@@ -46,7 +46,7 @@ export function useSlotDragSelect(options: {
   onComplete: (start: DateTime, end: DateTime, meta: { clientX: number }) => void
 }) {
   const { hourHeight, onComplete } = options
-  const { timeFormat } = useDisplayPreferences()
+  const { timeFormat, dragSnapMinutes } = useDisplayPreferences()
   const [preview, setPreview] = useState<SlotDragPreview | null>(null)
   const dragRef = useRef<DragState | null>(null)
 
@@ -71,12 +71,19 @@ export function useSlotDragSelect(options: {
     (e: MouseEvent) => {
       const drag = dragRef.current
       if (!drag) return
-      drag.currentMinutes = minutesFromPointer(e.clientY, drag.columnTop, hourHeight)
+      // The moving edge may reach midnight; the anchor below may not.
+      drag.currentMinutes = minutesFromPointer(
+        e.clientY,
+        drag.columnTop,
+        hourHeight,
+        dragSnapMinutes,
+        true
+      )
       drag.clientX = e.clientX
       drag.clientY = e.clientY
       setPreview(buildPreview(drag))
     },
-    [hourHeight, buildPreview]
+    [hourHeight, dragSnapMinutes, buildPreview]
   )
 
   const handleMouseUp = useCallback(() => {
@@ -105,7 +112,7 @@ export function useSlotDragSelect(options: {
       if ((e.target as HTMLElement).closest('.gc-event')) return
 
       const rect = e.currentTarget.getBoundingClientRect()
-      const minutes = minutesFromPointer(e.clientY, rect.top, hourHeight)
+      const minutes = minutesFromPointer(e.clientY, rect.top, hourHeight, dragSnapMinutes)
       const drag: DragState = {
         day,
         dayKey,
@@ -120,7 +127,7 @@ export function useSlotDragSelect(options: {
       window.addEventListener('mousemove', handleMouseMove)
       window.addEventListener('mouseup', handleMouseUp)
     },
-    [hourHeight, buildPreview, handleMouseMove, handleMouseUp]
+    [hourHeight, dragSnapMinutes, buildPreview, handleMouseMove, handleMouseUp]
   )
 
   return { preview, startDrag }

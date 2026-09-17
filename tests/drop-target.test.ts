@@ -575,3 +575,83 @@ describe('reaching the last block of the day', () => {
     expect(minutesFromPointer(-1e6, 0, 60, 30, true)).toBe(0)
   })
 })
+
+describe('dropping on a day that changes offset', () => {
+  function withZone<T>(zone: string, fn: () => T): T {
+    const previous = Settings.defaultZone
+    Settings.defaultZone = zone
+    try {
+      return fn()
+    } finally {
+      Settings.defaultZone = previous
+    }
+  }
+
+  /**
+   * `startOf('day').plus({ minutes })` adds elapsed time, so on the day a zone
+   * springs forward it steps over the missing hour: dropping on the 10:00 row of
+   * 4 October in Sydney produced an event at 11:00.
+   */
+  it('lands on the row the pointer is over, on a spring-forward day', () => {
+    withZone('Australia/Sydney', () => {
+      // 4 Oct 2026: 02:00 -> 03:00, so the day is 23 hours long.
+      const springForward = DateTime.fromISO('2026-10-04T00:00', { zone: 'Australia/Sydney' })
+      const { start, end } = dropRangeFromPointer({
+        targetDate: springForward,
+        pointerMinutes: 10 * 60,
+        durationMinutes: 60
+      })
+
+      expect(start.toFormat('HH:mm')).toBe('10:00')
+      expect(end.toFormat('HH:mm')).toBe('11:00')
+    })
+  })
+
+  it('lands on the right row on a fall-back day too', () => {
+    withZone('America/New_York', () => {
+      // 1 Nov 2026: 02:00 happens twice, so the day is 25 hours long.
+      const fallBack = DateTime.fromISO('2026-11-01T00:00', { zone: 'America/New_York' })
+      const { start } = dropRangeFromPointer({
+        targetDate: fallBack,
+        pointerMinutes: 10 * 60,
+        durationMinutes: 60
+      })
+
+      expect(start.toFormat('HH:mm')).toBe('10:00')
+    })
+  })
+
+  it('reaches the end of a short day', () => {
+    withZone('Australia/Sydney', () => {
+      const springForward = DateTime.fromISO('2026-10-04T00:00', { zone: 'Australia/Sydney' })
+      const { start } = dropRangeFromPointer({
+        targetDate: springForward,
+        pointerMinutes: 24 * 60,
+        durationMinutes: 60
+      })
+
+      expect(start.toISODate()).toBe('2026-10-05')
+      expect(start.toFormat('HH:mm')).toBe('00:00')
+    })
+  })
+
+  it('keeps a shifted event the same length in real time across the change', () => {
+    withZone('Australia/Sydney', () => {
+      const origStart = DateTime.fromISO('2026-09-29T10:00', { zone: 'Australia/Sydney' })
+      const origEnd = origStart.plus({ minutes: 90 })
+      const { start, end } = resolveDropRange({
+        allDay: false,
+        origStart,
+        origEnd,
+        segmentStart: origStart,
+        targetDate: DateTime.fromISO('2026-10-04T00:00', { zone: 'Australia/Sydney' }),
+        targetMinutes: 10 * 60,
+        grabOffsetMinutes: 0,
+        snapStepMinutes: 30
+      })
+
+      expect(start.toFormat('HH:mm')).toBe('10:00')
+      expect(end.diff(start, 'minutes').minutes).toBe(90)
+    })
+  })
+})

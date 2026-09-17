@@ -2,6 +2,27 @@ import type { DragEvent } from 'react'
 import { DateTime } from 'luxon'
 import { RESIZE_SNAP_MINUTES, snapMinutes } from './resize-math'
 
+/**
+ * Put a time on a day by its clock face, not by elapsed minutes.
+ *
+ * `startOf('day').plus({ minutes })` adds real time, so on the day a zone
+ * springs forward it skips an hour: dropping on the 10:00 row of 4 Oct in Sydney
+ * produced an event at 11:00. Setting the fields asks for that clock time, and
+ * Luxon resolves the offset.
+ *
+ * 1440 means the end of the day, which is midnight on the next one.
+ */
+function atMinutesOfDay(day: DateTime, minutes: number): DateTime {
+  const base = day.startOf('day')
+  if (minutes >= 24 * 60) return base.plus({ days: 1 }).startOf('day')
+  return base.set({
+    hour: Math.floor(minutes / 60),
+    minute: minutes % 60,
+    second: 0,
+    millisecond: 0
+  })
+}
+
 export type CalendarDropTarget = {
   dateKey: string
   hour?: number
@@ -76,7 +97,7 @@ export function dropRangeFromPointer(args: {
     0,
     snapMinutes(args.pointerMinutes - (args.grabOffsetMinutes ?? 0), step)
   )
-  const start = args.targetDate.startOf('day').plus({ minutes: snappedStart })
+  const start = atMinutesOfDay(args.targetDate, snappedStart)
   return { start, end: start.plus({ minutes: duration }) }
 }
 
@@ -149,11 +170,18 @@ export function shiftOccurrenceByDrop(args: {
   // minutes, so this was not an edge case.
   const step = args.snapStepMinutes ?? RESIZE_SNAP_MINUTES
   const minutesOfDay = rawStart.hour * 60 + rawStart.minute + rawStart.second / 60
-  const correction = snapMinutes(minutesOfDay, step) - minutesOfDay
+  const start = atMinutesOfDay(rawStart, snapMinutes(minutesOfDay, step))
 
+  // Carry the end by however much the start actually moved. Taking the snap as
+  // a minute count would be wrong across a DST boundary, where the correction
+  // in clock terms and in elapsed time are different numbers.
+  const correctionMs = start.toMillis() - rawStart.startOf('minute').toMillis()
   return {
-    start: rawStart.plus({ minutes: correction }).startOf('minute'),
-    end: args.origEnd.plus({ milliseconds: deltaMs }).plus({ minutes: correction }).startOf('minute')
+    start,
+    end: args.origEnd
+      .plus({ milliseconds: deltaMs })
+      .startOf('minute')
+      .plus({ milliseconds: correctionMs })
   }
 }
 

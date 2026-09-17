@@ -55,8 +55,18 @@ export function applyResizeEdge(args: {
       snapMinutes(minutesFromGridY(args.clientY, args.gridTop, args.hourHeight), step)
     )
   )
+  // By clock face, not elapsed minutes: adding minutes across a spring-forward
+  // hour lands an hour late.
   const baseDay = (edge === 'n' ? args.originStart : args.originEnd).startOf('day')
-  const next = baseDay.plus({ minutes: snapped })
+  const next =
+    snapped >= 24 * 60
+      ? baseDay.plus({ days: 1 }).startOf('day')
+      : baseDay.set({
+          hour: Math.floor(snapped / 60),
+          minute: snapped % 60,
+          second: 0,
+          millisecond: 0
+        })
   if (edge === 'n') start = next
   else end = next
 

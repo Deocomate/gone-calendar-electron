@@ -34,7 +34,10 @@ export const HourGutter: React.FC<HourGutterProps> = ({
   return (
     <div className="bg-app pr-2 text-right select-none min-w-0">
       {hours.map((hour) => {
-        const local = startOfDay.plus({ hours: hour })
+        // set(), not plus(): on the day a zone springs forward, adding hours
+        // skips one and every label below it reads an hour late - taking the
+        // secondary clock with it, since that converts from this instant.
+        const local = startOfDay.set({ hour, minute: 0, second: 0, millisecond: 0 })
         const primary = formatClockTime(local, timeFormat)
         const secondary = secondaryTimezone
           ? formatClockTime(local.setZone(secondaryTimezone), timeFormat)

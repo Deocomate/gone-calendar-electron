@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-31  
 **Version:** 0.1.0  
-**Build status:** All 10 phases complete, 361/361 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
+**Build status:** All 10 phases complete, 371/371 tests passing, 0 TypeScript errors, clean production build. CI (`.github/workflows/ci.yml`) runs typecheck + tests + build on every push and PR.
 
 ---
 
@@ -100,7 +100,7 @@ gone-calendar/
 │       ├── mini-calendar-grid.ts # Grid computation utilities
 │       ├── visible-range.ts     # Visible date range helpers
 │       └── ipc-contract.ts      # IPC_CHANNELS constants and GoneAPI interface
-├── tests/                       # Vitest unit tests (361 tests / 43 files)
+├── tests/                       # Vitest unit tests (371 tests / 44 files)
 │   └── stubs/electron.ts        # `electron` module stub for main-process tests
 ├── docs/
 │   ├── urd.md                   # User Requirements Document
@@ -225,6 +225,7 @@ Key types: `CalendarEvent`, `ExpandedOccurrence`, `Calendar`, `CalendarAccount`,
 tests/
 ├── lunar-vietnam.test.ts          # Lunar ↔ solar conversion accuracy
 ├── expand-occurrences.test.ts     # RRULE expansion correctness
+├── daylight-saving.test.ts        # A series keeps its clock time across a DST change
 ├── recurring-scope.test.ts        # this / this-and-future / all scope edits, and moving between calendars
 ├── occurrence-all-day-override.test.ts # Per-occurrence all-day detach (drag onto the hour grid)
 ├── occurrence-order.test.ts       # Within-day ordering: all-day first, then by time
@@ -268,7 +269,7 @@ tests/
 └── ipc-contract.test.ts           # IPC channel and API surface contract
 ```
 
-**Total: 361 tests across 43 files. All passing.**
+**Total: 371 tests across 44 files. All passing.**
 
 Main-process tests run in plain Node; the `electron` module is aliased to
 `tests/stubs/electron.ts` in `vitest.config.ts` so they do not need the Electron

@@ -28,7 +28,15 @@ echo "==> Built: $SRC_APPIMAGE"
 
 mkdir -p "$APPS_DIR" "$DESKTOP_DIR" "$ICON_DIR"
 
-install -m 755 "$SRC_APPIMAGE" "$TARGET_APPIMAGE"
+# Write beside the target and rename over it, rather than copying into it.
+# An AppImage that is already running is mounted from this exact file, and
+# `install` opens the destination and truncates it - which corrupts the mount
+# under the running app. A rename only swaps the directory entry: the running
+# instance keeps the inode it opened and carries on, and the new build is what
+# launches next time.
+TMP_APPIMAGE="$(mktemp "${TARGET_APPIMAGE}.new.XXXXXX")"
+install -m 755 "$SRC_APPIMAGE" "$TMP_APPIMAGE"
+mv -f "$TMP_APPIMAGE" "$TARGET_APPIMAGE"
 install -m 644 resources/icon.png "$ICON_DIR/${APP_ID}.png"
 
 cat > "$DESKTOP_DIR/${APP_ID}.desktop" <<EOF
@@ -60,3 +68,8 @@ echo "    App image : ${TARGET_APPIMAGE}"
 echo "    Launcher  : ${DESKTOP_DIR}/${APP_ID}.desktop"
 echo "    Find it in your app menu as \"${APP_NAME}\" (search: calendar)."
 echo "    Re-run this script after approving changes to update the app."
+if pgrep -f "${APP_NAME}.AppImage" >/dev/null 2>&1; then
+  echo
+  echo "    NOTE: ${APP_NAME} is running. It is still on the previous build -"
+  echo "          quit and reopen it to pick this one up."
+fi

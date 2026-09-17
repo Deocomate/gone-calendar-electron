@@ -45,7 +45,16 @@ export function applyResizeEdge(args: {
   let end = args.originEnd
   const { edge } = args
 
-  const snapped = snapMinutes(minutesFromGridY(args.clientY, args.gridTop, args.hourHeight), step)
+  // The south edge may land on midnight - that is how the last block of the day
+  // gets filled - while the north edge has to leave room for the event itself.
+  const maxMinutes = edge === 's' ? 24 * 60 : 24 * 60 - step
+  const snapped = Math.max(
+    0,
+    Math.min(
+      maxMinutes,
+      snapMinutes(minutesFromGridY(args.clientY, args.gridTop, args.hourHeight), step)
+    )
+  )
   const baseDay = (edge === 'n' ? args.originStart : args.originEnd).startOf('day')
   const next = baseDay.plus({ minutes: snapped })
   if (edge === 'n') start = next

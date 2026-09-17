@@ -146,3 +146,56 @@ describe('resizing is vertical only', () => {
     }
   })
 })
+
+describe('resizing to the end of the day', () => {
+  const day = DateTime.fromISO('2026-09-20T00:00:00', { zone: 'utc' })
+
+  it('lets the bottom edge land on midnight, filling the last block', () => {
+    const { start, end } = applyResizeEdge({
+      edge: 's',
+      originStart: day.set({ hour: 23, minute: 30 }),
+      originEnd: day.set({ hour: 23, minute: 45 }),
+      clientX: 0,
+      clientY: 1e6,
+      gridTop: 0,
+      hourHeight: 60,
+      snapStepMinutes: 30
+    })
+    expect(start.toFormat('HH:mm')).toBe('23:30')
+    expect(end.toISO()).toBe('2026-09-21T00:00:00.000Z')
+  })
+
+  it('will not drag the top edge past the bottom one', () => {
+    // Clamped to 23:30 by the grid, then pulled back by the minimum duration,
+    // because a start below the end is not a resize - it is an inverted event.
+    const originEnd = day.set({ hour: 11 })
+    const { start, end } = applyResizeEdge({
+      edge: 'n',
+      originStart: day.set({ hour: 10 }),
+      originEnd,
+      clientX: 0,
+      clientY: 1e6,
+      gridTop: 0,
+      hourHeight: 60,
+      snapStepMinutes: 30
+    })
+    expect(end.toISO()).toBe(originEnd.toISO())
+    expect(start.toFormat('HH:mm')).toBe('10:30')
+    expect(end.diff(start, 'minutes').minutes).toBe(30)
+  })
+
+  it('does not run off the top of the grid', () => {
+    const { end } = applyResizeEdge({
+      edge: 's',
+      originStart: day.set({ hour: 10 }),
+      originEnd: day.set({ hour: 11 }),
+      clientX: 0,
+      clientY: -1e6,
+      gridTop: 0,
+      hourHeight: 60,
+      snapStepMinutes: 30
+    })
+    // Clamped to the start of the day, then pushed out to the minimum duration.
+    expect(end.diff(day.set({ hour: 10 }), 'minutes').minutes).toBeGreaterThan(0)
+  })
+})

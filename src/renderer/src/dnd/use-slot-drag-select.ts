@@ -71,7 +71,14 @@ export function useSlotDragSelect(options: {
     (e: MouseEvent) => {
       const drag = dragRef.current
       if (!drag) return
-      drag.currentMinutes = minutesFromPointer(e.clientY, drag.columnTop, hourHeight, dragSnapMinutes)
+      // The moving edge may reach midnight; the anchor below may not.
+      drag.currentMinutes = minutesFromPointer(
+        e.clientY,
+        drag.columnTop,
+        hourHeight,
+        dragSnapMinutes,
+        true
+      )
       drag.clientX = e.clientX
       drag.clientY = e.clientY
       setPreview(buildPreview(drag))

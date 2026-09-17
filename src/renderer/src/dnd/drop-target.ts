@@ -30,12 +30,22 @@ export function minutesFromPointer(
   clientY: number,
   top: number,
   hourHeight: number,
-  snapStepMinutes: number = RESIZE_SNAP_MINUTES
+  snapStepMinutes: number = RESIZE_SNAP_MINUTES,
+  /**
+   * Let the reading reach midnight (1440).
+   *
+   * The default stops one step short, which is right for a *start* - nothing can
+   * begin at the end of the day. It is wrong for the moving edge of a drag,
+   * where it meant the last block of the day could never be filled: dragging to
+   * the bottom of the grid gave 23:30, so 23:30-00:00 was unreachable.
+   */
+  allowEndOfDay = false
 ): number {
   if (hourHeight <= 0) return 0
   const raw = ((clientY - top) / hourHeight) * 60
   const snapped = snapMinutes(raw, snapStepMinutes)
-  return Math.max(0, Math.min(24 * 60 - snapStepMinutes, snapped))
+  const max = allowEndOfDay ? 24 * 60 : 24 * 60 - snapStepMinutes
+  return Math.max(0, Math.min(max, snapped))
 }
 
 export function grabOffsetMinutes(

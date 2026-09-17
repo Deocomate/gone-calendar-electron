@@ -38,6 +38,7 @@
     "tests/ui-components.test.ts",
     "tests/stale-event-error.test.ts",
     "tests/friendly-error.test.ts",
+    "tests/time-picker-slots.test.ts",
     "tests/drop-target.test.ts",
     "tests/resize-math.test.ts",
     "tests/i18n-parity.test.ts",

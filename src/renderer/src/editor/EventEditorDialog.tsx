@@ -12,6 +12,7 @@ import type {
   LunarRecurrenceSpec
 } from '@shared/event-model'
 import type { TitleSuggestion } from '@shared/title-suggestions'
+import { endDateForTimes } from '@shared/time-format'
 import { convertSolarToLunar, resolveLunarOccurrence } from '@shared/lunar-vietnam'
 import { DEFAULT_EVENT_COLOR } from '@shared/mini-calendar-grid'
 import {
@@ -404,6 +405,24 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
     if (!endDateStr || endDateStr < newStart) setEndDateStr(newStart)
   }
 
+  /**
+   * Picking an end earlier in the day than the start is not a mistake - it means
+   * the event runs past midnight - so the date moves to match straight away
+   * rather than the form waiting to reject it on save.
+   */
+  const handleEndTimeChange = (newEnd: string) => {
+    setEndTimeStr(newEnd)
+    setIsDirty(true)
+    setEndDateStr(
+      endDateForTimes({
+        startDate: startDateStr,
+        startClock: startTimeStr,
+        endClock: newEnd,
+        currentEndDate: endDateStr || startDateStr
+      })
+    )
+  }
+
   const handleStartTimeChange = (newStart: string) => {
     setStartTimeStr(newStart)
     setIsDirty(true)
@@ -413,7 +432,18 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
       if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
         if (eh * 60 + em <= sh * 60 + sm) {
           const nextHour = (sh + 1) % 24
-          setEndTimeStr(`${nextHour.toString().padStart(2, '0')}:${sm.toString().padStart(2, '0')}`)
+          const rolledEnd = `${nextHour.toString().padStart(2, '0')}:${sm.toString().padStart(2, '0')}`
+          setEndTimeStr(rolledEnd)
+          // A start late enough that an hour later is tomorrow has to take the
+          // date with it, or the form holds a range that ends before it begins.
+          setEndDateStr(
+            endDateForTimes({
+              startDate: startDateStr,
+              startClock: newStart,
+              endClock: rolledEnd,
+              currentEndDate: endDateStr || startDateStr
+            })
+          )
         }
       }
     }
@@ -734,9 +764,8 @@ export const EventEditorDialog: React.FC<EventEditorDialogProps> = ({
                     <div className="w-[105px] shrink-0">
                       <TimePicker
                         value={endTimeStr}
-                        onChange={(val) => handleFieldChange(setEndTimeStr, val)}
+                        onChange={handleEndTimeChange}
                         startTime={startDateStr === endDateStr ? startTimeStr : undefined}
-                        showQuickDurations={startDateStr === endDateStr}
                         align="right"
                       />
                     </div>

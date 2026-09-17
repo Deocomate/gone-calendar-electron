@@ -555,3 +555,23 @@ describe('dropNeedsMoveOrCopyChoice', () => {
     expect(dropNeedsMoveOrCopyChoice({ sourceAllDay: true, targetAllDay: undefined })).toBe(false)
   })
 })
+
+describe('reaching the last block of the day', () => {
+  it('stops one step short of midnight for a start', () => {
+    // Nothing can begin at the end of the day.
+    expect(minutesFromPointer(1e6, 0, 60, 30)).toBe(23 * 60 + 30)
+    expect(minutesFromPointer(1e6, 0, 60, 60)).toBe(23 * 60)
+  })
+
+  it('reaches midnight for the moving edge of a drag', () => {
+    // Regression: dragging out a new event could never fill 23:30-00:00, because
+    // the edge that follows the pointer was clamped like a start.
+    expect(minutesFromPointer(1e6, 0, 60, 30, true)).toBe(24 * 60)
+    expect(minutesFromPointer(1e6, 0, 60, 60, true)).toBe(24 * 60)
+    expect(minutesFromPointer(1e6, 0, 60, 15, true)).toBe(24 * 60)
+  })
+
+  it('still refuses to go above the top of the grid', () => {
+    expect(minutesFromPointer(-1e6, 0, 60, 30, true)).toBe(0)
+  })
+})
